@@ -2,6 +2,8 @@ package model
 
 import "time"
 
+const TelegramCredentialOwner = "notify/telegram/credentials/v1"
+
 type Notification struct {
 	ID             string    `json:"id"`
 	CreatedAt      time.Time `json:"created_at"`

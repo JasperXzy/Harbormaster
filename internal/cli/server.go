@@ -116,6 +116,11 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		return fail("database_initialization_failed")
 	}
 	defer s.Close()
+	if !c.Dev {
+		if err = s.BindMasterKey(ctx, box); err != nil {
+			return fail("master_key_verification_failed")
+		}
+	}
 	if c.Dev {
 		if err = s.SeedDemo(ctx); err != nil {
 			return fail("demo_seed_failed")

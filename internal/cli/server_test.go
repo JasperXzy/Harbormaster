@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
 )
 
@@ -78,4 +79,45 @@ func (w *stopOnStart) Write(b []byte) (int, error) {
 		w.cancel()
 	}
 	return n, err
+}
+
+func TestProductionCommandRejectsWrongMasterKeyBeforeWriting(t *testing.T) {
+	t.Setenv("HM_MASTER_KEY_FILE", "")
+	t.Setenv("HM_CONFIG", "")
+	t.Setenv("HM_DEV", "false")
+	firstKey := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{11}, 32))
+	wrongKey := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{12}, 32))
+	t.Setenv("HM_MASTER_KEY", firstKey)
+	dir := t.TempDir()
+	var out, logs bytes.Buffer
+	if code := Server(context.Background(), []string{"migrate", "--data-dir", dir}, strings.NewReader(""), &out, &logs); code != 0 {
+		t.Fatal(code)
+	}
+	s, err := store.Open(context.Background(), dir, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	box, _ := security.NewBox(bytes.Repeat([]byte{11}, 32))
+	owner := "account/test-fixture/access-key"
+	ciphertext, err := box.Encrypt([]byte("fixture-only-not-a-real-credential"), owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.DB.Exec("INSERT INTO credential VALUES(?,?,'2026-11-12T00:00:00Z')", owner, ciphertext); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+	t.Setenv("HM_MASTER_KEY", wrongKey)
+	logs.Reset()
+	if code := Server(context.Background(), []string{"migrate", "--data-dir", dir}, strings.NewReader(""), &out, &logs); code == 0 {
+		t.Fatal("production command accepted a key that cannot decrypt existing credentials")
+	}
+	if !strings.Contains(logs.String(), "master_key_verification_failed") || strings.Contains(logs.String(), wrongKey) || strings.Contains(logs.String(), firstKey) {
+		t.Fatal("key verification did not fail safely")
+	}
+	t.Setenv("HM_MASTER_KEY", firstKey)
+	logs.Reset()
+	if code := Server(context.Background(), []string{"migrate", "--data-dir", dir}, strings.NewReader(""), &out, &logs); code != 0 {
+		t.Fatal("correct key failed after rejected attempt", code)
+	}
 }

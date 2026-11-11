@@ -14,8 +14,6 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/telegram"
 )
 
-const channelOwner = "notify/telegram/credentials/v1"
-
 var ErrConfiguration = errors.New("telegram_configuration_unavailable")
 
 type Channels struct {
@@ -31,7 +29,7 @@ func (c Channels) Load(ctx context.Context) (telegram.Destination, model.Telegra
 	if c.Box == nil {
 		return telegram.Destination{}, state, ErrConfiguration
 	}
-	raw, err := c.Box.Decrypt(sealed, channelOwner)
+	raw, err := c.Box.Decrypt(sealed, model.TelegramCredentialOwner)
 	if err != nil {
 		return telegram.Destination{}, state, ErrConfiguration
 	}
@@ -67,7 +65,7 @@ func (c Channels) Replace(ctx context.Context, d telegram.Destination, expectedR
 		return model.TelegramChannelState{}, ErrConfiguration
 	}
 	defer clear(raw)
-	sealed, err := c.Box.Encrypt(raw, channelOwner)
+	sealed, err := c.Box.Encrypt(raw, model.TelegramCredentialOwner)
 	if err != nil {
 		return model.TelegramChannelState{}, ErrConfiguration
 	}
