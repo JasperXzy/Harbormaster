@@ -17,15 +17,15 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go test -c \
 
 ## 拟执行动作（等待用户同意）
 
-1. 通过已有 SSH 别名将测试二进制上传到 main-server 的 `/tmp/hm-agent-kernel-test-9017ae1`。
+1. 通过已有 SSH 别名在 main-server 用 mktemp 创建独占的 0700 临时目录（`/tmp/hm-agent-kernel.XXXXXX`），将测试二进制上传到该目录。避免使用可被其他用户预先放置文件或符号链接的固定 /tmp 文件名。
 2. 以如下固定命令在新网络命名空间运行，记录测试结果；不启动常驻服务：
 
 ```sh
 sudo -n unshare --net -- env HM_AGENT_KERNEL_TEST=1 \
-  /tmp/hm-agent-kernel-test-9017ae1 -test.run '^TestKernelCounters$' -test.v -test.timeout 30s
+  /tmp/hm-agent-kernel.<实际随机后缀>/hm-agent-kernel-test -test.run '^TestKernelCounters$' -test.v -test.timeout 30s
 ```
 
-3. 删除上传的临时二进制。测试进程退出后独立命名空间自动销毁，其中的 veth、地址、路由、邻居和 nftables 表随之消失。不调用主机上的全局 flush，不改主机网卡/防火墙，不读取 AccessKey/主密钥/Token，不调用阿里云接口。
+3. 删除上传的临时二进制及本次创建的空临时目录。测试进程退出后独立命名空间自动销毁，其中的 veth、地址、路由、邻居和 nftables 表随之消失。不调用主机上的全局 flush，不改主机网卡/防火墙，不读取 AccessKey/主密钥/Token，不调用阿里云接口。
 
 允许测试不等于允许安装 agent、部署面板、改 DNS 或执行真实云写操作。若内核规则测试失败，将在本地修复、重新交叉编译并在相同隔离范围重试。
 
