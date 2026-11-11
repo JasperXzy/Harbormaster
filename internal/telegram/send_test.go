@@ -97,7 +97,7 @@ func TestProxyAuthStaysOnConfiguredHostAndRedirectIsRejected(t *testing.T) {
 func TestInvalidProxyAndMessageAreRejectedBeforeNetwork(t *testing.T) {
 	calls := 0
 	sender := fakeSender(func(*http.Request) (*http.Response, error) { calls++; return response(200, `{"ok":true}`), nil })
-	for _, raw := range []string{"http://proxy.example", "https://user:pass@proxy.example", "https://proxy.example?secret=token", "https://proxy.example/#fragment"} {
+	for _, raw := range []string{"http://proxy.example", "https://user:pass@proxy.example", "https://proxy.example?secret=token", "https://proxy.example/#fragment", "https://proxy.example/bot" + fakeToken} {
 		d := destination()
 		d.ProxyMode = "reverse_proxy"
 		d.ProxyURL = raw

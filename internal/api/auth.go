@@ -93,7 +93,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if p.agentManagement(w, r, path) || p.business(w, r, path) {
+	if p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.business(w, r, path) {
 		return
 	}
 	if r.Method != "GET" {

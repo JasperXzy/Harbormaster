@@ -142,16 +142,23 @@ func (s *Store) JobChanges(ctx context.Context, after int64) ([]model.Job, int64
 // ClaimJob recovers expired read jobs. An owner nonce fences every later write;
 // attempts are bounded even when the process repeatedly crashes mid-query.
 func (s *Store) ClaimJob(ctx context.Context, now time.Time) (model.Job, error) {
+	return s.ClaimCollectionJob(ctx, now)
+}
+
+// Collection workers must not consume Telegram test jobs: those jobs follow
+// notification delivery leases and a separate uncertain-delivery policy.
+func (s *Store) ClaimCollectionJob(ctx context.Context, now time.Time) (model.Job, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return model.Job{}, err
 	}
 	defer tx.Rollback()
+	filter := " AND type IN ('refresh','permission_check')"
 	if _, err = tx.ExecContext(ctx, `UPDATE job SET status='failed',error_code='retry_exhausted',finished_at=?,lease_owner=NULL,lease_until=0
- WHERE attempts>=3 AND ((status='running' AND lease_until<=?) OR status='queued')`, timestamp(now), now.Unix()); err != nil {
+ WHERE attempts>=3 AND ((status='running' AND lease_until<=?) OR status='queued')`+filter, timestamp(now), now.Unix()); err != nil {
 		return model.Job{}, err
 	}
-	j, err := readJob(tx.QueryRowContext(ctx, "SELECT "+jobColumns+" FROM job WHERE (status='queued' AND available_at<=?) OR (status='running' AND lease_until<=?) ORDER BY created_at,id LIMIT 1", now.Unix(), now.Unix()))
+	j, err := readJob(tx.QueryRowContext(ctx, "SELECT "+jobColumns+" FROM job WHERE ((status='queued' AND available_at<=?) OR (status='running' AND lease_until<=?))"+filter+" ORDER BY created_at,id LIMIT 1", now.Unix(), now.Unix()))
 	if errors.Is(err, ErrNotFound) {
 		if e := tx.Commit(); e != nil {
 			return j, e

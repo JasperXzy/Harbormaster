@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Notification reads: encrypted channel configuration exposes only safe metadata and proxy_auth_set; add not_tested so saved credentials are not reported healthy before a successful send. Notification history adds attempts, last_error, delivered_at and has_uncertain_attempt to distinguish workflow failure from unconfirmed delivery. Update/dispatch policy remains pending user decisions.
 # 2026-11-12  Agent install-command validates a complete local release before issuing a code; missing/corrupt files return 503 agent_release_unavailable. Generated commands pin installer and manifest checksums, pass the one-time code via stdin and keep active tokens until registration succeeds.
 # 2026-11-12  Agent ingestion: optional pending_first_report/data_quality distinguish registration from fresh samples. instance.realtime SSE can explicitly clear stale rates with null. New grant replaces the old code but retains the active token until successful registration; revocation gives not_installed. Metadata is not remote attestation. See docs/m0/agent-protocol.md.
 # 2026-11-12  CDT observations: official_quality=inferred, fetched_at separate from unknown cutoff; user approved provisional byte display only. Add raw cumulative observation history; daily values remain unknown without a verified daily source. Quota/daily freshness is nullable before first collection.
@@ -1964,7 +1965,8 @@ components:
 
     TelegramStatus:
       type: string
-      enum: [not_configured, ok, failing]
+      enum: [not_configured, not_tested, ok, failing]
+      description: not_tested means configuration is saved but no send has confirmed it works; syntax validation alone does not imply ok.
 
     TelegramChannel:
       type: object
@@ -1980,6 +1982,9 @@ components:
         proxy_url:
           type: string
           description: Proxy URL without credentials or secret query parameters; empty when disabled. Never echo stored authentication material.
+        proxy_auth_set:
+          type: boolean
+          description: Whether encrypted proxy authentication is saved. Neither the username nor password is returned.
         status:
           $ref: "#/components/schemas/TelegramStatus"
         last_error:
@@ -2097,6 +2102,25 @@ components:
           nullable: true
         delivery_status:
           $ref: "#/components/schemas/DeliveryStatus"
+        attempts:
+          type: integer
+          minimum: 0
+        last_error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+        has_uncertain_attempt:
+          type: boolean
+          description: At least one attempt may have reached Telegram without a confirmed response. A failed record is not proof of non-delivery; if a later attempt succeeds, duplicates may be possible.
 
     InstanceRealtimeEvent:
       type: object

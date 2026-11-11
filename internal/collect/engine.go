@@ -182,7 +182,7 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 func (e *Engine) RunOne(ctx context.Context) (bool, error) {
-	j, err := e.Store.ClaimJob(ctx, time.Now().UTC())
+	j, err := e.Store.ClaimCollectionJob(ctx, time.Now().UTC())
 	if errors.Is(err, store.ErrNotFound) {
 		return false, nil
 	}

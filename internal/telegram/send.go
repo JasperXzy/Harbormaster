@@ -23,9 +23,12 @@ import (
 )
 
 type Destination struct {
-	Token, ChatID                string
-	ProxyMode, ProxyURL          string
-	ProxyUsername, ProxyPassword string
+	Token         string `json:"bot_token"`
+	ChatID        string `json:"chat_id"`
+	ProxyMode     string `json:"proxy_mode"`
+	ProxyURL      string `json:"proxy_url"`
+	ProxyUsername string `json:"proxy_username"`
+	ProxyPassword string `json:"proxy_password"`
 }
 type Failure struct {
 	Code       string
@@ -44,7 +47,8 @@ type Sender struct {
 var tokenPattern = regexp.MustCompile(`^[0-9]{1,20}:[A-Za-z0-9_-]{20,128}$`)
 var chatPattern = regexp.MustCompile(`^(?:-?[0-9]{1,20}|@[A-Za-z0-9_]{5,64})$`)
 
-func invalid() *Failure { return &Failure{Code: "telegram_configuration_invalid"} }
+func invalid() *Failure            { return &Failure{Code: "telegram_configuration_invalid"} }
+func Validate(d Destination) error { _, err := endpoint(d); return err }
 func endpoint(d Destination) (string, error) {
 	if !tokenPattern.MatchString(d.Token) || !chatPattern.MatchString(d.ChatID) {
 		return "", invalid()
@@ -57,7 +61,7 @@ func endpoint(d Destination) (string, error) {
 		}
 	case "reverse_proxy":
 		u, err := url.Parse(d.ProxyURL)
-		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" {
+		if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" || strings.Contains(u.Path, d.Token) {
 			return "", invalid()
 		}
 		base = strings.TrimRight(u.String(), "/")
