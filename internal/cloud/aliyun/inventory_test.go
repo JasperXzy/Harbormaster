@@ -16,7 +16,7 @@ func (f callFunc) Call(ctx context.Context, c Credentials, a, r string, q map[st
 func testAccount() model.Account {
 	return model.Account{ID: "acct_test", Site: "china", RegionIDs: []string{"cn-shanghai"}}
 }
-func inventoryFixture(_ context.Context, _ Credentials, action, region string, _ map[string]string) (map[string]any, error) {
+func inventoryFixture(_ context.Context, _ Credentials, action, region string, q map[string]string) (map[string]any, error) {
 	switch action {
 	case "DescribeRegions":
 		return map[string]any{"Regions": map[string]any{"Region": []any{map[string]any{"RegionId": region}}}}, nil
@@ -29,6 +29,9 @@ func inventoryFixture(_ context.Context, _ Credentials, action, region string, _
 	case "DescribeInstances":
 		return map[string]any{"Instances": map[string]any{"Instance": []any{map[string]any{"InstanceId": "i-one", "InstanceName": "one", "Status": "Running", "InstanceChargeType": "PostPaid", "InstanceType": "ecs.test", "EipAddress": map[string]any{"AllocationId": "eip-one", "IpAddress": "203.0.113.10"}}, map[string]any{"InstanceId": "i-two", "InstanceName": "two", "Status": "Stopped", "InstanceChargeType": "PrePaid"}}}, "TotalCount": 2}, nil
 	case "DescribeNetworkInterfaces":
+		if q["InstanceId"] != "" {
+			return map[string]any{"NetworkInterfaceSets": map[string]any{"NetworkInterfaceSet": []any{map[string]any{"NetworkInterfaceId": "eni-" + q["InstanceId"], "InstanceId": q["InstanceId"], "Ipv6Sets": map[string]any{"Ipv6Set": []any{}}}}}, "NextToken": ""}, nil
+		}
 		return map[string]any{"NetworkInterfaceSets": map[string]any{"NetworkInterfaceSet": []any{map[string]any{"NetworkInterfaceId": "eni-two", "InstanceId": "i-two"}}}, "TotalCount": 1}, nil
 	case "DescribeEipAddresses":
 		return map[string]any{"EipAddresses": map[string]any{"EipAddress": []any{map[string]any{"AllocationId": "eip-one", "InstanceId": "i-one", "BandwidthPackageId": "cbwp-test", "InternetChargeType": "PayByTraffic", "IpAddress": "203.0.113.10"}, map[string]any{"AllocationId": "eip-two", "InstanceId": "eni-two", "BandwidthPackageId": "cbwp-test", "InternetChargeType": "PayByTraffic", "IpAddress": "203.0.113.11"}}}, "TotalCount": 2}, nil

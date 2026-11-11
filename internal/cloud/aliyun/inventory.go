@@ -84,7 +84,11 @@ func (c Inventory) pages(ctx context.Context, cred Credentials, action, region, 
 		if err := before(); err != nil {
 			return collection{err: err}
 		}
-		body, err := c.Caller.Call(ctx, cred, action, region, map[string]string{"RegionId": region, "PageNumber": strconv.Itoa(page), "PageSize": strconv.Itoa(size)})
+		query := map[string]string{"RegionId": region, "PageNumber": strconv.Itoa(page), "PageSize": strconv.Itoa(size)}
+		if action == "DescribeInstances" {
+			query["AdditionalAttributes.1"] = "NETWORK_PRIMARY_ENI_IP"
+		}
+		body, err := c.Caller.Call(ctx, cred, action, region, query)
 		if err != nil {
 			return collection{err: err}
 		}
@@ -221,6 +225,7 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 		}
 		checkedAt := time.Now().UTC()
 		part := normalizeRegion(a, region, ecs, eni, eips, packages, swas, traffic, trafficKnown, checkedAt)
+		c.attachIPv6(ctx, cred, region, ecs, part.Snapshots, before, observe)
 		attachNetworkCapacity(part.Snapshots, types, checkedAt)
 		attachRenewals(part.Snapshots, ecsRenewal, swasRenewal, checkedAt)
 		result.Snapshots = append(result.Snapshots, part.Snapshots...)

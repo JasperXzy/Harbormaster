@@ -45,6 +45,9 @@ func (s *Store) SaveScan(ctx context.Context, j model.Job, a model.Account, resu
 		}
 	}
 	for _, v := range result.Snapshots {
+		if err = retainIPv6(ctx, tx, a.ID, v); err != nil {
+			return err
+		}
 		raw, err := json.Marshal(v.Payload)
 		if err != nil {
 			return err

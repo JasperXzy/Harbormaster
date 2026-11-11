@@ -25,6 +25,7 @@ func (s *apiScanner) Scan(_ context.Context, a model.Account, _ model.Credential
 	for _, suffix := range []string{"1", "2"} {
 		id := a.ID + "_instance_" + suffix
 		items = append(items, model.Snapshot{Kind: "ecs", ID: id, Region: "cn-shanghai", Payload: map[string]any{"id": id, "cloud_instance_id": "i-test-" + suffix, "name": "test", "account_id": a.ID, "kind": "ecs", "region_id": "cn-shanghai", "status": "running", "updated_at": time.Now().UTC().Format(time.RFC3339)}})
+		items[len(items)-1].Payload["ipv6"] = map[string]any{"addresses": []string{"2001:db8::" + suffix}, "status": "ok", "source": "ecs_instances", "observed_at": "2026-11-12T00:00:00Z", "checked_at": "2026-11-12T00:00:00Z", "last_error": nil}
 	}
 	return model.ScanResult{Snapshots: items, CompleteScopes: map[string]bool{"ecs:cn-shanghai": true}, CDT: &model.CDTObservation{AccountID: a.ID, FetchedAt: time.Now().UTC(), Overseas: &zero, Quality: "inferred"}, Permissions: &model.PermissionCheck{CheckedAt: time.Now().UTC(), Items: []model.PermissionItem{{Key: "ecs_read", Result: "passed"}, {Key: "instance_power", Result: "not_verified"}}}}
 }
@@ -96,6 +97,9 @@ func TestAccountAPIUsesEncryptedTasksAndSnapshotReads(t *testing.T) {
 		t.Fatal("first cursor page", w.Body)
 	}
 	firstID := page.Items[0]["id"]
+	if ipv6, ok := page.Items[0]["ipv6"].(map[string]any); !ok || ipv6["status"] != "ok" || ipv6["observed_at"] != "2026-11-12T00:00:00Z" || len(ipv6["addresses"].([]any)) != 1 {
+		t.Fatal("stored IPv6 missing from instance API", page.Items[0])
+	}
 	w = panelRequest(p, "GET", "/instances?limit=1&cursor="+*page.Cursor, nil, cookie, "")
 	if json.Unmarshal(w.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Cursor != nil || page.Items[0]["id"] == firstID {
 		t.Fatal("second cursor page", w.Body)

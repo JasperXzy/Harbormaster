@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  IPv6 discovery: optional Instance.ipv6 exposes assigned ECS IPv6 addresses separately from public IPv4 and billing topology. Read instance extensions first, then per-instance ENIs with a 3-second total fallback deadline. Failed refreshes retain the previous result as stale, including its original observation time; only a successful complete read may clear addresses. SWAS is null pending a verified source.
 # 2026-11-12  Bandwidth mismatch alerts: add spec_bandwidth_insufficient (empty params, non-urgent). Fresh ECS network_capacity comparisons drive incident/recovery; unknown data is not recovery. The comparison concerns configured public outbound ceiling versus specification capability, not measured traffic.
 # 2026-11-12  Expiration reminders: add instance_expiring with before_days=7 by default. Evaluate only freshly collected subscription expiry dates, deduplicate active incidents and track renewal-date changes; disabled/released targets cancel pending reminders. Auto-renew enabled does not suppress a reminder. Notifications are persisted only; Telegram dispatch remains unwired.
 # 2026-11-12  Instance renewal snapshot: optional renewal object reports auto/manual/no-renewal/unknown/not-applicable with source, check time and safe error. ECS uses its subscription-only API; SWAS uses BSS records matched by instance ID, region and subscription type. Missing or conflicting records never mean disabled auto-renewal. No renewal write operations are added.
@@ -1606,6 +1607,44 @@ components:
           type: string
           format: date-time
 
+    InstanceIPv6:
+      type: object
+      required: [addresses, status, source, checked_at, observed_at, last_error]
+      properties:
+        addresses:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+            format: ipv6
+          description: Normalized assigned addresses from primary and secondary ENIs, sorted and deduplicated. Empty with unknown status does not confirm absence. Delegated prefixes are not expanded into host addresses.
+        status:
+          type: string
+          enum: [ok, stale, unknown]
+          description: ok means the latest complete query succeeded; stale retains a previous successful result after failure; unknown means no successful result yet.
+        source:
+          type: string
+          nullable: true
+          enum: [ecs_instances, ecs_network_interfaces, null]
+        checked_at:
+          type: string
+          format: date-time
+          description: Time of the latest collection attempt.
+        observed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Time of the last successful complete observation; unchanged on failure.
+        last_error:
+          nullable: true
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
     Instance:
       type: object
       required:
@@ -1665,6 +1704,12 @@ components:
                 type: string
               type:
                 $ref: "#/components/schemas/PublicIpType"
+        ipv6:
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/InstanceIPv6"
+          nullable: true
+          description: Assigned ECS IPv6 addresses; allocation does not prove public connectivity, internet bandwidth or CDT eligibility. Null for SWAS; absent in older snapshots.
         charge_type:
           $ref: "#/components/schemas/ChargeType"
         expires_at:
