@@ -111,7 +111,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f := makeFixtures(now, h.loc)
 	switch path {
 	case "/system/info":
-		respond(w, 200, object{"version": "dev-m0", "commit": "unknown", "built_at": nil, "latest_agent_version": "dev", "data_mode": "demo", "read_only": true})
+		respond(w, 200, object{"version": "dev-m0", "commit": "unknown", "built_at": nil, "latest_agent_version": "v0.2.0", "data_mode": "demo", "read_only": true})
 	case "/settings":
 		respond(w, 200, object{"business_timezone": h.loc.String(), "collection": object{"cdt_poll_interval_seconds": 300, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": 300}})
 	case "/regions":

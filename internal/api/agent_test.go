@@ -132,6 +132,15 @@ func TestInstallCommandChecksArtifactsBeforeIssuingGrant(t *testing.T) {
 		}
 	}
 	cookie, csrf := setupPanel(t, p)
+	checkSystemVersion := func(want any) {
+		t.Helper()
+		w := panelRequest(p, "GET", "/system/info", nil, cookie, "")
+		var info map[string]any
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &info) != nil || info["latest_agent_version"] != want {
+			t.Fatal("system info advertised wrong agent release", w.Body.String())
+		}
+	}
+	checkSystemVersion(nil)
 	path := "/instances/ecs/agent/install-command"
 	if w := panelRequest(p, "POST", path, nil, cookie, ""); w.Code != 403 {
 		t.Fatal("missing CSRF accepted")
@@ -159,6 +168,7 @@ func TestInstallCommandChecksArtifactsBeforeIssuingGrant(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.agentReleaseDir = dir
+	checkSystemVersion("v1.2.0")
 	checkHint := func(want *bool) {
 		t.Helper()
 		items := []map[string]any{{"id": "ecs"}}

@@ -18,6 +18,16 @@ sh deploy/build-agent.sh deploy/bin/agent-releases v1.2.3
 
 没有新增远程执行或自动升级：用户明确执行安装命令后仍走原有校验、绑定、状态保留与回滚流程。本阶段只完成后端字段和开发示例；前端提示样式与文案交给 Claude。
 
+## 前端对接修正
+
+2026-11-12 检查设置页调用方时，发现 `web/src/pages/Settings.tsx` 仍用 installed version 与 SystemInfo.latest_agent_version 的字符串不等判断升级。该判断会把不同的 dev 标签、较新的已安装版本以及缺少发布包的情况误判为“有新版本”。需要 Claude 将判断改为 `i.agent.update_available === true`，并在显示 available_version / latest_agent_version 时处理 null；同时从更新的 OpenAPI 重新生成类型。这里仅记录交接，不修改前端。
+
+后端 SystemInfo.latest_agent_version 已改为同一个经过完整校验的本地 agent 版本缓存，未配置有效发布目录时为 null，不再返回 hm-server 自身 buildinfo.Version。开发模式系统信息与合成升级示例统一使用 v0.2.0。
+
+新增回归测试先复现了旧逻辑：未配置发布目录时仍返回 latest_agent_version=dev；修复后验证无发布包返回 null、配置有效 v1.2.0 发布包后返回 v1.2.0，测试通过。
+
+此修正后再次运行 go build ./...、go vet ./...、go test -race ./...、OpenAPI lint 和 git diff --check，均 exit 0。本次 race 输出：internal/api 26.304s、internal/cli 2.675s、internal/devmode 5.375s，其他有测试的包 cached / passed。
+
 ## 验证
 
 ```text

@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Correct SystemInfo.latest_agent_version: nullable, sourced from the same verified local release as Agent.available_version, never the hm-server build version. Frontends must use Agent.update_available===true, not version-string inequality, to show upgrade hints.
 # 2026-11-12  Agent upgrade hints: optional nullable available_version/update_available refer to the server's locally configured, checksum-verified agent release. Semantic versions compare by precedence; dev/unknown versions yield null. Release checks are cached for at most 30 seconds; obtaining an upgrade command always revalidates artifacts and uses the existing install-command endpoint.
 # 2026-11-12  Read-only bandwidth checks: Instance.network_capacity optionally exposes ECS specification RX/TX limits in kbit/s, source timestamp/error and a nullable comparison against the configured public outbound ceiling. Unknown topology, multiple billing exits, missing specifications and SWAS do not produce a passing result. No GET-triggered cloud calls or protective action.
 # 2026-11-12  Configurable agent cadence: optional nullable Agent.report_interval_seconds reports the latest accepted cadence (1–60 seconds); settings.collection.agent_report_interval_seconds remains the default, not a global override. Offline alert timeout remains separately configurable.
@@ -1119,6 +1120,8 @@ components:
           description: Null when the binary has no build timestamp.
         latest_agent_version:
           type: string
+          nullable: true
+          description: Verified local agent release version, using the same cache as Agent.available_version. Null when unavailable. Use Agent.update_available for upgrade decisions, not string inequality against this field.
 
     Settings:
       type: object

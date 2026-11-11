@@ -108,7 +108,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, buildinfo.BuildTime); err == nil {
 			builtAt = t.UTC().Format(time.RFC3339)
 		}
-		writeJSON(w, 200, map[string]any{"version": buildinfo.Version, "commit": buildinfo.Commit, "built_at": builtAt, "latest_agent_version": buildinfo.Version, "data_mode": "live", "read_only": p.engine == nil})
+		writeJSON(w, 200, map[string]any{"version": buildinfo.Version, "commit": buildinfo.Commit, "built_at": builtAt, "latest_agent_version": p.releaseVersions.Get(p.agentReleaseDir, p.now()), "data_mode": "live", "read_only": p.engine == nil})
 	case "/settings":
 		zone := p.timezone
 		err := p.s.DB.QueryRowContext(r.Context(), "SELECT value FROM app_meta WHERE key='business_timezone'").Scan(&zone)
