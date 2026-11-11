@@ -12,6 +12,10 @@ import (
 // AgentViews reads the current ledger and the previous sample in its epoch.
 // Receipt order alone is insufficient: a catch-up batch shares one receipt time.
 func (s *Store) AgentViews(ctx context.Context, now time.Time) (map[string]model.AgentView, error) {
+	offlineAfter, err := s.AgentOfflineAfter(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.DB.QueryContext(ctx, `SELECT a.instance_id,a.version,a.registered_at,a.last_received_at,a.revoked_at,
  coalesce(cfg.enabled,0),c.sampled_at,c.received_at,c.quality,c.uptime_ms,c.rx_bytes,c.tx_bytes,
  p.uptime_ms,p.rx_bytes,p.tx_bytes,p.sampled_at
@@ -44,7 +48,7 @@ func (s *Store) AgentViews(ctx context.Context, now time.Time) (map[string]model
 				v.Agent.Quality = &q
 			}
 			if last := v.Agent.LastReportAt; last != nil {
-				offline := last.Add(30 * time.Second)
+				offline := last.Add(offlineAfter)
 				if enabled && now.Before(offline) && !last.After(now) {
 					v.Agent.Status = "online"
 				} else if !now.Before(offline) {

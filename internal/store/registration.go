@@ -144,5 +144,11 @@ func (s *Store) RevokeAgent(ctx context.Context, instanceID string, now time.Tim
 	if _, err = tx.ExecContext(ctx, "DELETE FROM agent_registration WHERE instance_id=?", instanceID); err != nil {
 		return err
 	}
+	if _, err = tx.ExecContext(ctx, "UPDATE alert_state SET active=0,changed_at=? WHERE rule_key='agent_offline' AND target_id=? AND active=1", timestamp(now), instanceID); err != nil {
+		return err
+	}
+	if err = cancelPendingNotifications(ctx, tx, "rule_key='agent_offline' AND instance_id=?", []any{instanceID}, "agent_revoked", now); err != nil {
+		return err
+	}
 	return tx.Commit()
 }

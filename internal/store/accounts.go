@@ -155,6 +155,14 @@ func (s *Store) UpdateAccount(ctx context.Context, id string, change func(*model
 		return a, err
 	}
 	// A newly enabled account is discovered even if its prior refresh was queued.
+	if !a.Enabled {
+		if _, err = tx.ExecContext(ctx, "UPDATE alert_state SET active=0,changed_at=? WHERE account_id=? AND active=1", timestamp(now), id); err != nil {
+			return a, err
+		}
+		if err = cancelPendingNotifications(ctx, tx, "account_id=?", []any{id}, "account_disabled", now); err != nil {
+			return a, err
+		}
+	}
 	if a.Enabled {
 		if _, err = tx.ExecContext(ctx, "UPDATE account_settings SET next_cdt_at=0 WHERE account_id=?", id); err != nil {
 			return a, err

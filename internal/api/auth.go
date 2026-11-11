@@ -93,7 +93,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.business(w, r, path) {
+	if p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.business(w, r, path) {
 		return
 	}
 	if r.Method != "GET" {
@@ -120,7 +120,12 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			scanSeconds = int(p.engine.Interval.Seconds())
 			cdtSeconds = int(p.engine.TrafficInterval().Seconds())
 		}
-		writeJSON(w, 200, map[string]any{"business_timezone": zone, "collection": map[string]int{"cdt_poll_interval_seconds": cdtSeconds, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": scanSeconds}})
+		offline, err := p.s.AgentOfflineAfter(r.Context())
+		if err != nil {
+			businessError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"business_timezone": zone, "collection": map[string]int{"cdt_poll_interval_seconds": cdtSeconds, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": int(offline.Seconds()), "resource_scan_interval_seconds": scanSeconds}})
 	case "/events":
 		p.events(w, r)
 	case "/accounts", "/instances", "/traffic/quotas", "/traffic/daily", "/traffic/billing-subjects", "/bandwidth-packages", "/regions", "/notify/telegram", "/alert-rules", "/notifications":
@@ -343,6 +348,10 @@ func (p *productionPanel) events(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
+	noticeSeq, err := p.s.NotificationChangeHead(r.Context())
+	if err != nil {
+		return
+	}
 	if !send("ping", map[string]any{}) {
 		return
 	}
@@ -365,6 +374,20 @@ func (p *productionPanel) events(w http.ResponseWriter, r *http.Request) {
 			}
 			if !p.agentEvents(r.Context(), agentState, send) {
 				return
+			}
+			notices, nextNotice, err := p.s.NotificationChanges(r.Context(), noticeSeq)
+			if err != nil {
+				return
+			}
+			noticeSeq = nextNotice
+			for _, notice := range notices {
+				event := "notification.updated"
+				if notice.Created {
+					event = "notification.created"
+				}
+				if !send(event, notice.Notification) {
+					return
+				}
 			}
 			jobs, next, err := p.s.JobChanges(r.Context(), seq)
 			if err != nil {

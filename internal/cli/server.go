@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/api"
@@ -22,6 +23,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/logging"
 	"github.com/JasperXzy/harbormaster/internal/m0"
 	"github.com/JasperXzy/harbormaster/internal/model"
+	"github.com/JasperXzy/harbormaster/internal/notify"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
 	"github.com/JasperXzy/harbormaster/internal/ui"
@@ -169,6 +171,9 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 					break
 				}
 			}
+			if err = s.EvaluateAlerts(ctx, time.Now().UTC()); err != nil {
+				return fail("alert_evaluation_failed")
+			}
 			log.Info("run_once_complete", "cloud_writes", 0)
 			return 0
 		}
@@ -239,9 +244,11 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 	}
 	if engine != nil {
 		workerCtx, cancel := context.WithCancel(ctx)
-		finished := make(chan struct{})
-		go func() { defer close(finished); engine.Run(workerCtx) }()
-		defer func() { cancel(); <-finished }()
+		var workers sync.WaitGroup
+		workers.Add(2)
+		go func() { defer workers.Done(); engine.Run(workerCtx) }()
+		go func() { defer workers.Done(); (notify.Evaluator{Store: s, Log: log}).Run(workerCtx) }()
+		defer func() { cancel(); workers.Wait() }()
 	}
 	h := &http.Server{Handler: api.NewHandler(s, panel, frontend), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10, BaseContext: func(net.Listener) context.Context { return ctx }}
 	done := make(chan error, 1)

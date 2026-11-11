@@ -66,6 +66,7 @@ func (e *Engine) CreateAccount(ctx context.Context, in model.AccountCreate) (mod
 }
 func (e *Engine) UpdateAccount(ctx context.Context, id string, in model.AccountUpdate) (model.Account, error) {
 	return e.Store.UpdateAccount(ctx, id, func(a *model.Account) ([]byte, error) {
+		wasEnabled := a.Enabled
 		in.Apply(a)
 		f := a.Validate()
 		if (in.AccessKeyID == nil) != (in.AccessKeySecret == nil) {
@@ -86,11 +87,15 @@ func (e *Engine) UpdateAccount(ctx context.Context, id string, in model.AccountU
 			a.AccessKeyIDMasked = security.MaskAccessKeyID(c.AccessKeyID)
 			a.PermissionCheck = nil
 			a.SyncStatus = "never_synced"
+			a.ConsecutiveFailures = 0
+			a.LastError = nil
 			return e.encrypt(a.ID, c)
 		}
-		if in.RegionIDs != nil {
+		if in.RegionIDs != nil || (!wasEnabled && a.Enabled) {
 			a.PermissionCheck = nil
 			a.SyncStatus = "never_synced"
+			a.ConsecutiveFailures = 0
+			a.LastError = nil
 		}
 		return nil, nil
 	}, time.Now().UTC(), e.scanInterval())
@@ -289,16 +294,22 @@ func (e *Engine) scanAccount(ctx context.Context, j model.Job, a model.Account) 
 	defer func() { cancel(); <-done }()
 	cipher, err := e.Store.AccountCipher(scanCtx, a.ID)
 	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			result := model.ScanResult{Failure: "credential_unavailable"}
+			return result, e.Store.SaveScan(scanCtx, j, a, result, time.Now().UTC())
+		}
 		return model.ScanResult{}, err
 	}
 	raw, err := e.Box.Decrypt(cipher, model.CredentialOwner(a.ID))
 	if err != nil {
-		return model.ScanResult{}, errors.New("credential_decryption_failed")
+		result := model.ScanResult{Failure: "credential_decryption_failed"}
+		return result, e.Store.SaveScan(scanCtx, j, a, result, time.Now().UTC())
 	}
 	defer clear(raw)
 	var credential model.Credential
 	if json.Unmarshal(raw, &credential) != nil {
-		return model.ScanResult{}, errors.New("credential_decryption_failed")
+		result := model.ScanResult{Failure: "credential_decryption_failed"}
+		return result, e.Store.SaveScan(scanCtx, j, a, result, time.Now().UTC())
 	}
 	before := func() error {
 		if scanCtx.Err() != nil {

@@ -272,3 +272,31 @@ func TestIncompleteScanRetainsPriorResources(t *testing.T) {
 		t.Fatal("historical resource row deleted")
 	}
 }
+
+func TestUnreadableCredentialsBecomeRecordedCollectionFailures(t *testing.T) {
+	e, _ := testEngine(t)
+	ctx := context.Background()
+	a, _, err := e.CreateAccount(ctx, testCreate("unreadable"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Scanner = scanFunc(func(context.Context, model.Account, model.Credential, bool, func() error) model.ScanResult {
+		t.Fatal("unreadable credentials reached provider")
+		return model.ScanResult{}
+	})
+	if _, err = e.Store.DB.Exec("UPDATE credential SET ciphertext=? WHERE owner_field=?", bytes.Repeat([]byte{7}, 40), model.CredentialOwner(a.ID)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = e.RunOne(ctx); err != nil {
+		t.Fatal(err)
+	}
+	a, err = e.Store.Account(ctx, a.ID)
+	if err != nil || a.SyncStatus != "failing" || a.ConsecutiveFailures != 1 || a.LastError.Code != "credential_decryption_failed" {
+		t.Fatal(a, err)
+	}
+	replacement := testCreate("unused").Credential
+	a, err = e.UpdateAccount(ctx, a.ID, model.AccountUpdate{AccessKeyID: &replacement.AccessKeyID, AccessKeySecret: &replacement.AccessKeySecret})
+	if err != nil || a.SyncStatus != "never_synced" || a.ConsecutiveFailures != 0 || a.LastError != nil {
+		t.Fatal("credential rotation retained old failure evidence", err)
+	}
+}

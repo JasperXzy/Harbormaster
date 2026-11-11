@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Source-health alerts: production lists account_api_failure, cdt_official_unavailable and agent_offline only; usage/forecast remain unavailable pending metering decisions. Persisted offline timeout drives both status and alerts. Add notification.updated SSE for delivery/cancellation changes; evaluation records events without dispatching Telegram yet.
 # 2026-11-12  Notification reads: encrypted channel configuration exposes only safe metadata and proxy_auth_set; add not_tested so saved credentials are not reported healthy before a successful send. Notification history adds attempts, last_error, delivered_at and has_uncertain_attempt to distinguish workflow failure from unconfirmed delivery. Update/dispatch policy remains pending user decisions.
 # 2026-11-12  Agent install-command validates a complete local release before issuing a code; missing/corrupt files return 503 agent_release_unavailable. Generated commands pin installer and manifest checksums, pass the one-time code via stdin and keep active tokens until registration succeeds.
 # 2026-11-12  Agent ingestion: optional pending_first_report/data_quality distinguish registration from fresh samples. instance.realtime SSE can explicitly clear stale rates with null. New grant replaces the old code but retains the active token until successful registration; revocation gives not_installed. Metadata is not remote attestation. See docs/m0/agent-protocol.md.
@@ -365,6 +366,7 @@ paths:
         | `agent.status` | `AgentStatusEvent` | agent 上线、掉线、注册、被撤销 |
         | `job.updated` | `Job` | 任务状态变化 |
         | `notification.created` | `Notification` | 产生了一条新通知 |
+        | `notification.updated` | `Notification` | 已有通知的发送或取消状态变化；按 id 更新，不当作新告警 |
         | `ping` | `{}` | 心跳 |
 
         断线后前端自动重连，重连成功后重新拉取当前页面的数据。
@@ -798,6 +800,7 @@ paths:
       tags: [notify]
       operationId: listAlertRules
       summary: 内置告警规则
+      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable and agent_offline. Usage/forecast rules are not returned until their metering source and policy are available.
       responses:
         "200":
           description: 告警规则
@@ -2035,10 +2038,14 @@ components:
             type: integer
         consecutive_failures:
           type: integer
+          minimum: 1
+          maximum: 1000
           description: account_api_failure、cdt_official_unavailable：连续失败多少次后告警。
         offline_after_seconds:
           type: integer
-          description: agent_offline：连续多少秒无上报视为掉线。
+          minimum: 10
+          maximum: 86400
+          description: agent_offline：连续多少秒无新鲜上报视为掉线，默认 30。实例状态和 settings 使用同一值；关闭告警不关闭状态监测。尚未收到首次有效上报的注册不触发掉线告警。
 
     AlertRule:
       type: object

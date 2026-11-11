@@ -261,3 +261,15 @@ func (s *Store) FinishNotification(ctx context.Context, n model.Notification, me
 	}
 	return tx.Commit()
 }
+
+// predicate is a fixed internal SQL expression; values remain bound arguments.
+func cancelPendingNotifications(ctx context.Context, tx *sql.Tx, predicate string, values []any, code string, now time.Time) error {
+	args := append([]any{timestamp(now), code}, values...)
+	if _, err := tx.ExecContext(ctx, "UPDATE job SET status='failed',finished_at=?,error_code=?,lease_owner=NULL,lease_until=0 WHERE status IN ('queued','running') AND id IN (SELECT job_id FROM notification WHERE delivery_status='pending' AND "+predicate+")", args...); err != nil {
+		return err
+	}
+	args = append([]any{code}, values...)
+	_, err := tx.ExecContext(ctx, `UPDATE notification SET delivery_status=CASE WHEN lease_owner IS NULL THEN 'not_sent' ELSE 'failed' END,
+ last_error_code=?,uncertain=(uncertain OR lease_owner IS NOT NULL),lease_owner=NULL,lease_until=0 WHERE delivery_status='pending' AND `+predicate, args...)
+	return err
+}
