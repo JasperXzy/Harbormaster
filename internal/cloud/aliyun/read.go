@@ -46,19 +46,21 @@ func Code(err error) string {
 type definition struct{ product, version, params string }
 
 var reads = map[string]definition{
-	"DescribeRegions":                 {"ecs", "2014-05-26", ""},
-	"DescribeInstanceTypes":           {"ecs", "2014-05-26", "MaxResults NextToken InstanceTypes.1 InstanceTypes.2 InstanceTypes.3 InstanceTypes.4 InstanceTypes.5 InstanceTypes.6 InstanceTypes.7 InstanceTypes.8 InstanceTypes.9 InstanceTypes.10"},
-	"DescribeInstances":               {"ecs", "2014-05-26", "RegionId PageNumber PageSize"},
-	"DescribeNetworkInterfaces":       {"ecs", "2014-05-26", "RegionId PageNumber PageSize"},
-	"DescribeEipAddresses":            {"vpc", "2016-04-28", "RegionId PageNumber PageSize"},
-	"DescribeCommonBandwidthPackages": {"vpc", "2016-04-28", "RegionId PageNumber PageSize"},
-	"ListInstances":                   {"swas", "2020-06-01", "RegionId PageNumber PageSize"},
-	"ListInstancesTrafficPackages":    {"swas", "2020-06-01", "RegionId InstanceIds"},
-	"ListCdtInternetTraffic":          {"cdt", "2021-08-13", "RegionId"},
-	"DescribeMetricMetaList":          {"cms", "2019-01-01", "Namespace MetricName PageNumber PageSize"},
-	"DescribeMetricList":              {"cms", "2019-01-01", "Namespace MetricName Dimensions StartTime EndTime Period"},
-	"QueryAccountBalance":             {"bss", "2017-12-14", ""},
-	"QueryBillOverview":               {"bss", "2017-12-14", "BillingCycle"},
+	"DescribeInstanceAutoRenewAttribute": {"ecs", "2014-05-26", "RegionId InstanceId PageNumber PageSize"},
+	"QueryAvailableInstances":            {"bss", "2017-12-14", "InstanceIDs SubscriptionType PageNum PageSize"},
+	"DescribeRegions":                    {"ecs", "2014-05-26", ""},
+	"DescribeInstanceTypes":              {"ecs", "2014-05-26", "MaxResults NextToken InstanceTypes.1 InstanceTypes.2 InstanceTypes.3 InstanceTypes.4 InstanceTypes.5 InstanceTypes.6 InstanceTypes.7 InstanceTypes.8 InstanceTypes.9 InstanceTypes.10"},
+	"DescribeInstances":                  {"ecs", "2014-05-26", "RegionId PageNumber PageSize"},
+	"DescribeNetworkInterfaces":          {"ecs", "2014-05-26", "RegionId PageNumber PageSize"},
+	"DescribeEipAddresses":               {"vpc", "2016-04-28", "RegionId PageNumber PageSize"},
+	"DescribeCommonBandwidthPackages":    {"vpc", "2016-04-28", "RegionId PageNumber PageSize"},
+	"ListInstances":                      {"swas", "2020-06-01", "RegionId PageNumber PageSize"},
+	"ListInstancesTrafficPackages":       {"swas", "2020-06-01", "RegionId InstanceIds"},
+	"ListCdtInternetTraffic":             {"cdt", "2021-08-13", "RegionId"},
+	"DescribeMetricMetaList":             {"cms", "2019-01-01", "Namespace MetricName PageNumber PageSize"},
+	"DescribeMetricList":                 {"cms", "2019-01-01", "Namespace MetricName Dimensions StartTime EndTime Period"},
+	"QueryAccountBalance":                {"bss", "2017-12-14", ""},
+	"QueryBillOverview":                  {"bss", "2017-12-14", "BillingCycle"},
 }
 
 type Caller interface {

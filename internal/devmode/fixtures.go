@@ -77,11 +77,16 @@ func makeFixtures(now time.Time, loc *time.Location) fixtures {
 		if i <= 1 {
 			ipType = "eip"
 		}
+		renewal := object{"status": "not_applicable", "source": nil, "checked_at": stamp, "last_error": nil}
+		if kind == "swas" {
+			renewal["status"] = "manual_renewal"
+			renewal["source"] = "bss_query_available_instances"
+		}
 		var capacity any
 		if kind == "ecs" {
 			capacity = object{"source": "ecs_describe_instance_types", "checked_at": stamp, "rx_kbps": 1000000, "tx_kbps": 1000000, "public_outbound_mbps": 2000, "public_outbound_exceeds_spec": true, "last_error": nil}
 		}
-		f.Instances = append(f.Instances, object{"id": id, "cloud_instance_id": []string{"i-demo-sin", "i-demo-hkg", "swas-demo-sha"}[i], "name": name, "account_id": account, "kind": kind, "region_id": []string{"ap-southeast-1", "cn-hongkong", "cn-shanghai"}[i], "zone_id": nil, "spec": "example-spec", "network_capacity": capacity, "status": "running", "public_ips": []object{{"address": ip, "type": ipType}}, "charge_type": []string{"pay_as_you_go", "pay_as_you_go", "subscription"}[i], "expires_at": nil, "billing_subject_id": "subject-" + id, "billing_subject_kind": billing, "metering_rule": rule, "bandwidth_mbps": []int{2000, 2000, 200}[i], "bandwidth_package_name": packageName, "counts_toward_cdt": counts, "cdt_scope": scope, "agent": agent, "realtime_protection": protection, "realtime": realtime, "updated_at": stamp})
+		f.Instances = append(f.Instances, object{"id": id, "cloud_instance_id": []string{"i-demo-sin", "i-demo-hkg", "swas-demo-sha"}[i], "name": name, "account_id": account, "kind": kind, "region_id": []string{"ap-southeast-1", "cn-hongkong", "cn-shanghai"}[i], "zone_id": nil, "spec": "example-spec", "network_capacity": capacity, "renewal": renewal, "status": "running", "public_ips": []object{{"address": ip, "type": ipType}}, "charge_type": []string{"pay_as_you_go", "pay_as_you_go", "subscription"}[i], "expires_at": nil, "billing_subject_id": "subject-" + id, "billing_subject_kind": billing, "metering_rule": rule, "bandwidth_mbps": []int{2000, 2000, 200}[i], "bandwidth_package_name": packageName, "counts_toward_cdt": counts, "cdt_scope": scope, "agent": agent, "realtime_protection": protection, "realtime": realtime, "updated_at": stamp})
 		var rx, tx, metered any
 		source := "none"
 		if i == 0 {

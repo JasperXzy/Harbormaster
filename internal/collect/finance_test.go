@@ -135,3 +135,27 @@ func TestStaleFinanceCollectionCannotPublish(t *testing.T) {
 		t.Fatal("disabled account accepted in-flight finance", view, err)
 	}
 }
+
+func TestFinancePermissionKeepsEarlierBSSFailure(t *testing.T) {
+	e, _ := testEngine(t)
+	ctx := context.Background()
+	a, _, err := e.CreateAccount(ctx, testCreate("renewal permission"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.Scanner = financeScanner{scanFunc: scanFunc(func(_ context.Context, a model.Account, _ model.Credential, _ bool, _ func() error) model.ScanResult {
+		r := oneSnapshot(a)
+		r.Failure = "permission_denied"
+		r.Permissions = &model.PermissionCheck{Items: []model.PermissionItem{{Key: "bss_read", Result: "missing"}}}
+		return r
+	}), collectFinance: func(_ context.Context, _ model.Account, cycle string) []model.FinanceObservation {
+		return []model.FinanceObservation{{Kind: "balance", FetchedAt: time.Now(), Balance: &model.BalanceData{Currency: "CNY", Available: "1", Cash: "1"}}, {Kind: "bill", Cycle: cycle, FetchedAt: time.Now(), Bill: &model.BillData{Cycle: cycle, Items: []model.BillItem{}}}}
+	}}
+	if ran, err := e.RunOne(ctx); !ran || err != nil {
+		t.Fatal(ran, err)
+	}
+	a, err = e.Store.Account(ctx, a.ID)
+	if err != nil || a.PermissionCheck.Items[0].Result != "missing" || a.SyncStatus != "failing" {
+		t.Fatal("finance success hid missing renewal permission", err)
+	}
+}

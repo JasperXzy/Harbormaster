@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Instance renewal snapshot: optional renewal object reports auto/manual/no-renewal/unknown/not-applicable with source, check time and safe error. ECS uses its subscription-only API; SWAS uses BSS records matched by instance ID, region and subscription type. Missing or conflicting records never mean disabled auto-renewal. No renewal write operations are added.
 # 2026-11-12  API Key management: session/CSRF-protected create, paginated list and soft revocation. Creation returns the secret once; subsequent responses expose metadata only. Scopes are fixed to summary:read, instance:control and cron:run; they do not grant browser-session or agent-report access. Integration consumers are separate from this management API.
 # 2026-11-12  Account finance: GET /accounts/{account_id}/finance reads cached balance and current-month bill overview only. Money is decimal text with provider currency; bill types remain separate, no guessed net total. Sources retain last successful data on failure and are fenced by credential version; the configured business timezone selects the requested billing cycle.
 # 2026-11-12  Correct SystemInfo.latest_agent_version: nullable, sourced from the same verified local release as Agent.available_version, never the hm-server build version. Frontends must use Agent.update_available===true, not version-string inequality, to show upgrade hints.
@@ -1693,6 +1694,8 @@ components:
           type: integer
           nullable: true
           description: 实际生效的公网带宽上限（实例、EIP 或所在共享带宽）。
+        renewal:
+          $ref: "#/components/schemas/InstanceRenewal"
         bandwidth_package_name:
           type: string
           nullable: true
@@ -1727,6 +1730,31 @@ components:
           type: string
           format: date-time
           description: 这台实例的资源信息最近一次从阿里云更新的时间。
+
+    InstanceRenewal:
+      type: object
+      required: [status, source, checked_at, last_error]
+      properties:
+        status:
+          type: string
+          enum: [auto_renewal, manual_renewal, no_renewal, unknown, not_applicable]
+          description: A configured renewal policy, not proof that a renewal payment will succeed. Known pay-as-you-go/spot instances are not_applicable; unavailable or ambiguous subscription data is unknown.
+        source:
+          type: string
+          nullable: true
+          enum: [ecs_describe_instance_auto_renew_attribute, bss_query_available_instances, null]
+        checked_at:
+          type: string
+          format: date-time
+        last_error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
 
     InstanceNetworkCapacity:
       type: object

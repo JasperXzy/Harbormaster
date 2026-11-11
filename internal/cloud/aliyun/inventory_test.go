@@ -20,6 +20,10 @@ func inventoryFixture(_ context.Context, _ Credentials, action, region string, _
 	switch action {
 	case "DescribeRegions":
 		return map[string]any{"Regions": map[string]any{"Region": []any{map[string]any{"RegionId": region}}}}, nil
+	case "DescribeInstanceAutoRenewAttribute":
+		return map[string]any{"TotalCount": 1, "InstanceRenewAttributes": map[string]any{"InstanceRenewAttribute": []any{map[string]any{"InstanceId": "i-two", "RenewalStatus": "Normal", "AutoRenewEnabled": false}}}}, nil
+	case "QueryAvailableInstances":
+		return map[string]any{"Success": true, "Data": map[string]any{"TotalCount": 1, "InstanceList": []any{map[string]any{"InstanceID": "swas-test", "Region": region, "SubscriptionType": "Subscription", "RenewStatus": "AutoRenewal"}}}}, nil
 	case "DescribeInstanceTypes":
 		return map[string]any{"InstanceTypes": map[string]any{"InstanceType": []any{map[string]any{"InstanceTypeId": "ecs.test", "InstanceBandwidthRx": 1000000, "InstanceBandwidthTx": 1000000}}}}, nil
 	case "DescribeInstances":
@@ -76,7 +80,7 @@ func TestDiscoverySharedTopologyAndNoPackage(t *testing.T) {
 		t.Fatal(instances, packages, subjects)
 	}
 	for _, p := range r.Permissions.Items {
-		if p.Key == "instance_power" || p.Key == "eip_manage" || p.Key == "bss_read" {
+		if p.Key == "instance_power" || p.Key == "eip_manage" {
 			if p.Result != "not_verified" {
 				t.Fatal("write permission falsely verified")
 			}

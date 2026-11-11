@@ -208,9 +208,21 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 		}
 		types := c.instanceTypes(ctx, cred, region, ecs, before)
 		observe("ecs_read", types.err)
+		ecsRenewal := c.renewals(ctx, cred, region, "ecs", ecs, before)
+		observe("ecs_read", ecsRenewal.err)
+		swasRenewal := c.renewals(ctx, cred, region, "swas", swas, before)
+		if swas.err == nil {
+			for _, row := range swas.rows {
+				if charge(row) == "subscription" {
+					observe("bss_read", swasRenewal.err)
+					break
+				}
+			}
+		}
 		checkedAt := time.Now().UTC()
 		part := normalizeRegion(a, region, ecs, eni, eips, packages, swas, traffic, trafficKnown, checkedAt)
 		attachNetworkCapacity(part.Snapshots, types, checkedAt)
+		attachRenewals(part.Snapshots, ecsRenewal, swasRenewal, checkedAt)
 		result.Snapshots = append(result.Snapshots, part.Snapshots...)
 		for k, v := range part.CompleteScopes {
 			result.CompleteScopes[k] = v

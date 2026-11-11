@@ -360,7 +360,14 @@ func (e *Engine) scanAccount(ctx context.Context, j model.Job, a model.Account) 
 		if result.Permissions != nil {
 			for i := range result.Permissions.Items {
 				if result.Permissions.Items[i].Key == "bss_read" {
-					result.Permissions.Items[i].Result = permission
+					old := result.Permissions.Items[i].Result
+					if old == "missing" || permission == "missing" {
+						result.Permissions.Items[i].Result = "missing"
+					} else if old == "check_failed" || permission == "check_failed" {
+						result.Permissions.Items[i].Result = "check_failed"
+					} else {
+						result.Permissions.Items[i].Result = permission
+					}
 				}
 			}
 		}

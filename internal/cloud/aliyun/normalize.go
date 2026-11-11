@@ -86,7 +86,11 @@ func baseInstance(a model.Account, kind, region string, r map[string]any, now ti
 	if kind == "swas" {
 		spec = text(r, "PlanId")
 	}
-	return map[string]any{"id": resourceID(a, kind, region, id), "cloud_instance_id": id, "name": name, "account_id": a.ID, "kind": kind, "region_id": region, "zone_id": nullableText(text(r, "ZoneId")), "spec": spec, "status": status(text(r, "Status")), "public_ips": []map[string]any{}, "charge_type": charge(r), "expires_at": utcTime(text(r, "ExpiredTime")), "billing_subject_id": nil, "billing_subject_ids": []string{}, "billing_subject_kind": nil, "metering_rule": nil, "bandwidth_mbps": nil, "bandwidth_package_name": nil, "counts_toward_cdt": nil, "cdt_scope": nil, "agent": map[string]any{"status": "not_installed", "version": nil, "registered_at": nil, "last_report_at": nil, "offline_since": nil, "worst_case": nil}, "realtime_protection": "unprotected", "realtime": nil, "updated_at": now.Format(time.RFC3339)}
+	var expires any
+	if charge(r) == "subscription" {
+		expires = utcTime(text(r, "ExpiredTime"))
+	}
+	return map[string]any{"id": resourceID(a, kind, region, id), "cloud_instance_id": id, "name": name, "account_id": a.ID, "kind": kind, "region_id": region, "zone_id": nullableText(text(r, "ZoneId")), "spec": spec, "status": status(text(r, "Status")), "public_ips": []map[string]any{}, "charge_type": charge(r), "expires_at": expires, "billing_subject_id": nil, "billing_subject_ids": []string{}, "billing_subject_kind": nil, "metering_rule": nil, "bandwidth_mbps": nil, "bandwidth_package_name": nil, "counts_toward_cdt": nil, "cdt_scope": nil, "agent": map[string]any{"status": "not_installed", "version": nil, "registered_at": nil, "last_report_at": nil, "offline_since": nil, "worst_case": nil}, "realtime_protection": "unprotected", "realtime": nil, "updated_at": now.Format(time.RFC3339)}
 }
 func subject(a model.Account, id, name, kind, rule, region string, bandwidth any, now time.Time) map[string]any {
 	var eligible any
