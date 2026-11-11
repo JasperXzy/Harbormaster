@@ -15,7 +15,7 @@ func TestAlertRuleAPIUsesAvailableSourcesAndSharedOfflineTimeout(t *testing.T) {
 	var list struct {
 		Items []model.AlertRule `json:"items"`
 	}
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 3 {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 4 {
 		t.Fatal(w.Code, w.Body)
 	}
 	for _, rule := range list.Items {
@@ -41,5 +41,16 @@ func TestAlertRuleAPIUsesAvailableSourcesAndSharedOfflineTimeout(t *testing.T) {
 	}
 	if w = panelRequest(p, "PATCH", "/alert-rules/cdt_usage", map[string]bool{"enabled": true}, cookie, csrf); w.Code != 404 {
 		t.Fatal("unavailable rule became enabled")
+	}
+	for _, days := range []int{-1, 366} {
+		if w = panelRequest(p, "PATCH", "/alert-rules/instance_expiring", map[string]any{"params": map[string]int{"before_days": days}}, cookie, csrf); w.Code != 422 {
+			t.Fatal(w.Code, w.Body)
+		}
+	}
+	if w = panelRequest(p, "PATCH", "/alert-rules/instance_expiring", map[string]any{"params": map[string]int{"before_days": 3}}, cookie, csrf); w.Code != 200 || !strings.Contains(w.Body.String(), `"before_days":3`) {
+		t.Fatal(w.Code, w.Body)
+	}
+	if w = panelRequest(p, "PATCH", "/alert-rules/account_api_failure", map[string]any{"params": map[string]int{"consecutive_failures": 3, "before_days": 7}}, cookie, csrf); w.Code != 422 {
+		t.Fatal("expiry params accepted on another rule", w.Code)
 	}
 }

@@ -15,6 +15,7 @@ type alertObservation struct {
 	rule, target, account, instance string
 	outcome                         string // firing, healthy, unknown; absent targets are no longer applicable.
 	detail                          string
+	basis                           string
 }
 
 // EvaluateAlerts reads evidence and commits state transitions + notifications
@@ -149,6 +150,28 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 			return err
 		}
 	}
+	// Expiry transitions are driven by successful collection, not cached clock
+	// extrapolation. Keep present targets unknown here; absence still closes them.
+	if r := rules["instance_expiring"]; r.Enabled {
+		rows, err = tx.QueryContext(ctx, `SELECT i.id,i.account_id FROM instance i JOIN account_settings a ON a.account_id=i.account_id AND a.enabled=1
+ WHERE EXISTS(SELECT 1 FROM resource_snapshot rs WHERE rs.account_id=i.account_id AND rs.id=i.id AND rs.kind=i.kind AND rs.present=1)`)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var id, account string
+			if err = rows.Scan(&id, &account); err != nil {
+				rows.Close()
+				return err
+			}
+			observations = append(observations, alertObservation{rule: r.Key, target: id, account: account, instance: id, outcome: "unknown"})
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+	}
 	seen := map[string]bool{}
 	for _, o := range observations {
 		seen[o.rule+"/"+o.target] = true
@@ -194,13 +217,27 @@ func applyAlert(ctx context.Context, tx *sql.Tx, o alertObservation, now time.Ti
 	}
 	var active bool
 	var episode int64
-	err := tx.QueryRowContext(ctx, "SELECT active,episode FROM alert_state WHERE rule_key=? AND target_id=?", o.rule, o.target).Scan(&active, &episode)
+	var basis string
+	err := tx.QueryRowContext(ctx, "SELECT active,episode,basis FROM alert_state WHERE rule_key=? AND target_id=?", o.rule, o.target).Scan(&active, &episode, &basis)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
 	firing := o.outcome == "firing"
+	if active && firing && o.basis != "" && basis != "" && basis != o.basis {
+		// A changed deadline still inside the warning window is a new basis,
+		// not recovery. Replace an unsent old reminder without claiming health.
+		if err = cancelPendingNotifications(ctx, tx, "rule_key=? AND instance_id=? AND kind='alert'", []any{o.rule, o.instance}, "expiration_changed", now); err != nil {
+			return err
+		}
+		active = false
+	}
 	if active == firing {
 		return nil
+	}
+	if o.rule == "instance_expiring" && !firing {
+		if err = cancelPendingNotifications(ctx, tx, "rule_key=? AND instance_id=? AND kind='alert'", []any{o.rule, o.instance}, "expiration_changed", now); err != nil {
+			return err
+		}
 	}
 	kind := "recovery"
 	severity := "info"
@@ -218,8 +255,8 @@ func applyAlert(ctx context.Context, tx *sql.Tx, o alertObservation, now time.Ti
 			severity = "warning"
 		}
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO alert_state(rule_key,target_id,account_id,active,episode,changed_at) VALUES(?,?,nullif(?,''),?,?,?)
- ON CONFLICT(rule_key,target_id) DO UPDATE SET active=excluded.active,episode=excluded.episode,changed_at=excluded.changed_at`, o.rule, o.target, o.account, firing, episode, timestamp(now)); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO alert_state(rule_key,target_id,account_id,active,episode,changed_at,basis) VALUES(?,?,nullif(?,''),?,?,?,?)
+ ON CONFLICT(rule_key,target_id) DO UPDATE SET active=excluded.active,episode=excluded.episode,changed_at=excluded.changed_at,basis=excluded.basis`, o.rule, o.target, o.account, firing, episode, timestamp(now), o.basis); err != nil {
 		return err
 	}
 	n := model.Notification{EventKey: "alert/" + o.rule + "/" + o.target + "/" + strconv.FormatInt(episode, 10) + "/" + kind, Kind: kind, Severity: severity, RuleKey: &o.rule, Title: "Harbormaster " + kind + ": " + o.rule, Body: "target=" + o.target + "; " + detail}

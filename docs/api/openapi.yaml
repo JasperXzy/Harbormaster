@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Expiration reminders: add instance_expiring with before_days=7 by default. Evaluate only freshly collected subscription expiry dates, deduplicate active incidents and track renewal-date changes; disabled/released targets cancel pending reminders. Auto-renew enabled does not suppress a reminder. Notifications are persisted only; Telegram dispatch remains unwired.
 # 2026-11-12  Instance renewal snapshot: optional renewal object reports auto/manual/no-renewal/unknown/not-applicable with source, check time and safe error. ECS uses its subscription-only API; SWAS uses BSS records matched by instance ID, region and subscription type. Missing or conflicting records never mean disabled auto-renewal. No renewal write operations are added.
 # 2026-11-12  API Key management: session/CSRF-protected create, paginated list and soft revocation. Creation returns the secret once; subsequent responses expose metadata only. Scopes are fixed to summary:read, instance:control and cron:run; they do not grant browser-session or agent-report access. Integration consumers are separate from this management API.
 # 2026-11-12  Account finance: GET /accounts/{account_id}/finance reads cached balance and current-month bill overview only. Money is decimal text with provider currency; bill types remain separate, no guessed net total. Sources retain last successful data on failure and are fenced by credential version; the configured business timezone selects the requested billing cycle.
@@ -933,7 +934,7 @@ paths:
       tags: [notify]
       operationId: listAlertRules
       summary: 内置告警规则
-      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable and agent_offline. Usage/forecast rules are not returned until their metering source and policy are available.
+      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline and instance_expiring. Usage/forecast rules are not returned until their metering source and policy are available.
       responses:
         "200":
           description: 告警规则
@@ -2384,8 +2385,8 @@ components:
 
     AlertRuleKey:
       type: string
-      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable]
-      description: M1 可用的内置规则；后续里程碑在此追加。
+      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring]
+      description: 内置规则；仅返回当前已实现且有可用来源的规则。
 
     Severity:
       type: string
@@ -2395,6 +2396,11 @@ components:
       type: object
       description: 每条规则只用到其中一部分字段，用不到的字段不返回。
       properties:
+        before_days:
+          type: integer
+          minimum: 0
+          maximum: 365
+          description: instance_expiring only. Default 7; compare freshly collected expiry against now plus this many 24-hour days. Missing expiry is unknown. Stopped subscription instances remain applicable.
         thresholds_percent:
           type: array
           description: cdt_usage 的默认档位（账号可以单独覆盖）。

@@ -1,6 +1,7 @@
 package model
 
 type AlertParams struct {
+	BeforeDays          *int `json:"before_days,omitempty"`
 	ConsecutiveFailures *int `json:"consecutive_failures,omitempty"`
 	OfflineAfterSeconds *int `json:"offline_after_seconds,omitempty"`
 }
@@ -17,7 +18,22 @@ type AlertRuleUpdate struct {
 
 func (r AlertRule) Validate() map[string]string {
 	fields := map[string]string{}
+	if r.Key != "instance_expiring" && r.Params.BeforeDays != nil {
+		fields["params.before_days"] = "not_applicable"
+	}
 	switch r.Key {
+	case "instance_expiring":
+		if r.Params.BeforeDays == nil {
+			fields["params.before_days"] = "required"
+		} else if *r.Params.BeforeDays < 0 || *r.Params.BeforeDays > 365 {
+			fields["params.before_days"] = "out_of_range"
+		}
+		if r.Params.ConsecutiveFailures != nil {
+			fields["params.consecutive_failures"] = "not_applicable"
+		}
+		if r.Params.OfflineAfterSeconds != nil {
+			fields["params.offline_after_seconds"] = "not_applicable"
+		}
 	case "account_api_failure", "cdt_official_unavailable":
 		if r.Params.ConsecutiveFailures == nil {
 			fields["params.consecutive_failures"] = "required"
