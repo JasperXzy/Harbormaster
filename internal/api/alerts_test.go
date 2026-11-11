@@ -15,7 +15,7 @@ func TestAlertRuleAPIUsesAvailableSourcesAndSharedOfflineTimeout(t *testing.T) {
 	var list struct {
 		Items []model.AlertRule `json:"items"`
 	}
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 5 {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 6 {
 		t.Fatal(w.Code, w.Body)
 	}
 	for _, rule := range list.Items {
@@ -58,5 +58,13 @@ func TestAlertRuleAPIUsesAvailableSourcesAndSharedOfflineTimeout(t *testing.T) {
 	}
 	if w = panelRequest(p, "PATCH", "/alert-rules/spec_bandwidth_insufficient", map[string]any{"params": map[string]int{"consecutive_failures": 3}}, cookie, csrf); w.Code != 422 {
 		t.Fatal("parameterless rule accepted a threshold", w.Code)
+	}
+	if w = panelRequest(p, "PATCH", "/alert-rules/instance_public_ip_changed", map[string]any{"enabled": false, "params": map[string]int{}}, cookie, csrf); w.Code != 200 || !strings.Contains(w.Body.String(), `"enabled":false`) || !strings.Contains(w.Body.String(), `"urgent":false`) {
+		t.Fatal("IP rule cannot be disabled", w.Code, w.Body)
+	}
+	for _, key := range []string{"before_days", "consecutive_failures", "offline_after_seconds"} {
+		if w = panelRequest(p, "PATCH", "/alert-rules/instance_public_ip_changed", map[string]any{"params": map[string]int{key: 1}}, cookie, csrf); w.Code != 422 {
+			t.Fatal("IP rule accepted an unrelated threshold", key, w.Code)
+		}
 	}
 }

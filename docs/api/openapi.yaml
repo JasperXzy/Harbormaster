@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Public IP change alerts: add instance_public_ip_changed (empty params, non-urgent, enabled by default). Each new public_ipv4_changed instance event records one notification in the same transaction. First discovery, unknown/incomplete sources, IPv6 allocation-only changes and unchanged rescans do not notify. This is an event notification with no recovery incident; Telegram dispatch remains unwired.
 # 2026-11-12  Instance change history: GET /instance-events lists persisted discovery, disappearance/reappearance, status and IP changes with cursor/account/instance filters. Events describe scan observations, not proven cloud creation/deletion or operator intent. Only complete product scans infer disappearance; unknown status, incomplete IPv4 topology and stale IPv6 do not overwrite comparison baselines. Existing installations start field baselines without inventing historical changes.
 # 2026-11-12  IPv6 discovery: optional Instance.ipv6 exposes assigned ECS IPv6 addresses separately from public IPv4 and billing topology. Read instance extensions first, then per-instance ENIs with a 3-second total fallback deadline. Failed refreshes retain the previous result as stale, including its original observation time; only a successful complete read may clear addresses. SWAS is null pending a verified source.
 # 2026-11-12  Bandwidth mismatch alerts: add spec_bandwidth_insufficient (empty params, non-urgent). Fresh ECS network_capacity comparisons drive incident/recovery; unknown data is not recovery. The comparison concerns configured public outbound ceiling versus specification capability, not measured traffic.
@@ -976,7 +977,7 @@ paths:
       tags: [notify]
       operationId: listAlertRules
       summary: 内置告警规则
-      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring and spec_bandwidth_insufficient. Usage/forecast rules are not returned until their metering source and policy are available.
+      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient and instance_public_ip_changed. Usage/forecast rules are not returned until their metering source and policy are available.
       responses:
         "200":
           description: 告警规则
@@ -2518,7 +2519,7 @@ components:
 
     AlertRuleKey:
       type: string
-      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient]
+      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed]
       description: 内置规则；仅返回当前已实现且有可用来源的规则。
 
     Severity:
@@ -2527,7 +2528,7 @@ components:
 
     AlertRuleParams:
       type: object
-      description: 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient 使用空对象，无额外阈值。
+      description: 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient 和 instance_public_ip_changed 使用空对象，无额外阈值。公网 IP 变化按每次有效事件记录，不产生恢复通知。
       properties:
         before_days:
           type: integer

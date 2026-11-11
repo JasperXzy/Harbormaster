@@ -120,7 +120,10 @@ func recordInstanceEvents(ctx context.Context, tx *sql.Tx, account string, resul
 			return err
 		}
 		_, err = tx.ExecContext(ctx, "INSERT INTO instance_event(id,account_id,instance_id,payload_json) VALUES(?,?,?,?)", event.ID, account, state.ID, string(raw))
-		return err
+		if err != nil {
+			return err
+		}
+		return notifyInstanceIPChange(ctx, tx, event, now)
 	}
 	seen := map[string]bool{}
 	for _, snapshot := range result.Snapshots {
