@@ -206,7 +206,11 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 				observe("swas_read", err)
 			}
 		}
-		part := normalizeRegion(a, region, ecs, eni, eips, packages, swas, traffic, trafficKnown, time.Now().UTC())
+		types := c.instanceTypes(ctx, cred, region, ecs, before)
+		observe("ecs_read", types.err)
+		checkedAt := time.Now().UTC()
+		part := normalizeRegion(a, region, ecs, eni, eips, packages, swas, traffic, trafficKnown, checkedAt)
+		attachNetworkCapacity(part.Snapshots, types, checkedAt)
 		result.Snapshots = append(result.Snapshots, part.Snapshots...)
 		for k, v := range part.CompleteScopes {
 			result.CompleteScopes[k] = v

@@ -46,6 +46,7 @@ type definition struct{ product, version, params string }
 
 var reads = map[string]definition{
 	"DescribeRegions":                 {"ecs", "2014-05-26", ""},
+	"DescribeInstanceTypes":           {"ecs", "2014-05-26", "MaxResults NextToken InstanceTypes.1 InstanceTypes.2 InstanceTypes.3 InstanceTypes.4 InstanceTypes.5 InstanceTypes.6 InstanceTypes.7 InstanceTypes.8 InstanceTypes.9 InstanceTypes.10"},
 	"DescribeInstances":               {"ecs", "2014-05-26", "RegionId PageNumber PageSize"},
 	"DescribeNetworkInterfaces":       {"ecs", "2014-05-26", "RegionId PageNumber PageSize"},
 	"DescribeEipAddresses":            {"vpc", "2016-04-28", "RegionId PageNumber PageSize"},

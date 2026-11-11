@@ -20,6 +20,8 @@ func inventoryFixture(_ context.Context, _ Credentials, action, region string, _
 	switch action {
 	case "DescribeRegions":
 		return map[string]any{"Regions": map[string]any{"Region": []any{map[string]any{"RegionId": region}}}}, nil
+	case "DescribeInstanceTypes":
+		return map[string]any{"InstanceTypes": map[string]any{"InstanceType": []any{map[string]any{"InstanceTypeId": "ecs.test", "InstanceBandwidthRx": 1000000, "InstanceBandwidthTx": 1000000}}}}, nil
 	case "DescribeInstances":
 		return map[string]any{"Instances": map[string]any{"Instance": []any{map[string]any{"InstanceId": "i-one", "InstanceName": "one", "Status": "Running", "InstanceChargeType": "PostPaid", "InstanceType": "ecs.test", "EipAddress": map[string]any{"AllocationId": "eip-one", "IpAddress": "203.0.113.10"}}, map[string]any{"InstanceId": "i-two", "InstanceName": "two", "Status": "Stopped", "InstanceChargeType": "PrePaid"}}}, "TotalCount": 2}, nil
 	case "DescribeNetworkInterfaces":
