@@ -32,7 +32,7 @@ export interface paths {
         put?: never;
         /**
          * 用初始化 token 设置管理员密码
-         * @description 成功后直接建立登录会话（Set-Cookie）。只能成功一次，之后返回 409 `already_initialized`。
+         * @description 成功后原子地建立单管理员及登录会话（Set-Cookie），保存业务时区并消耗初始化凭证。只能成功一次，之后返回 409 `already_initialized`。初始化 token 由 HM_SETUP_TOKEN 或数据目录外的 HM_SETUP_TOKEN_FILE 提供，数据库只存哈希，有效期 24 小时，不写日志；过期后需运维提供新 token 并重启。
          */
         post: operations["completeSetup"];
         delete?: never;
@@ -51,7 +51,10 @@ export interface paths {
         /** 当前会话 */
         get: operations["getSession"];
         put?: never;
-        /** 用管理员密码登录 */
+        /**
+         * 用管理员密码登录
+         * @description 单管理员，无用户名；生产环境要求同源 Origin。密码限 12–1024 UTF-8 字节，首次设置状态由 setup/status 查询。
+         */
         post: operations["login"];
         /** 退出登录 */
         delete: operations["logout"];
@@ -193,7 +196,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** 删除账号 */
+        /**
+         * 停用账号并保留历史
+         * @description 用户已确认采用保留历史策略：停止该账号采集，不物理删除账号、实例或历史数据。账号显示为停用；此操作不修改云资源。
+         */
         delete: operations["deleteAccount"];
         options?: never;
         head?: never;
@@ -534,8 +540,9 @@ export interface components {
             password_min_length: number;
         };
         SetupRequest: {
-            /** @description hm-server 首次启动时输出的初始化 token。 */
+            /** @description 运维通过 HM_SETUP_TOKEN 或 HM_SETUP_TOKEN_FILE 提供的初始化凭证；不从日志读取。 */
             setup_token: string;
+            /** @description 12–1024 UTF-8 字节。 */
             password: string;
             /** @description IANA 时区名，默认 Asia/Shanghai。 */
             business_timezone?: string;
@@ -1076,6 +1083,24 @@ export interface components {
         };
     };
     responses: {
+        /** @description 请求体必须使用 application/json（`unsupported_media_type`）。 */
+        UnsupportedMediaType: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description 来源、HTTPS 或管理员地址限制不满足（`forbidden`、`csrf_failed`）。 */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
         /** @description 未登录（`unauthenticated`） */
         Unauthorized: {
             headers: {
@@ -1187,7 +1212,7 @@ export interface operations {
                     "application/json": components["schemas"]["Session"];
                 };
             };
-            /** @description 初始化 token 不正确（`invalid_setup_token`） */
+            /** @description 初始化 token 不正确或已过期（`invalid_setup_token`），或请求来源不符（`csrf_failed`）。 */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1197,6 +1222,7 @@ export interface operations {
                 };
             };
             409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
             422: components["responses"]["ValidationFailed"];
             429: components["responses"]["RateLimited"];
         };
@@ -1253,6 +1279,9 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            403: components["responses"]["Forbidden"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
             429: components["responses"]["RateLimited"];
         };
     };
@@ -1477,7 +1506,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 已删除 */
+            /** @description 已停用，历史数据保留 */
             204: {
                 headers: {
                     [name: string]: unknown;

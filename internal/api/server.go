@@ -10,15 +10,14 @@ import (
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/agentproto"
-	"github.com/JasperXzy/harbormaster/internal/devmode"
 	"github.com/JasperXzy/harbormaster/internal/store"
 )
 
 func Handler(s *store.Store) http.Handler {
-	return NewHandler(s, false, "Asia/Shanghai", nil)
+	return NewHandler(s, nil, nil)
 }
 
-func NewHandler(s *store.Store, dev bool, timezone string, frontend http.Handler) http.Handler {
+func NewHandler(s *store.Store, panel, frontend http.Handler) http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
 	m.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
@@ -62,8 +61,8 @@ func NewHandler(s *store.Store, dev bool, timezone string, frontend http.Handler
 		}
 	})
 	// API misses must never receive a successful SPA document.
-	if dev {
-		m.Handle("/api/v1/", devmode.New(s, timezone))
+	if panel != nil {
+		m.Handle("/api/v1/", panel)
 	}
 	m.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) { writeError(w, 404, "not_found") })
 	m.HandleFunc("/agent/", func(w http.ResponseWriter, r *http.Request) { writeError(w, 404, "not_found") })

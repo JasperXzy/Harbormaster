@@ -16,6 +16,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/api"
 	"github.com/JasperXzy/harbormaster/internal/buildinfo"
 	"github.com/JasperXzy/harbormaster/internal/config"
+	"github.com/JasperXzy/harbormaster/internal/devmode"
 	"github.com/JasperXzy/harbormaster/internal/logging"
 	"github.com/JasperXzy/harbormaster/internal/m0"
 	"github.com/JasperXzy/harbormaster/internal/security"
@@ -142,6 +143,26 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		log.Info("password_reset_complete", "sessions_revoked", true)
 		return 0
 	}
+	if !c.Dev {
+		if c.PublicURL == "" {
+			return fail("public_url_required_for_production_serve")
+		}
+		initialized, err := s.Initialized(ctx)
+		if err != nil {
+			return fail("setup_state_unavailable")
+		}
+		if !initialized {
+			token, err := security.LoadSetupToken(c.DataDir)
+			if err != nil {
+				return fail(err.Error())
+			}
+			defer clear(token)
+			if err = s.PrepareSetup(ctx, token, time.Now()); err != nil {
+				return fail("setup_preparation_failed")
+			}
+			log.Info("setup_required", "credential_source", "external_environment_or_file")
+		}
+	}
 	return serve(ctx, c, s, log)
 }
 
@@ -155,7 +176,13 @@ func serve(ctx context.Context, c config.Config, s *store.Store, log *slog.Logge
 	if c.Frontend == "embedded" {
 		frontend = ui.Handler()
 	}
-	h := &http.Server{Handler: api.NewHandler(s, c.Dev, c.Timezone, frontend), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+	var panel http.Handler
+	if c.Dev {
+		panel = devmode.New(s, c.Timezone)
+	} else {
+		panel = api.NewProductionPanel(s, c)
+	}
+	h := &http.Server{Handler: api.NewHandler(s, panel, frontend), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10, BaseContext: func(net.Listener) context.Context { return ctx }}
 	done := make(chan error, 1)
 	go func() { done <- h.Serve(listener) }()
 	log.Info("server_started", "listen", listener.Addr().String(), "development", c.Dev, "frontend", c.Frontend, "cloud_writes", false)

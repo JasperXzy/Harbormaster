@@ -230,11 +230,8 @@ export async function handle(method: string, fullPath: string, body: unknown): P
       return ok(a);
     }
     if (method === "DELETE" && seg.length === 2) {
-      db.accounts = db.accounts.filter((x) => x !== a);
-      db.instances = db.instances.filter((x) => x.account_id !== a.id);
-      db.quotas = db.quotas.filter((x) => x.account_id !== a.id);
-      db.subjects = db.subjects.filter((x) => x.account_id !== a.id);
-      db.packages = db.packages.filter((x) => x.account_id !== a.id);
+      a.enabled = false;
+      a.updated_at = iso();
       return ok(undefined, 204);
     }
     if (method === "POST" && seg[2] === "permission-check")

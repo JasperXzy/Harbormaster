@@ -81,7 +81,7 @@ function Accounts() {
               <div className="inline">
                 <button className="btn sm" onClick={() => check(a.id)} disabled={checking.has(a.id)}>重新测试权限</button>
                 <button className="btn sm" onClick={() => setForm({ account: a })}>修改</button>
-                <button className="btn sm danger" onClick={() => setDel(a)}>删除</button>
+                <button className="btn sm" disabled={!a.enabled} onClick={() => setDel(a)}>停用并保留历史</button>
                 <Switch on={a.enabled} label={`启用 ${a.name}`} onChange={(v) => toggle(a, v)} />
               </div>
             </div>
@@ -99,13 +99,13 @@ function Accounts() {
       )}
       {del && (
         <Confirm
-          title={`删除账号 ${del.name}？`} okText="删除账号" danger typeToConfirm={del.name} onClose={() => setDel(undefined)}
-          body={<>删除后，面板不再显示这个账号下的 {del.instance_count} 台实例和它的流量数据，也不再为它发告警。这不会影响阿里云上的机器本身。此操作不能撤销。</>}
+          title={`停用账号 ${del.name}？`} okText="停用账号" typeToConfirm={del.name} onClose={() => setDel(undefined)}
+          body={<>停止这个账号的数据采集，保留其 {del.instance_count} 台实例和历史数据。之后可重新启用。这不会改变阿里云上的机器状态。</>}
           onOk={async () => {
             try {
               await api.deleteAccount(del.id);
               reloadAll();
-              toast(`已删除 ${del.name}`);
+              toast(`已停用 ${del.name}，历史数据已保留`);
             } catch (e) {
               toast(errMsg(e), true);
               throw e;

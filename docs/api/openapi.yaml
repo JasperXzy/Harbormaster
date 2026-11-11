@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Production auth: single administrator confirmed; setup token supplied outside logs, one-use/24h; HTTPS origin and CSRF checks; configurable absolute session lifetime, persistent login limits. Account removal retains history and disables collection (user decision).
 # 2026-11-11  前端  起草 M1 部分（v0.1.0-draft）。
 # 2026-11-11  Backend review: nullable unknown usage/eligibility, calendar reset, GET auth, data timezone; reasons in docs/m0/contract-review.md. Still draft.
 # 2026-11-11  Unified implementation: SystemInfo adds data_mode/read_only so independently deployed frontends identify demo data and unavailable writes.
@@ -67,6 +68,8 @@ info:
     - 来自阿里云或 agent 的数据都带 `updated_at`。
     - M0 development mode serves synthetic read data and local sessions only; unsupported operations return 501 with error.code=not_implemented. No cloud or Telegram calls occur.
     - Session cookies use HttpOnly and SameSite=Lax; production HTTPS also uses Secure. GET does not require CSRF; authenticated mutations do.
+    - Production browser API requires HTTPS and the configured public host. All mutations, including setup/login/logout, require an Origin matching HM_PUBLIC_URL. Forwarded headers are accepted only from configured trusted proxies; optional admin CIDRs apply only to panel APIs.
+    - Production sessions have a configurable absolute lifetime (default 12 hours), without sliding renewal. Logout and CLI password reset revoke sessions server-side. Login/setup allow five attempts per source IP per five minutes, with a shared thirty-attempt ceiling; 429 includes Retry-After and retry_after_seconds.
     - SSE uses a 15-second ping, no replay guarantee, and a fresh snapshot after reconnect. Updates may be coalesced per 10-second report interval.
 
 servers:
@@ -111,7 +114,7 @@ paths:
       tags: [setup]
       operationId: completeSetup
       summary: 用初始化 token 设置管理员密码
-      description: 成功后直接建立登录会话（Set-Cookie）。只能成功一次，之后返回 409 `already_initialized`。
+      description: 成功后原子地建立单管理员及登录会话（Set-Cookie），保存业务时区并消耗初始化凭证。只能成功一次，之后返回 409 `already_initialized`。初始化 token 由 HM_SETUP_TOKEN 或数据目录外的 HM_SETUP_TOKEN_FILE 提供，数据库只存哈希，有效期 24 小时，不写日志；过期后需运维提供新 token 并重启。
       security: []
       requestBody:
         required: true
@@ -127,7 +130,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Session"
         "403":
-          description: 初始化 token 不正确（`invalid_setup_token`）
+          description: 初始化 token 不正确或已过期（`invalid_setup_token`），或请求来源不符（`csrf_failed`）。
           content:
             application/json:
               schema:
@@ -138,6 +141,8 @@ paths:
           $ref: "#/components/responses/ValidationFailed"
         "429":
           $ref: "#/components/responses/RateLimited"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
 
   /session:
     get:
@@ -159,6 +164,7 @@ paths:
       tags: [session]
       operationId: login
       summary: 用管理员密码登录
+      description: 单管理员，无用户名；生产环境要求同源 Origin。密码限 12–1024 UTF-8 字节，首次设置状态由 setup/status 查询。
       security: []
       requestBody:
         required: true
@@ -181,6 +187,12 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "429":
           $ref: "#/components/responses/RateLimited"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
     delete:
       security:
         - sessionCookie: []
@@ -411,10 +423,11 @@ paths:
           csrfToken: []
       tags: [accounts]
       operationId: deleteAccount
-      summary: 删除账号
+      summary: 停用账号并保留历史
+      description: 用户已确认采用保留历史策略：停止该账号采集，不物理删除账号、实例或历史数据。账号显示为停用；此操作不修改云资源。
       responses:
         "204":
-          description: 已删除
+          description: 已停用，历史数据保留
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -858,6 +871,18 @@ components:
         type: string
 
   responses:
+    UnsupportedMediaType:
+      description: 请求体必须使用 application/json（`unsupported_media_type`）。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: 来源、HTTPS 或管理员地址限制不满足（`forbidden`、`csrf_failed`）。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     Unauthorized:
       description: 未登录（`unauthenticated`）
       content:
@@ -990,9 +1015,10 @@ components:
       properties:
         setup_token:
           type: string
-          description: hm-server 首次启动时输出的初始化 token。
+          description: 运维通过 HM_SETUP_TOKEN 或 HM_SETUP_TOKEN_FILE 提供的初始化凭证；不从日志读取。
         password:
           type: string
+          description: 12–1024 UTF-8 字节。
         business_timezone:
           type: string
           description: IANA 时区名，默认 Asia/Shanghai。

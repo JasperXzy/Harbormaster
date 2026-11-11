@@ -16,8 +16,10 @@ M0 使用 modernc.org/sqlite（纯 Go），无需 CGO，文件 `harbormaster.db`
 | agent | 实例唯一绑定、32-byte token_hash、撤销时间、版本、最后接收时间 |
 | traffic_sample | agent/epoch/sequence 联合主键，累计双向字节非负；按 agent+sampled_at 查询、received_at 清理索引 |
 | cdt_snapshot | 官方用量、period_start、可空 covered_until、fetched_at、来源与质量；未知水位不能填抓取时间 |
-| administrator | M0 示例单管理员，Argon2id PHC 字符串；正式首次设置尚未实现 |
+| administrator | 单管理员，Argon2id PHC 字符串；生产首次设置与 demo 预置使用隔离数据库 |
 | session | 随机会话 token 的哈希和有效期；reset-password 同事务清空会话 |
+| setup_credential | 一次性初始化凭证哈希与 24 小时有效期，创建管理员的事务中消耗 |
+| auth_attempt | 来源 IP 与全局登录/初始化尝试窗口，跨重启保留限速 |
 
 迁移文件位于 `internal/store/migrations/`，通过 go:embed 编入二进制。启动或 migrate 在立即写事务中创建迁移记录、顺序执行未执行文件；失败回滚，不半建库。后续只追加迁移，不修改已应用的 001。不提供破坏性自动 down migration。
 
@@ -36,4 +38,4 @@ AccessKey Secret、Telegram Token 等需要可逆使用的值放 credential；ag
 - M2：规则、期望状态变更原因/确认状态、豁免期限、审计和动作记录；outbox 与业务事件同事务，外部 Telegram 发送仍可能成功但 ACK 丢失，不能承诺网络意义上的 exactly-once。
 - M3：probe/route 相关表，测速样本默认 30 天。
 
-不在 M0 预建全部后续表或宣称已实现持久任务/自动停机。删除账号的历史保留策略待用户决定；目前外键不自动级联删除历史，API 删除未开放。SQLite ≤1GB 和常驻内存目标尚未做长期负载验收。
+不在 M0 预建全部后续表或宣称已实现持久任务/自动停机。2026-11-12 用户确认账号停用并保留历史；外键不自动级联删除历史，生产账号写 API 尚未开放。SQLite ≤1GB 和常驻内存目标尚未做长期负载验收。

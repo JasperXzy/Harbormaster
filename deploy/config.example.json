@@ -4,5 +4,9 @@
   "dev": false,
   "log_level": "info",
   "timezone": "Asia/Shanghai",
-  "frontend": "api"
+  "frontend": "api",
+  "public_url": "https://harbor.jasperxzy.com",
+  "trusted_proxies": ["127.0.0.1/32", "::1/128"],
+  "admin_allow_cidrs": [],
+  "session_ttl_seconds": 43200
 }

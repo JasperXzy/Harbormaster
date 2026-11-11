@@ -271,7 +271,9 @@ func (h *handler) events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Accel-Buffering", "no")
 	send := func(event string, v any) bool {
-		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(5 * time.Second))
+		ctl := http.NewResponseController(w)
+		_ = ctl.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		defer ctl.SetWriteDeadline(time.Time{})
 		b, _ := json.Marshal(v)
 		_, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
 		if err != nil {

@@ -48,7 +48,7 @@ sh deploy/dev.sh api
 ./deploy/bin/hm-server run-once --dev --data-dir /tmp/harbormaster-separated-dev
 ```
 
-开发 API 只供只读页面和会话联调，写入口暂返回 `501 not_implemented`，不会接受并保存真实 AccessKey/Telegram Token。demo 的业务数据是合成快照，agent 上报落库的验证与面板 fixture 分开，尚无真实计费估算。正式认证、初始设置、云采集、Telegram 发送、任务引擎、自动化和真实 agent 采集均未交付。
+开发 API 只供只读页面和会话联调，写入口暂返回 `501 not_implemented`，不会接受并保存真实 AccessKey/Telegram Token。demo 的业务数据是合成快照，agent 上报落库的验证与面板 fixture 分开，尚无真实计费估算。2026-11-12 已补齐生产认证与初始设置，见[生产认证说明](production-auth.md)；云采集、Telegram 发送、任务引擎、自动化和真实 agent 采集仍未交付。
 
 reset-password 从 stdin 读取新密码，12–1024 字节，不支持明文命令行参数；开发库已有示例管理员，生产空库返回 administrator_not_initialized。生产模式须先通过仓库外的环境/密钥文件提供 HM_MASTER_KEY，配置示例见 `deploy/config.example.json`。数据库模式互斥，不把开发库改为生产库。
 
@@ -60,7 +60,7 @@ reset-password 从 stdin 读取新密码，12–1024 字节，不支持明文命
 
 - [agent 协议](agent-protocol.md)、[数据库](database.md)、[契约评审 B1–B21](contract-review.md)。契约仍是草稿；前端现已重新生成类型并处理 null 与 cutoff_unknown。
 - 两账号凭据已导入并通过实测；已使用本机已有 SSH 配置完成 sin-pro/sha-pro 只读检查，无需重新提供凭据。下一步仍需确定 V7 计数安装与 24 小时观察窗口。
-- 用户在 M1 前确认：是否永久单管理员；删除账号是否删除历史；“最近峰值”是否继续称为“最坏上界”；无官方 cutoff 时的对齐策略。轻量预绑定方案已获同意，尚未实现注册。
+- 用户已确认单管理员；账号停用保留历史；无官方 cutoff 时估算保持待确认，暂不启用依赖精确对齐的保护。“最近峰值”是否继续称为“最坏上界”仍待后续保护阶段确认。轻量预绑定方案已获同意，尚未实现注册。
 - 前端：确认上述契约修改，补齐 Telegram 文案模板；多出口实例表示与代理认证字段更新语义需在冻结前解决。
 - V9 等真实写操作需要独立的具体授权；当前只读凭据/SSH 的提供不构成开关机授权。
 

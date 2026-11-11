@@ -61,7 +61,8 @@ function PasswordStep({ minPassword, onNext }: { minPassword: number; onNext: ()
     e.preventDefault();
     const local: Record<string, string> = {};
     if (!token.trim()) local.setup_token = "required";
-    if (pw.length < minPassword) local.password = "too_short";
+    const passwordBytes = new TextEncoder().encode(pw).length;
+    if (passwordBytes < minPassword || passwordBytes > 1024) local.password = "out_of_range";
     if (pw !== pw2) local.password2 = "mismatch";
     setFields(local);
     setError(undefined);
@@ -86,12 +87,12 @@ function PasswordStep({ minPassword, onNext }: { minPassword: number; onNext: ()
         <label className="lbl" htmlFor="su-token">初始化 token</label>
         <input id="su-token" type="text" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" spellCheck={false} aria-invalid={!!fields.setup_token} autoFocus />
         {fields.setup_token && <div className="field-error">{fieldErrorText(fields.setup_token)}</div>}
-        <div className="field-help">hm-server 第一次启动时会在日志里打印这串字符，用来证明你就是装这台服务的人。它只能用一次。</div>
+        <div className="field-help">使用部署时通过 HM_SETUP_TOKEN_FILE 文件或 HM_SETUP_TOKEN 环境变量提供的凭证。它不会出现在日志中，只能使用一次，有效期 24 小时。</div>
       </div>
       <div>
         <label className="lbl" htmlFor="su-pw">管理员密码</label>
         <input id="su-pw" type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" aria-invalid={!!fields.password} />
-        {fields.password ? <div className="field-error">密码至少要 {minPassword} 位。</div> : <div className="field-help">至少 {minPassword} 位。以后登录面板就用它。</div>}
+        {fields.password ? <div className="field-error">密码长度需在 {minPassword}–1024 字节之间。</div> : <div className="field-help">至少 {minPassword} 个英文字母或数字的长度；也支持中文密码。以后登录面板就用它。</div>}
       </div>
       <div>
         <label className="lbl" htmlFor="su-pw2">再输入一次</label>
