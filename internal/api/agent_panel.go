@@ -56,11 +56,16 @@ func (p *productionPanel) overlayAgents(ctx context.Context, items []map[string]
 	if err != nil {
 		return err
 	}
+	available := p.releaseVersions.Get(p.agentReleaseDir, p.now())
 	for _, item := range items {
 		id, _ := item["id"].(string)
 		v, ok := views[id]
 		if !ok {
 			v.Agent = model.AgentStatus{Status: "not_installed"}
+		}
+		v.Agent.AvailableVersion = available
+		if available != nil && v.Agent.Version != nil {
+			v.Agent.UpdateAvailable = agentrelease.UpdateAvailable(*v.Agent.Version, *available)
 		}
 		item["agent"] = v.Agent
 		item["realtime"] = v.Realtime

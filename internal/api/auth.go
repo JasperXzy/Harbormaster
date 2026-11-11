@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JasperXzy/harbormaster/internal/agentrelease"
 	"github.com/JasperXzy/harbormaster/internal/buildinfo"
 	"github.com/JasperXzy/harbormaster/internal/collect"
 	"github.com/JasperXzy/harbormaster/internal/config"
@@ -34,6 +35,7 @@ type productionPanel struct {
 	engine          *collect.Engine
 	publicURL       string
 	agentReleaseDir string
+	releaseVersions agentrelease.VersionCache
 }
 
 func NewProductionPanel(s *store.Store, c config.Config, engine *collect.Engine) http.Handler {

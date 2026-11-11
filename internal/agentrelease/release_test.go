@@ -17,6 +17,9 @@ func fixture(t *testing.T) string {
 	var sums strings.Builder
 	for _, name := range Files {
 		raw := []byte("test artifact " + name)
+		if name == "VERSION" {
+			raw = []byte("v1.2.0\n")
+		}
 		if err := os.WriteFile(filepath.Join(dir, name), raw, 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -30,7 +33,7 @@ func fixture(t *testing.T) string {
 func TestReleaseMustBeCompleteAndChecksummed(t *testing.T) {
 	dir := fixture(t)
 	m, err := Check(dir)
-	if err != nil || len(m.Hashes) != 4 || len(m.Digest) != 64 {
+	if err != nil || len(m.Hashes) != len(Files) || len(m.Digest) != 64 {
 		t.Fatal(m, err)
 	}
 	if err = os.WriteFile(filepath.Join(dir, Files[0]), []byte("corrupt"), 0600); err != nil {

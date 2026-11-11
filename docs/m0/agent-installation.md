@@ -4,13 +4,21 @@
 
 ## 发布与接口
 
-`sh deploy/build-agent.sh` 生成 Linux amd64/arm64 静态二进制、install.sh、hm-agent.service 和 SHA256SUMS，输出在已忽略的 `deploy/bin/agent-releases/`。服务端通过 JSON `agent_release_dir` 或 `HM_AGENT_RELEASE_DIR` 配置独立只读发布目录，示例为 `/opt/harbormaster/agent-releases`。
+`sh deploy/build-agent.sh` 生成 Linux amd64/arm64 静态二进制、install.sh、hm-agent.service、VERSION 和 SHA256SUMS，输出在已忽略的 `deploy/bin/agent-releases/`。服务端通过 JSON `agent_release_dir` 或 `HM_AGENT_RELEASE_DIR` 配置独立只读发布目录，示例为 `/opt/harbormaster/agent-releases`。
 
 `POST /api/v1/instances/{id}/agent/install-command` 先验证全部文件和 SHA256 清单，再创建 10 分钟的一次性注册码。未配置/文件缺失/校验失败返回 503 agent_release_unavailable，不签发或消耗注册码；已确认消失的实例返回 409 agent_not_supported，停用账号返回 409 account_disabled。签发新命令使旧注册码失效，但成功注册前不撤销正在工作的 token。
 
-下载位于 `/agent/v1/releases/{filename}`，只允许固定的五个文件，生产必须 HTTPS、匹配配置主机名，不接受目录索引、任意文件名或越过根目录的符号链接。Go 后端不依赖前端构建；代理示例已把 `/agent/*` 转给后端。
+下载位于 `/agent/v1/releases/{filename}`，只允许固定的六个文件，生产必须 HTTPS、匹配配置主机名，不接受目录索引、任意文件名或越过根目录的符号链接。Go 后端不依赖前端构建；代理示例已把 `/agent/*` 转给后端。
 
 生成的一行命令固定安装脚本和发布清单的 SHA256，下载后验证，再经 stdin 向安装脚本传注册码，避免落在 sudo 参数日志和子进程环境变量中。**命令文本本身含一次性秘密**，前端不可写入调试日志或分析事件。发布过程中更换文件会使旧命令验证失败，应重新生成命令。
+
+## 发布版本与升级提示
+
+`sh deploy/build-agent.sh deploy/bin/agent-releases v1.2.3` 将指定的完整语义版本同时写入两种架构的 agent 和 `VERSION` 文件，并把版本文件纳入 SHA256 清单。省略第二个参数仍构建 `dev`；不会自动给当前代码分配正式版本号。无 `v` 前缀的版本会补齐，预发布和 build metadata 按 SemVer 处理，非法值在构建前拒绝。
+
+面板 agent 字段新增 `available_version` 和 `update_available`。服务器只检查本地发布目录，最长缓存 30 秒；`dev`、缺少安装信息或不能比较时 update_available 为 null。发布文件损坏或不完整时 available_version 为 null。旧的四文件清单缺少 VERSION，需用当前脚本重新构建，才能继续签发安装命令。
+
+前端在 update_available=true 时可提示升级，并使用原有 `POST /instances/{id}/agent/install-command` 获取命令。后台生成命令时重新验证所有发布文件，不使用提示缓存，也不会自动在主机执行升级。详情见 [版本提示设计与验证](agent-version-hints.md)。
 
 ## 目标主机变更
 

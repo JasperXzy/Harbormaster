@@ -3,6 +3,8 @@ package model
 import "time"
 
 type AgentStatus struct {
+	AvailableVersion      *string    `json:"available_version"`
+	UpdateAvailable       *bool      `json:"update_available"`
 	ReportIntervalSeconds *int       `json:"report_interval_seconds"`
 	Status                string     `json:"status"`
 	Version               *string    `json:"version"`

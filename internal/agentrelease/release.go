@@ -13,11 +13,12 @@ import (
 )
 
 var ErrUnavailable = errors.New("agent_release_unavailable")
-var Files = []string{"hm-agent-linux-amd64", "hm-agent-linux-arm64", "hm-agent.service", "install.sh"}
+var Files = []string{"hm-agent-linux-amd64", "hm-agent-linux-arm64", "hm-agent.service", "install.sh", "VERSION"}
 
 type Manifest struct {
-	Digest string
-	Hashes map[string]string
+	Digest  string
+	Hashes  map[string]string
+	Version string
 }
 
 func Check(dir string) (Manifest, error) {
@@ -68,6 +69,17 @@ func Check(dir string) (Manifest, error) {
 		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 || info.Size() > 64<<20 {
 			f.Close()
 			return Manifest{}, ErrUnavailable
+		}
+		if name == "VERSION" {
+			raw, readErr := io.ReadAll(io.LimitReader(f, 66))
+			f.Close()
+			version, ok := NormalizeVersion(strings.TrimSuffix(string(raw), "\n"))
+			sum := sha256.Sum256(raw)
+			if readErr != nil || len(raw) > 65 || !ok || hex.EncodeToString(sum[:]) != m.Hashes[name] {
+				return Manifest{}, ErrUnavailable
+			}
+			m.Version = version
+			continue
 		}
 		h := sha256.New()
 		_, err = io.Copy(h, f)

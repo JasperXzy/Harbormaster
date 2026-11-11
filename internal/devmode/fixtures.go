@@ -52,7 +52,7 @@ func makeFixtures(now time.Time, loc *time.Location) fixtures {
 			packageName = []string{"sg-share (demo)", "hk-share (demo)"}[i]
 		}
 		if i == 0 {
-			agent = object{"status": "online", "version": "dev", "registered_at": stamp, "last_report_at": stamp, "offline_since": nil, "worst_case": nil}
+			agent = object{"status": "online", "version": "v0.1.0", "available_version": "v0.2.0", "update_available": true, "registered_at": stamp, "last_report_at": stamp, "offline_since": nil, "worst_case": nil}
 		}
 		protection := "unprotected"
 		if i == 0 {

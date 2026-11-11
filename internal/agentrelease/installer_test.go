@@ -95,6 +95,7 @@ esac
 	write(filepath.Join(release, "hm-agent-linux-arm64"), artifact)
 	write(filepath.Join(release, "hm-agent.service"), "# test unit\n")
 	write(filepath.Join(release, "install.sh"), string(script))
+	write(filepath.Join(release, "VERSION"), "v1.2.0\n")
 	manifest := func() string {
 		var b strings.Builder
 		for _, name := range Files {

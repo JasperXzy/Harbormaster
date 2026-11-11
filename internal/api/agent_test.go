@@ -16,6 +16,7 @@ import (
 
 	"github.com/JasperXzy/harbormaster/internal/agentproto"
 	"github.com/JasperXzy/harbormaster/internal/agentrelease"
+	"github.com/JasperXzy/harbormaster/internal/model"
 )
 
 func TestAgentHTTPRegistrationBatchAndIndependentAuth(t *testing.T) {
@@ -146,6 +147,9 @@ func TestInstallCommandChecksArtifactsBeforeIssuingGrant(t *testing.T) {
 	var manifest strings.Builder
 	for _, name := range agentrelease.Files {
 		raw := []byte("test artifact " + name)
+		if name == "VERSION" {
+			raw = []byte("v1.2.0\n")
+		}
 		if err := os.WriteFile(filepath.Join(dir, name), raw, 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -155,6 +159,51 @@ func TestInstallCommandChecksArtifactsBeforeIssuingGrant(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.agentReleaseDir = dir
+	checkHint := func(want *bool) {
+		t.Helper()
+		items := []map[string]any{{"id": "ecs"}}
+		if err := p.overlayAgents(context.Background(), items); err != nil {
+			t.Fatal(err)
+		}
+		a := items[0]["agent"].(model.AgentStatus)
+		if a.AvailableVersion == nil || *a.AvailableVersion != "v1.2.0" {
+			t.Fatal("available release missing", a)
+		}
+		if want == nil {
+			if a.UpdateAvailable != nil {
+				t.Fatal("unknown installation compared", a)
+			}
+			return
+		}
+		if a.UpdateAvailable == nil || *a.UpdateAvailable != *want {
+			t.Fatal("incorrect upgrade hint", a)
+		}
+	}
+	checkHint(nil)
+	code, _, err := p.s.AgentGrant(context.Background(), "ecs", p.now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.s.RegisterAgent(context.Background(), agentproto.Registration{Version: 1, Code: code, Nonce: strings.Repeat("b", 64), AgentVersion: "v1.1.0", Metadata: agentproto.Metadata{InstanceID: "i-test", RegionID: "cn-shanghai"}}, p.now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	newer := true
+	checkHint(&newer)
+	sawHint := false
+	if !p.agentEvents(context.Background(), map[string]string{}, func(event string, payload any) bool {
+		if event == "agent.status" {
+			raw, _ := json.Marshal(payload)
+			sawHint = strings.Contains(string(raw), `"update_available":true`) && strings.Contains(string(raw), `"available_version":"v1.2.0"`)
+		}
+		return true
+	}) || !sawHint {
+		t.Fatal("SSE upgrade hint missing")
+	}
+	if err := p.s.RevokeAgent(context.Background(), "ecs", p.now()); err != nil {
+		t.Fatal(err)
+	}
+	checkHint(nil)
 	w := panelRequest(p, "POST", path, nil, cookie, csrf)
 	if w.Code != 201 || !strings.Contains(w.Body.String(), "hm_reg_") || !strings.Contains(w.Body.String(), "sha256sum") {
 		t.Fatal(w.Code, w.Body)
@@ -188,6 +237,13 @@ func TestInstallCommandChecksArtifactsBeforeIssuingGrant(t *testing.T) {
 		t.Fatal(err)
 	}
 	if w = panelRequest(p, "POST", path, nil, cookie, csrf); w.Code != 409 || !strings.Contains(w.Body.String(), "agent_not_supported") {
+		t.Fatal(w.Code, w.Body)
+	}
+	// A cached hint must never let a now-corrupt release mint a new grant.
+	if err := os.WriteFile(filepath.Join(dir, "VERSION"), []byte("v9.9.9\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if w = panelRequest(p, "POST", path, nil, cookie, csrf); w.Code != 503 {
 		t.Fatal(w.Code, w.Body)
 	}
 }
