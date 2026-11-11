@@ -1,0 +1,58 @@
+name: harbormaster
+services:
+  hm-server:
+    image: ${HM_IMAGE:-harbormaster-server:local}
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    user: "${HM_RUN_UID:-65532}:${HM_RUN_GID:-65532}"
+    # Linux main-server already has a host-network OpenResty proxy. The Go
+    # listener remains loopback-only; no new public port is opened.
+    network_mode: host
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      HM_MASTER_KEY_FILE: /run/harbormaster-secrets/master.key
+      HM_SETUP_TOKEN_FILE: /run/harbormaster-secrets/setup.token
+    command: [serve, --config, /etc/harbormaster/server.json]
+    volumes:
+      - type: bind
+        source: ${HM_CONFIG_PATH:-/etc/harbormaster/server.json}
+        target: /etc/harbormaster/server.json
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${HM_DATA_PATH:-/var/lib/harbormaster-server}
+        target: /var/lib/harbormaster-server
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${HM_MASTER_KEY_PATH:-/etc/harbormaster/server-master.key}
+        target: /run/harbormaster-secrets/master.key
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${HM_SETUP_TOKEN_PATH:-/etc/harbormaster/server-setup.token}
+        target: /run/harbormaster-secrets/setup.token
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: ${HM_AGENT_RELEASE_PATH:-/opt/harbormaster/agent-releases}
+        target: /opt/harbormaster/agent-releases
+        read_only: true
+        bind: {create_host_path: false}
+    tmpfs:
+      - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
+    healthcheck:
+      test: [CMD, /hm-server, healthcheck, --listen, "127.0.0.1:8080"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

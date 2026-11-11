@@ -1,0 +1,16 @@
+**
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!internal/
+!internal/**
+# A prior optional embed build may have staged a frontend bundle locally.
+internal/ui/assets/**
+!internal/ui/assets/index.html
+# Keep only source and explicitly checked-in fallback assets in the build context.
+**/*.test
+**/*.out
+**/*.exe
+**/*.local.*
+**/*.secret.*

@@ -1,0 +1,15 @@
+{
+  "listen": "127.0.0.1:8080",
+  "data_dir": "/var/lib/harbormaster-server",
+  "frontend": "api",
+  "public_url": "https://harbor.jasperxzy.com",
+  "agent_release_dir": "/opt/harbormaster/agent-releases",
+  "trusted_proxies": ["127.0.0.1/32", "::1/128"],
+  "admin_allow_cidrs": [],
+  "timezone": "Asia/Shanghai",
+  "log_level": "info",
+  "worker_count": 2,
+  "resource_scan_interval_seconds": 300,
+  "cdt_poll_interval_seconds": 300,
+  "session_ttl_seconds": 43200
+}
