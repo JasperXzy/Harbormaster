@@ -1,0 +1,8 @@
+{
+  "listen": "127.0.0.1:8080",
+  "data_dir": "data",
+  "dev": false,
+  "log_level": "info",
+  "timezone": "Asia/Shanghai",
+  "frontend": "api"
+}

@@ -1,0 +1,255 @@
+// 流量：官方与实时估算对比、每日用量、累计与预测、计费对象、共享带宽每小时收发。
+import { useState } from "react";
+import { api } from "../api/client";
+import { RULE, SCOPE, SUBJECT_KIND } from "../api/labels";
+import type { BandwidthPackage, DailyTraffic, QuotaScope, QuotaStatus } from "../api/types";
+import { DailyBars } from "../components/charts/DailyBars";
+import { LineChart } from "../components/charts/LineChart";
+import { QuotaMeter } from "../components/QuotaMeter";
+import { TipRow } from "../components/charts/common";
+import { Async, Badge, Card, EmptyState, ErrorState, Fresh, SegToggle, Skeleton } from "../components/ui";
+import { useShared } from "../lib/data";
+import { gb, gbValue, num, shortDate, time } from "../lib/format";
+import { Link } from "../lib/router";
+import { useResource } from "../lib/useResource";
+import { cumulativeBytes } from "../lib/usage";
+
+type View = "chart" | "table";
+const VIEW: [View, string][] = [["chart", "图表"], ["table", "表格"]];
+
+export function Traffic() {
+  const { accounts, quotas, instances } = useShared();
+  const [picked, setPicked] = useState<string>();
+  const accs = accounts.data;
+  const accountId = picked ?? accs?.[0]?.id;
+
+  if (accounts.error) return <div className="card"><ErrorState error={accounts.error} onRetry={accounts.reload} /></div>;
+  if (!accs) return <div className="card"><Skeleton lines={6} /></div>;
+  if (!accs.length || !accountId)
+    return (
+      <div className="card">
+        <EmptyState title="还没有流量数据" action={<Link className="btn primary" to="/settings">去添加账号</Link>}>添加阿里云账号后，这里会显示每天用了多少流量、月底大概会用到多少。</EmptyState>
+      </div>
+    );
+  const qs = (quotas.data ?? []).filter((q) => q.account_id === accountId);
+  const instName = (id: string) => instances.data?.items.find((i) => i.id === id)?.name ?? id;
+
+  return (
+    <>
+      <div className="filters">
+        <label className="sub" htmlFor="traffic-account">账号</label>
+        <select id="traffic-account" value={accountId} onChange={(e) => setPicked(e.target.value)}>
+          {accs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
+        <span className="sub">免费额度按账号计算，每月 {accs.find((a) => a.id === accountId)?.reset_day} 号重新开始。</span>
+      </div>
+
+      <Card title="官方数据与实时估算" sub="只有官方截止时间已确认，才能把之后的采集增量与官方数据对齐">
+        {quotas.error ? <ErrorState error={quotas.error} onRetry={quotas.reload} /> : !quotas.data ? <Skeleton /> : !qs.length ? <EmptyState title="这个账号还没有额度数据" /> : <QuotaTable qs={qs} />}
+      </Card>
+
+      <DailySection key={accountId} accountId={accountId} quotas={qs} />
+
+      <Subjects accountId={accountId} instName={instName} />
+      <Packages accountId={accountId} />
+    </>
+  );
+}
+
+function QuotaTable({ qs }: { qs: QuotaStatus[] }) {
+  const order: QuotaScope[] = ["overseas", "mainland"];
+  const rows = order.map((s) => qs.find((q) => q.scope === s)).filter((q): q is QuotaStatus => !!q);
+  return (
+    <>
+    <div className="only-narrow">{rows.map((q) => <QuotaMeter key={q.scope} q={q} />)}</div>
+    <div className="table-wrap only-wide">
+      <table>
+        <thead>
+          <tr><th>范围</th><th className="num">免费额度</th><th className="num">官方数据</th><th className="num">实时估算</th><th className="num">两者相差</th><th className="num">预测月底</th><th>会不会超额</th><th>更新</th></tr>
+        </thead>
+        <tbody>
+          {rows.map((q) => (
+            <tr key={q.scope}>
+              <td><b>{SCOPE[q.scope]}</b></td>
+              <td className="num">{gb(q.quota_bytes, 0)}</td>
+              <td className="num">{gb(q.official_bytes)}<div className="sub">{q.official_as_of ? `截至 ${time(q.official_as_of)}` : q.official_bytes === null ? "还没有数据" : "截止时间未提供"}</div></td>
+              <td className="num"><b>{gb(q.estimated_bytes)}</b><div className="sub">{q.effective_bytes === null ? "暂不能作为保护依据" : "告警使用已确认的有效用量"}</div></td>
+              <td className="num">{q.estimated_bytes === null || q.official_bytes === null ? "待确认" : `+${gb(q.estimated_bytes - q.official_bytes)}`}{q.worst_case_bytes !== null && q.worst_case_bytes > 0 && <div className="sub">含推算 {gb(q.worst_case_bytes)}</div>}</td>
+              <td className="num">{q.forecast ? gb(q.forecast.cycle_end_bytes) : "—"}</td>
+              <td>{!q.forecast ? <span className="sub">数据不够，暂时无法预测</span> : q.forecast.exceeds_on ? <Badge level="critical">预计 {shortDate(q.forecast.exceeds_on)} 超出</Badge> : <Badge level="good">不会超额</Badge>}</td>
+              <td>{q.official_status === "cutoff_unknown" ? <Badge level="warning">截止时间待确认</Badge> : q.official_status === "unavailable" ? <Badge level="warning">官方数据取不到</Badge> : <Fresh at={q.updated_at} kind="realtime" prefix="更新" />}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+    </>
+  );
+}
+
+const addDays = (date: string, n: number) => new Date(Date.parse(date + "T00:00:00Z") + n * 86400_000).toISOString().slice(0, 10);
+
+function DailySection({ accountId, quotas }: { accountId: string; quotas: QuotaStatus[] }) {
+  const daily = useResource(() => api.dailyTraffic(accountId), [accountId], { refreshMs: 60_000 });
+  const [view, setView] = useState<View>("chart");
+  const [scope, setScope] = useState<QuotaScope>("overseas");
+  return (
+    <div className="grid g2">
+      <Card title="每天用了多少" sub={daily.data ? `按 ${daily.data.data_timezone} 划分日期；未确认数据保留空缺` : "未确认的数据不按零用量显示"} right={<SegToggle label="显示方式" value={view} onChange={setView} options={VIEW} />}>
+        <Async res={daily} lines={6}>
+          {(d) =>
+            !d.days.length ? <EmptyState title="这个计费周期还没有数据" /> : view === "chart" ? (
+              <>
+                <div className="legend" style={{ marginBottom: 8 }}>
+                  <span><i style={{ background: "var(--series-1)" }} />{SCOPE.overseas}</span>
+                  <span><i style={{ background: "var(--series-2)" }} />{SCOPE.mainland}</span>
+                </div>
+                <DailyBars
+                  ariaLabel="每日流量用量" unit="GB" nameA={SCOPE.overseas} nameB={SCOPE.mainland} totalSlots={cycleDays(d)}
+                  bars={d.days.map((x) => ({ label: shortDate(x.date), a: x.overseas_bytes === null ? null : gbValue(x.overseas_bytes), b: x.mainland_bytes === null ? null : gbValue(x.mainland_bytes), provisional: x.provisional }))}
+                />
+              </>
+            ) : (
+              <div className="table-wrap" style={{ maxHeight: 300, overflowY: "auto" }}>
+                <table>
+                  <thead><tr><th>日期</th><th className="num">{SCOPE.overseas}</th><th className="num">{SCOPE.mainland}</th></tr></thead>
+                  <tbody>
+                    {[...d.days].reverse().map((x) => (
+                      <tr key={x.date}><td>{shortDate(x.date)}{x.provisional && <span className="sub"> · 含实时增量</span>}</td><td className="num">{gb(x.overseas_bytes)}</td><td className="num">{gb(x.mainland_bytes)}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          }
+        </Async>
+      </Card>
+      <Card title="累计用量与预测" sub="虚线：按最近 7 天的日均用量推算到月底" right={<SegToggle label="范围" value={scope} onChange={setScope} options={[["overseas", "海外"], ["mainland", "国内"]]} />}>
+        <Async res={daily} lines={6}>
+          {(d) => {
+            const q = quotas.find((x) => x.scope === scope);
+            if (!d.days.length || !q) return <EmptyState title="还没有足够的数据画图" />;
+            return <Cumulative d={d} q={q} scope={scope} />;
+          }}
+        </Async>
+      </Card>
+    </div>
+  );
+}
+
+const cycleDays = (d: DailyTraffic) => Math.max(d.days.length, Math.round((Date.parse(d.cycle_end) - Date.parse(d.cycle_start)) / 86400_000));
+
+function Cumulative({ d, q, scope }: { d: DailyTraffic; q: QuotaStatus; scope: QuotaScope }) {
+  const total = cycleDays(d), n = d.days.length;
+  const labels = Array.from({ length: total }, (_, i) => shortDate(addDays(d.days[0].date, i)));
+  const cum = cumulativeBytes(d.days, scope).map((v) => v === null ? null : gbValue(v));
+  const last = cum[n - 1];
+  const dailyAvg = q.forecast ? gbValue(q.forecast.daily_average_bytes) : 0;
+  const actual = labels.map((_, i) => (i < n ? cum[i] : null));
+  const proj = labels.map((_, i) => (q.forecast && last !== null && i >= n - 1 ? last + dailyAvg * (i - n + 1) : null));
+  const quota = gbValue(q.quota_bytes);
+  const exIdx = q.forecast?.exceeds_on ? labels.indexOf(shortDate(q.forecast.exceeds_on)) : -1;
+  const color = scope === "overseas" ? "var(--series-1)" : "var(--series-2)";
+  return (
+    <>
+      {cum.some((v) => v === null) && <p className="note">日用量存在缺口，缺口之后的累计值暂不连线或预测。</p>}
+      <div className="legend" style={{ marginBottom: 8 }}>
+        <span><i className="line" style={{ background: color }} />已经用掉的</span>
+        {q.forecast && <span><i className="dash" style={{ borderColor: color }} />预测</span>}
+      </div>
+      <LineChart
+        ariaLabel={`${SCOPE[scope]}累计用量与预测`} labels={labels} unit="GB" height={250}
+        series={[{ name: "已用", color, data: actual, endLabel: false }, { name: "预测", color, data: proj, dashed: true, endLabel: false }]}
+        refLine={{ value: quota, label: `免费额度 ${num(quota, 0)} GB` }}
+        marker={exIdx >= 0 ? { index: exIdx, value: quota, label: `预计 ${labels[exIdx]} 超出` } : undefined}
+        extraTip={(i) => { const v = actual[i] ?? proj[i]; return v == null ? null : <TipRow label="占免费额度" value={`${num((v / quota) * 100, 0)}%`} />; }}
+      />
+    </>
+  );
+}
+
+function Subjects({ accountId, instName }: { accountId: string; instName: (id: string) => string }) {
+  const res = useResource(() => api.billingSubjects(accountId), [accountId], { refreshMs: 30_000 });
+  const src = { agent: "采集程序", cloud_monitor: "云监控（晚 1–2 分钟）", none: "没有数据来源" } as const;
+  return (
+    <Card title="流量是按什么计费的" sub="每个公网出口各算各的；这里是今天到现在的数字">
+      <Async res={res} lines={5}>
+        {(items) =>
+          !items.length ? <EmptyState title="这个账号下没有公网出口" /> : (
+            <div className="table-wrap">
+              <table>
+                <thead><tr><th>公网出口</th><th>类型</th><th>怎么算</th><th className="num">今天收到</th><th className="num">今天发出</th><th className="num">今天计费流量</th><th>计入免费额度</th><th>数据来源</th></tr></thead>
+                <tbody>
+                  {items.map((s) => (
+                    <tr key={s.id}>
+                      <td><b>{s.name}</b><div className="sub"><span className="mono">{s.public_ips.join("、")}</span>{s.kind.startsWith("cbwp") ? ` · 成员 ${s.instance_ids.map(instName).join("、")}` : ""}</div></td>
+                      <td>{SUBJECT_KIND[s.kind]}</td>
+                      <td>{RULE[s.metering_rule]}</td>
+                      <td className="num">{s.today_rx_bytes === null ? <span className="sub">—</span> : gb(s.today_rx_bytes)}</td>
+                      <td className="num">{s.today_tx_bytes === null ? <span className="sub">—</span> : gb(s.today_tx_bytes)}</td>
+                      <td className="num">{s.today_metered_bytes === null ? <span className="sub">—</span> : <b>{gb(s.today_metered_bytes)}</b>}</td>
+                      <td>{s.counts_toward_cdt === null ? <Badge level="warning">归属待确认</Badge> : s.counts_toward_cdt && s.cdt_scope ? <Badge level="good">{SCOPE[s.cdt_scope]}</Badge> : <span className="sub">不计入</span>}</td>
+                      <td><span className="sub">{src[s.data_source]}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+      </Async>
+      <p className="note">阿里云的官方数据只有整个账号的合计，分不到每台机器；这张表里的数字来自采集程序或云监控，用来看流量主要是谁用掉的。</p>
+    </Card>
+  );
+}
+
+function Packages({ accountId }: { accountId: string }) {
+  const res = useResource(api.bandwidthPackages, []);
+  const mine = (res.data ?? []).filter((p) => p.account_id === accountId);
+  if (!mine.length) return null;
+  return <>{mine.map((p) => <PackageHourly key={p.id} p={p} />)}</>;
+}
+
+function PackageHourly({ p }: { p: BandwidthPackage }) {
+  const res = useResource(() => api.bandwidthPackageHourly(p.id), [p.id], { refreshMs: 60_000 });
+  const [view, setView] = useState<View>("chart");
+  return (
+    <Card title={`共享带宽 ${p.name} · 今天每小时收发`} sub="每小时按收、发中较大的一方计费" right={<SegToggle label="显示方式" value={view} onChange={setView} options={VIEW} />}>
+      <Async res={res} lines={6}>
+        {(h) => {
+          if (!h.periods.length) return <EmptyState title="今天还没有数据" />;
+          // 当前这个周期还没结束，数值偏小，画在图上会像“突然掉下来”，所以图里不画，表格里照常列出
+          const open = Date.parse(h.periods[h.periods.length - 1].start) + h.period_seconds * 1000 > Date.now();
+          const done = open ? h.periods.slice(0, -1) : h.periods;
+          const labels = done.map((x) => time(x.start));
+          if (view === "chart" && done.length < 2) return <EmptyState title="今天的数据还不够画图">过了凌晨 2 点之后这里会出现曲线。可以先切到表格查看。</EmptyState>;
+          return view === "chart" ? (
+            <>
+              <div className="legend" style={{ marginBottom: 8 }}>
+                <span><i className="line" style={{ background: "var(--series-1)" }} />发出</span>
+                <span><i className="line" style={{ background: "var(--series-3)" }} />收到</span>
+              </div>
+              <LineChart
+                ariaLabel={`${p.name} 每小时收发流量`} labels={labels} unit="GB" digits={2}
+                series={[{ name: "发出", color: "var(--series-1)", data: done.map((x) => gbValue(x.tx_bytes)) }, { name: "收到", color: "var(--series-3)", data: done.map((x) => gbValue(x.rx_bytes)) }]}
+                extraTip={(i) => <TipRow label="按这个计费" value={`${done[i].rx_bytes >= done[i].tx_bytes ? "收到" : "发出"} ${num(gbValue(done[i].metered_bytes), 2)} GB`} />}
+              />
+              {open && <p className="note">当前这一小时还没结束，没有画在图上；切到表格可以看到。</p>}
+            </>
+          ) : (
+            <div className="table-wrap" style={{ maxHeight: 300, overflowY: "auto" }}>
+              <table>
+                <thead><tr><th>开始时间</th><th className="num">收到</th><th className="num">发出</th><th className="num">计费流量</th></tr></thead>
+                <tbody>
+                  {[...h.periods].reverse().map((x) => (
+                    <tr key={x.start}><td>{time(x.start)}{open && x === h.periods[h.periods.length - 1] && <span className="sub"> · 还没结束</span>}</td><td className="num">{gb(x.rx_bytes, 2)}</td><td className="num">{gb(x.tx_bytes, 2)}</td><td className="num"><b>{gb(x.metered_bytes, 2)}</b></td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }}
+      </Async>
+    </Card>
+  );
+}

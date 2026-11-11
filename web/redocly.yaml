@@ -1,0 +1,7 @@
+# openapi.yaml 的格式校验配置（npm run lint:api）
+extends:
+  - recommended
+rules:
+  info-license: off            # 私有项目，不需要许可证字段
+  no-unused-components: off    # 事件流的 data 结构只在说明文字里引用
+  operation-4xx-response: off  # GET /setup/status 是公开接口，没有 4xx

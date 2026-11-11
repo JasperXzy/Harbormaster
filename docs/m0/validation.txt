@@ -1,0 +1,74 @@
+$ go build ./...
+exit=0
+$ go vet ./...
+exit=0
+$ go mod verify
+all modules verified
+exit=0
+$ sh deploy/build.sh
+frontend: staged dist for go:embed
+exit=0
+$ /Users/jasperxzy/Projects/Server/harbormaster/deploy/bin/hm-server version
+{"build_time":"unknown","commit":"unknown","program":"hm-server","version":"dev"}
+exit=0
+$ /Users/jasperxzy/Projects/Server/harbormaster/deploy/bin/hm-agent version
+{"program":"hm-agent","version":"dev"}
+exit=0
+$ /Users/jasperxzy/Projects/Server/harbormaster/deploy/bin/hm-server healthcheck --listen 127.0.0.1:50140
+ready
+exit=0
+$ /Users/jasperxzy/Projects/Server/harbormaster/deploy/bin/hm-server migrate --dev --data-dir /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-smoke-fshkycn0/dev
+{"time":"2026-11-11T13:14:20.344Z","level":"INFO","msg":"migrations_applied"}
+exit=0
+$ /Users/jasperxzy/Projects/Server/harbormaster/deploy/bin/hm-server run-once --dev --data-dir /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-smoke-fshkycn0/dev
+{"time":"2026-11-11T13:14:20.452Z","level":"INFO","msg":"run_once_complete","cloud_queries":0,"cloud_writes":0,"phase":"m0"}
+exit=0
+PASS embedded web/dist index and unknown-page SPA fallback
+PASS 15 development GET responses: contract required fields, types, enums and nullable values
+PASS Cookie session, CSRF rejection, unsupported write 501, API 404, SSE ping
+$ /Users/jasperxzy/Projects/Server/harbormaster/deploy/bin/hm-agent run-once --dev --server http://127.0.0.1:50140
+{"time":"2026-11-11T13:14:20.566Z","level":"INFO","msg":"demo_report_accepted","sequence":1}
+exit=0
+PASS agent -> authenticated report -> SQLite WAL -> idempotent replay; one stored sample
+$ /Users/jasperxzy/Projects/Server/harbormaster/deploy/bin/hm-server reset-password --dev --data-dir /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-smoke-fshkycn0/dev
+{"time":"2026-11-11T13:14:20.777Z","level":"INFO","msg":"password_reset_complete","sessions_revoked":true}
+exit=0
+PASS reset-password invalidates existing Cookie session
+{"time":"2026-11-11T13:14:20.210Z","level":"INFO","msg":"server_started","listen":"127.0.0.1:50140","development":true,"cloud_writes":false}
+{"time":"2026-11-11T13:14:20.781Z","level":"INFO","msg":"server_stopped"}
+$ /Users/jasperxzy/Projects/Server/harbormaster/deploy/bin/hm-server migrate --data-dir /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-smoke-fshkycn0/prod
+{"time":"2026-11-11T13:14:20.791Z","level":"ERROR","msg":"provide exactly one of HM_MASTER_KEY or HM_MASTER_KEY_FILE"}
+exit=1
+$ /Users/jasperxzy/Projects/Server/harbormaster/deploy/bin/hm-server migrate --data-dir /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-smoke-fshkycn0/prod
+{"time":"2026-11-11T13:14:20.798Z","level":"INFO","msg":"migrations_applied"}
+exit=0
+$ /Users/jasperxzy/Projects/Server/harbormaster/deploy/bin/hm-agent run-once
+{"time":"2026-11-11T13:14:20.804Z","level":"ERROR","msg":"real_collection_not_available_in_m0"}
+exit=1
+$ go run ./internal/ui/prepare -source /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-smoke-fshkycn0/absent-dist
+frontend: embedded fallback
+exit=0
+$ go build -o /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-smoke-fshkycn0/hm-server-fallback ./cmd/hm-server
+exit=0
+PASS absent-dist compiled binary serves embedded fallback and SPA routes
+{"time":"2026-11-11T13:14:21.741Z","level":"INFO","msg":"server_started","listen":"127.0.0.1:50177","development":true,"cloud_writes":false}
+{"time":"2026-11-11T13:14:21.783Z","level":"INFO","msg":"server_stopped"}
+$ go build ./...
+exit=0
+PASS no real cloud request or Telegram send was made; all smoke servers stopped
+$ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-cross-zqzu9p9g/hm-server-linux-amd64 ./cmd/hm-server
+exit=0
+$ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-cross-zqzu9p9g/hm-server-linux-arm64 ./cmd/hm-server
+exit=0
+$ CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath -o /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-cross-zqzu9p9g/hm-server-darwin-amd64 ./cmd/hm-server
+exit=0
+$ CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -trimpath -o /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-cross-zqzu9p9g/hm-server-darwin-arm64 ./cmd/hm-server
+exit=0
+$ CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -o /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-cross-zqzu9p9g/hm-server-windows-amd64 ./cmd/hm-server
+exit=0
+$ CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -trimpath -o /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-cross-zqzu9p9g/hm-server-windows-arm64 ./cmd/hm-server
+exit=0
+$ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-cross-zqzu9p9g/hm-agent-linux-amd64 ./cmd/hm-agent
+exit=0
+$ CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o /var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-m0-cross-zqzu9p9g/hm-agent-linux-arm64 ./cmd/hm-agent
+exit=0

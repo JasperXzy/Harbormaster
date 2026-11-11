@@ -1,0 +1,20 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeInstances",
+        "ecs:DescribeNetworkInterfaces",
+        "vpc:DescribeEipAddresses",
+        "vpc:DescribeCommonBandwidthPackages",
+        "swas-open:ListInstances",
+        "swas-open:ListInstancesTrafficPackages",
+        "cms:QueryMetricList",
+        "bss:DescribeAcccount",
+        "bss:DescribeBillList"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

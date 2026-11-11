@@ -1,0 +1,31 @@
+{
+  "name": "harbormaster-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "dev": "vite",
+    "dev:api": "vite --mode api",
+    "build": "tsc --noEmit && vite build",
+    "build:mock": "tsc --noEmit && vite build --mode mock --outDir dist-mock",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "gen:api": "openapi-typescript ../docs/api/openapi.yaml -o src/api/schema.gen.ts",
+    "lint:api": "redocly lint ../docs/api/openapi.yaml"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@redocly/cli": "^2.77.0",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "openapi-typescript": "^7.13.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8"
+  }
+}

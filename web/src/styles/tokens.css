@@ -1,0 +1,117 @@
+/* 设计变量：颜色、字号、间距、圆角。取值沿用 ../demo/index.html，说明见 docs/design/README.md。 */
+:root {
+  color-scheme: light;
+
+  /* 表面与文字 */
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --surface-2: #f3f3f0;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --muted: #898781;
+  --border: rgba(11, 11, 11, 0.1);
+
+  /* 图表 */
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --forecast: #86b6ef;
+  --realtime: #86b6ef;
+
+  /* 强调与状态 */
+  --accent: #2a78d6;
+  --on-accent: #ffffff;
+  --good: #0ca30c;
+  --warning: #fab219;
+  --serious: #ec835a;
+  --critical: #d03b3b;
+  --tint-warning: rgba(250, 178, 25, 0.14);
+  --tint-critical: rgba(208, 59, 59, 0.1);
+  --tint-accent: rgba(42, 120, 214, 0.1);
+
+  --shadow: 0 1px 2px rgba(11, 11, 11, 0.04), 0 2px 8px rgba(11, 11, 11, 0.04);
+  --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.12);
+
+  /* 字号 */
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-base: 14px;
+  --fs-lg: 15px;
+  --fs-xl: 18px;
+  --fs-stat: 28px;
+
+  /* 间距（4 的倍数） */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-7: 28px;
+
+  /* 圆角 */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 14px;
+  --r-pill: 999px;
+
+  --font: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --side-w: 216px;
+  --tabbar-h: 58px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --surface-2: #232321;
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --muted: #898781;
+    --border: rgba(255, 255, 255, 0.1);
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --accent: #3987e5;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --forecast: #1c5cab;
+    --realtime: #184f95;
+    --tint-warning: rgba(250, 178, 25, 0.12);
+    --tint-critical: rgba(208, 59, 59, 0.16);
+    --tint-accent: rgba(57, 135, 229, 0.16);
+    --shadow: none;
+    --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --surface-2: #232321;
+  --text: #f0efec;
+  --text-2: #c3c2b7;
+  --muted: #898781;
+  --border: rgba(255, 255, 255, 0.1);
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --accent: #3987e5;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --forecast: #1c5cab;
+  --realtime: #184f95;
+  --tint-warning: rgba(250, 178, 25, 0.12);
+  --tint-critical: rgba(208, 59, 59, 0.16);
+  --tint-accent: rgba(57, 135, 229, 0.16);
+  --shadow: none;
+  --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.5);
+}

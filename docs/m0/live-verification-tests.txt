@@ -1,0 +1,21 @@
+$ go build ./...
+exit=0
+$ go test -race ./...
+?   	github.com/JasperXzy/harbormaster/cmd/hm-agent	[no test files]
+?   	github.com/JasperXzy/harbormaster/cmd/hm-server	[no test files]
+?   	github.com/JasperXzy/harbormaster/internal/agentcli	[no test files]
+?   	github.com/JasperXzy/harbormaster/internal/agentproto	[no test files]
+ok  	github.com/JasperXzy/harbormaster/internal/api	(cached)
+?   	github.com/JasperXzy/harbormaster/internal/buildinfo	[no test files]
+?   	github.com/JasperXzy/harbormaster/internal/cli	[no test files]
+ok  	github.com/JasperXzy/harbormaster/internal/config	(cached)
+ok  	github.com/JasperXzy/harbormaster/internal/devmode	(cached)
+ok  	github.com/JasperXzy/harbormaster/internal/logging	(cached)
+ok  	github.com/JasperXzy/harbormaster/internal/m0	1.904s
+ok  	github.com/JasperXzy/harbormaster/internal/security	(cached)
+ok  	github.com/JasperXzy/harbormaster/internal/store	(cached)
+?   	github.com/JasperXzy/harbormaster/internal/ui	[no test files]
+ok  	github.com/JasperXzy/harbormaster/internal/ui/prepare	(cached)
+exit=0
+$ go vet ./...
+exit=0

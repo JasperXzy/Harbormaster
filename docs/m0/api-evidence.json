@@ -1,0 +1,3504 @@
+{
+  "checked_on": "2026-11-11",
+  "cloud_requests": 0,
+  "apis": [
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "action": "DescribeRegions",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/DescribeRegions/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/ecs-20140526/blob/f3703b562423b36cb3115c54d2fa979284627e30/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "InstanceChargeType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ResourceType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AcceptLanguage",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [],
+      "metadata_message": null
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "action": "DescribeInstances",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/DescribeInstances/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/ecs-20140526/blob/f3703b562423b36cb3115c54d2fa979284627e30/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "VpcId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "VSwitchId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ZoneId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceNetworkType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SecurityGroupId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceIds",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageNumber",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageSize",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NextToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MaxResults",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InnerIpAddresses",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PrivateIpAddresses",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PublicIpAddresses",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "EipAddresses",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceChargeType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InternetChargeType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ImageId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Status",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "LockReason",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Filter.1.Key",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Filter.2.Key",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Filter.3.Key",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Filter.4.Key",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Filter.1.Value",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Filter.2.Value",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Filter.3.Value",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Filter.4.Value",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DeviceAvailable",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "IoOptimized",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NeedSaleCycle",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceTypeFamily",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "KeyPairName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ResourceGroupId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "HpcClusterId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "RdmaIpAddresses",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DryRun",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "HttpEndpoint",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "HttpTokens",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "HttpPutResponseHopLimit",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv6Address",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Tag",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AdditionalAttributes",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "list",
+          "ramAction": {
+            "action": "ecs:DescribeInstances",
+            "authLevel": "resource",
+            "actionConditions": [
+              {
+                "conditionKey": "ResourceOwner",
+                "validationType": "always"
+              }
+            ],
+            "resources": [
+              {
+                "validationType": "conditional",
+                "product": "ECS",
+                "resourceType": "Instance",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:instance/*"
+              },
+              {
+                "validationType": "conditional",
+                "product": "ECS",
+                "resourceType": "Instance",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:instance/{#instanceId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "action": "DescribeInstanceTypes",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/DescribeInstanceTypes/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/ecs-20140526/blob/f3703b562423b36cb3115c54d2fa979284627e30/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "InstanceTypeFamily",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceTypes",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumCpuCoreCount",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MaximumCpuCoreCount",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumMemorySize",
+          "type": "number",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MaximumMemorySize",
+          "type": "number",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumGPUAmount",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MaximumGPUAmount",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "GPUSpec",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceCategory",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "CpuArchitecture",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumCpuSpeedFrequency",
+          "type": "number",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MaximumCpuSpeedFrequency",
+          "type": "number",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumCpuTurboFrequency",
+          "type": "number",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MaximumCpuTurboFrequency",
+          "type": "number",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PhysicalProcessorModel",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceFamilyLevel",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumInstancePpsRx",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumInstancePpsTx",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumInstanceBandwidthRx",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumInstanceBandwidthTx",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumPrimaryEniQueueNumber",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumSecondaryEniQueueNumber",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumEniQuantity",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumQueuePairNumber",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumEriQuantity",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumEniPrivateIpAddressQuantity",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumEniIpv6AddressQuantity",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumLocalStorageAmount",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumLocalStorageCapacity",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumDiskQuantity",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "LocalStorageCategory",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NvmeSupport",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumBaselineCredit",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinimumInitialCredit",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceTypeFamilies",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "GpuSpecs",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceCategories",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "CpuArchitectures",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PhysicalProcessorModels",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "LocalStorageCategories",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MaxResults",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NextToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AdditionalAttributes",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [],
+      "metadata_message": null
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "action": "DescribeNetworkInterfaces",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/DescribeNetworkInterfaces/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/ecs-20140526/blob/f3703b562423b36cb3115c54d2fa979284627e30/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "Tag",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ResourceGroupId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "VSwitchId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "VpcId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PrimaryIpAddress",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SecurityGroupId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NetworkInterfaceName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Type",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ServiceManaged",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Status",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageNumber",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageSize",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NextToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MaxResults",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PrivateIpAddress",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NetworkInterfaceId",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv6Address",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "get",
+          "ramAction": {
+            "action": "ecs:DescribeNetworkInterfaces",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "conditional",
+                "product": "ECS",
+                "resourceType": "NetworkInterface",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:eni/{#eniId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "action": "StartInstance",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/StartInstance/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/ecs-20140526/blob/f3703b562423b36cb3115c54d2fa979284627e30/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "readAndWrite",
+      "parameters": [
+        {
+          "name": "InstanceId",
+          "type": "string",
+          "required": true,
+          "document_required": false
+        },
+        {
+          "name": "InitLocalDisk",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DryRun",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "ecs:StartInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "ECS",
+                "resourceType": "Instance",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:instance/{#instanceId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "action": "StopInstance",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/StopInstance/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/ecs-20140526/blob/f3703b562423b36cb3115c54d2fa979284627e30/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "readAndWrite",
+      "parameters": [
+        {
+          "name": "InstanceId",
+          "type": "string",
+          "required": true,
+          "document_required": false
+        },
+        {
+          "name": "ConfirmStop",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ForceStop",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "StoppedMode",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DryRun",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Hibernate",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "ecs:StopInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "ECS",
+                "resourceType": "Instance",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:instance/{#instanceId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "action": "RebootInstance",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/RebootInstance/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/ecs-20140526/blob/f3703b562423b36cb3115c54d2fa979284627e30/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "readAndWrite",
+      "parameters": [
+        {
+          "name": "InstanceId",
+          "type": "string",
+          "required": true,
+          "document_required": false
+        },
+        {
+          "name": "ForceStop",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DryRun",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "ecs:RebootInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "ECS",
+                "resourceType": "Instance",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:instance/{#instanceId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "action": "RunInstances",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/RunInstances/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/ecs-20140526/blob/f3703b562423b36cb3115c54d2fa979284627e30/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "readAndWrite",
+      "parameters": [
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": false
+        },
+        {
+          "name": "ImageId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ImageFamily",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SecurityGroupId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "VSwitchId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Description",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InternetMaxBandwidthIn",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InternetMaxBandwidthOut",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "HostName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "UniqueSuffix",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Password",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PasswordInherit",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ZoneId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InternetChargeType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SystemDisk.Size",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SystemDisk.Category",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SystemDisk.DiskName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SystemDisk.Description",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SystemDisk.PerformanceLevel",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SystemDisk.AutoSnapshotPolicyId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "IoOptimized",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "UserData",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "KeyPairName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "RamRoleName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Amount",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MinAmount",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AutoReleaseTime",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SpotStrategy",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SpotDuration",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SpotPriceLimit",
+          "type": "number",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SpotInterruptionBehavior",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SecurityEnhancementStrategy",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ClientToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "HpcClusterId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DryRun",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DedicatedHostId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "LaunchTemplateId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "LaunchTemplateName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "LaunchTemplateVersion",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ResourceGroupId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Period",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PeriodUnit",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AutoRenew",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AutoRenewPeriod",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceChargeType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DeploymentSetId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DeploymentSetGroupNo",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PrivateIpAddress",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "CreditSpecification",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv6AddressCount",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NetworkInterfaceQueueNumber",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DeletionProtection",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "HibernationOptions.Configured",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Affinity",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Tenancy",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "StorageSetId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "StorageSetPartitionNumber",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "CpuOptions.Core",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "CpuOptions.ThreadsPerCore",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "CpuOptions.Numa",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "CpuOptions.TopologyType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SecurityOptions.TrustedSystemMode",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SecurityOptions.ConfidentialComputingMode",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "HttpEndpoint",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "HttpTokens",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "HttpPutResponseHopLimit",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PrivatePoolOptions.MatchCriteria",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PrivatePoolOptions.Id",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Isp",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SchedulerOptions.DedicatedHostClusterId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SecurityGroupIds",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "HostNames",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DataDisk",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Arn",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NetworkInterface",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Tag",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv6Address",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SystemDisk",
+          "type": "object",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ImageOptions",
+          "type": "object",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NetworkOptions",
+          "type": "object",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AutoPay",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PrivateDnsNameOptions",
+          "type": "object",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ClockOptions",
+          "type": "object",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "CpuOptions",
+          "type": "object",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SecurityOptions",
+          "type": "object",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ManagedHostId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "create",
+          "ramAction": {
+            "action": "ecs:RunInstances",
+            "authLevel": "resource",
+            "actionConditions": [
+              {
+                "conditionKey": "vpc:IsDefaultVSwitch",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "vpc:IsDefaultVpc",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "vpc:VPC",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "ecs:IsDiskEncrypted",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "ecs:InstanceTypeFamily",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "ecs:InstanceType",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "ecs:ImageOwnerId",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "ecs:ImageSource",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "ecs:NotSpecifySecurityGroupId"
+              },
+              {
+                "conditionKey": "ecs:LoginAsNonRoot"
+              },
+              {
+                "conditionKey": "ecs:IsSystemDiskByokEncrypted"
+              },
+              {
+                "conditionKey": "ecs:IsDiskByokEncrypted"
+              },
+              {
+                "conditionKey": "ecs:PasswordInherit"
+              },
+              {
+                "conditionKey": "ecs:PasswordCustomized"
+              },
+              {
+                "conditionKey": "ecs:IsSystemDiskEncrypted"
+              },
+              {
+                "conditionKey": "ecs:ImagePlatform"
+              },
+              {
+                "conditionKey": "ecs:IsDiskEncrypted"
+              },
+              {
+                "conditionKey": "ecs:SecurityHardeningMode"
+              },
+              {
+                "conditionKey": "ecs:AssociatePublicIpAddress"
+              },
+              {
+                "conditionKey": "vpc:CreateDefaultVpc"
+              },
+              {
+                "conditionKey": "ecs:SecurityEnhancementStrategy"
+              },
+              {
+                "conditionKey": "ecs:InstanceChargeType"
+              }
+            ],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "ECS",
+                "resourceType": "全部资源",
+                "arn": "*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "action": "DeleteInstance",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/DeleteInstance/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/ecs-20140526/blob/f3703b562423b36cb3115c54d2fa979284627e30/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "readAndWrite",
+      "parameters": [
+        {
+          "name": "InstanceId",
+          "type": "string",
+          "required": true,
+          "document_required": false
+        },
+        {
+          "name": "Force",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ForceStop",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "TerminateSubscription",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DryRun",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "delete",
+          "ramAction": {
+            "action": "ecs:DeleteInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "ECS",
+                "resourceType": "Instance",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:instance/{#instanceId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "action": "DescribeInstanceHistoryEvents",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/DescribeInstanceHistoryEvents/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/ecs-20140526/blob/f3703b562423b36cb3115c54d2fa979284627e30/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "InstanceId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "EventCycleStatus",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "EventType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NotBefore.Start",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NotBefore.End",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "EventPublishTime.Start",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "EventPublishTime.End",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ImpactLevel",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageNumber",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageSize",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ResourceType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "EventId",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceEventCycleStatus",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceEventType",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ResourceId",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Tag",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ResourceGroupId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NextToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MaxResults",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "get",
+          "ramAction": {
+            "action": "ecs:DescribeInstanceHistoryEvents",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "ECS",
+                "resourceType": "全部资源",
+                "arn": "*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "action": "DescribeEipAddresses",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/DescribeEipAddresses/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/vpc-20160428/blob/7e9e96a54ea924f6c793d8121afaa4cb1bb8712f/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "IncludeReservationData",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Status",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "EipAddress",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AllocationId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SegmentInstanceId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ResourceGroupId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageNumber",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageSize",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ISP",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Filter.1.Key",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Filter.2.Key",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Filter.1.Value",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Filter.2.Value",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "LockReason",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AssociatedInstanceType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AssociatedInstanceId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ChargeType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DryRun",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "EipName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Tag",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SecurityProtectionEnabled",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PublicIpAddressPoolId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ServiceManaged",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "list",
+          "ramAction": {
+            "action": "vpc:DescribeEipAddresses",
+            "authLevel": "resource",
+            "actionConditions": [
+              {
+                "conditionKey": "vpc:tag",
+                "validationType": "always"
+              }
+            ],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "Address",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:eip/*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "action": "AllocateEipAddress",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/AllocateEipAddress/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/vpc-20160428/blob/7e9e96a54ea924f6c793d8121afaa4cb1bb8712f/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "readAndWrite",
+      "parameters": [
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "Bandwidth",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Period",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ISP",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ActivityId",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Netmode",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AutoPay",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PricingCycle",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceChargeType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InternetChargeType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ResourceGroupId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ClientToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Name",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Description",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SecurityProtectionTypes",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PublicIpAddressPoolId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Zone",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "IpAddress",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Tag",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "create",
+          "ramAction": {
+            "action": "vpc:AllocateEipAddress",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "Address",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:eip/*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "action": "AssociateEipAddress",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/AssociateEipAddress/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/vpc-20160428/blob/7e9e96a54ea924f6c793d8121afaa4cb1bb8712f/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "readAndWrite",
+      "parameters": [
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": false,
+          "document_required": true
+        },
+        {
+          "name": "AllocationId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "InstanceId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "InstanceType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceRegionId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PrivateIpAddress",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Mode",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "VpcId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ClientToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "vpc:AssociateEipAddress",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "Address",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:eip/{#AllocationId}"
+              },
+              {
+                "validationType": "conditional",
+                "product": "VPC",
+                "resourceType": "NatGateway",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:natgateway/{#NatGatewayId}"
+              },
+              {
+                "validationType": "conditional",
+                "product": "VPC",
+                "resourceType": "Instance",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:instance/{#InstanceId}"
+              },
+              {
+                "validationType": "conditional",
+                "product": "VPC",
+                "resourceType": "Association",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:havip/{#HaVipId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "action": "UnassociateEipAddress",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/UnassociateEipAddress/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/vpc-20160428/blob/7e9e96a54ea924f6c793d8121afaa4cb1bb8712f/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "readAndWrite",
+      "parameters": [
+        {
+          "name": "Force",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AllocationId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "InstanceId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PrivateIpAddress",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ClientToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "delete",
+          "ramAction": {
+            "action": "vpc:UnassociateEipAddress",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "conditional",
+                "product": "VPC",
+                "resourceType": "Instance",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:instance/{#InstanceId}"
+              },
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "Address",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:eip/{#AllocationId}"
+              },
+              {
+                "validationType": "conditional",
+                "product": "VPC",
+                "resourceType": "HaVip",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:havip/{#HaVipId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "action": "ReleaseEipAddress",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/ReleaseEipAddress/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/vpc-20160428/blob/7e9e96a54ea924f6c793d8121afaa4cb1bb8712f/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "readAndWrite",
+      "parameters": [
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AllocationId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "vpc:ReleaseEipAddress",
+            "authLevel": "resource",
+            "actionConditions": [
+              {
+                "conditionKey": "vpc:tag",
+                "validationType": "always"
+              }
+            ],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "Address",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:eip/{#AllocationId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "action": "CreateVpc",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/CreateVpc/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/vpc-20160428/blob/7e9e96a54ea924f6c793d8121afaa4cb1bb8712f/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "readAndWrite",
+      "parameters": [
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "CidrBlock",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv6CidrBlock",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "VpcName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "EnableIpv6",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Description",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ResourceGroupId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Tag",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DryRun",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "UserCidr",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ClientToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv6Isp",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv4IpamPoolId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv4CidrMask",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "EnableDnsHostname",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv6IpamPoolId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv6CidrMask",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "create",
+          "ramAction": {
+            "action": "vpc:CreateVpc",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "VPC",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:vpc/*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "action": "CreateVSwitch",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/CreateVSwitch/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/vpc-20160428/blob/7e9e96a54ea924f6c793d8121afaa4cb1bb8712f/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "readAndWrite",
+      "parameters": [
+        {
+          "name": "Tag",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ZoneId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "CidrBlock",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "CidrMask",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv6CidrBlock",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv6CidrMask",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Ipv6Only",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "VpcId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "VSwitchName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Description",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ClientToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "VpcIpv6CidrBlock",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "create",
+          "ramAction": {
+            "action": "vpc:CreateVSwitch",
+            "authLevel": "resource",
+            "actionConditions": [
+              {
+                "conditionKey": "vpc:tag",
+                "validationType": "always"
+              }
+            ],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "VPC",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:vpc/{#VpcId}"
+              },
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "VSwitch",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:vswitch/*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "action": "DescribeCommonBandwidthPackages",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/DescribeCommonBandwidthPackages/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/vpc-20160428/blob/7e9e96a54ea924f6c793d8121afaa4cb1bb8712f/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "IncludeReservationData",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "BandwidthPackageId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ResourceGroupId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Name",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageNumber",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageSize",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "DryRun",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Tag",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SecurityProtectionEnabled",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "get",
+          "ramAction": {
+            "action": "vpc:DescribeCommonBandwidthPackages",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "CommonBandwidthPackage",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:combandwidthpackage/*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "SWAS-OPEN",
+      "version": "2020-06-01",
+      "action": "ListInstances",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/SWAS-OPEN/versions/2020-06-01/apis/ListInstances/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/swas-open-20200601/blob/20152ee11f942458506f80e08b7fd9ba5d0dc537/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "InstanceIds",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ChargeType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PublicIpAddresses",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageNumber",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageSize",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Status",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Tag",
+          "type": "array",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ResourceGroupId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "InstanceName",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PlanType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "get",
+          "ramAction": {
+            "action": "swas-open:ListInstances",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "conditional",
+                "product": "SimpleApplicationServer",
+                "resourceType": "Instance",
+                "arn": "acs:swas-open:{#regionId}:{#accountId}:instance/*"
+              },
+              {
+                "validationType": "always",
+                "product": "SimpleApplicationServer",
+                "resourceType": "Instance",
+                "arn": "acs:swas-open:{#regionId}:{#accountId}:instance/{#InstanceId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "SWAS-OPEN",
+      "version": "2020-06-01",
+      "action": "StartInstance",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/SWAS-OPEN/versions/2020-06-01/apis/StartInstance/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/swas-open-20200601/blob/20152ee11f942458506f80e08b7fd9ba5d0dc537/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "write",
+      "parameters": [
+        {
+          "name": "InstanceId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "ClientToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "swas-open:StartInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "SimpleApplicationServer",
+                "resourceType": "Instance",
+                "arn": "acs:swas-open:{#regionId}:{#accountId}:instance/{#InstanceId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "SWAS-OPEN",
+      "version": "2020-06-01",
+      "action": "StopInstance",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/SWAS-OPEN/versions/2020-06-01/apis/StopInstance/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/swas-open-20200601/blob/20152ee11f942458506f80e08b7fd9ba5d0dc537/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "write",
+      "parameters": [
+        {
+          "name": "InstanceId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "ClientToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "swas-open:StopInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "SimpleApplicationServer",
+                "resourceType": "Instance",
+                "arn": "acs:swas-open:{#regionId}:{#accountId}:instance/{#InstanceId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "SWAS-OPEN",
+      "version": "2020-06-01",
+      "action": "RebootInstance",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/SWAS-OPEN/versions/2020-06-01/apis/RebootInstance/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/swas-open-20200601/blob/20152ee11f942458506f80e08b7fd9ba5d0dc537/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "write",
+      "parameters": [
+        {
+          "name": "InstanceId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "ClientToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "swas-open:RebootInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "SimpleApplicationServer",
+                "resourceType": "Instance",
+                "arn": "acs:swas-open:{#regionId}:{#accountId}:instance/{#InstanceId}"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "SWAS-OPEN",
+      "version": "2020-06-01",
+      "action": "ListInstancesTrafficPackages",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/SWAS-OPEN/versions/2020-06-01/apis/ListInstancesTrafficPackages/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/swas-open-20200601/blob/20152ee11f942458506f80e08b7fd9ba5d0dc537/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "RegionId",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "InstanceIds",
+          "type": "string",
+          "required": true,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "get",
+          "ramAction": {
+            "action": "swas-open:ListInstancesTrafficPackages",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "SimpleApplicationServer",
+                "resourceType": "全部资源",
+                "arn": "*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Cms",
+      "version": "2019-01-01",
+      "action": "DescribeMetricList",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Cms/versions/2019-01-01/apis/DescribeMetricList/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/cms-20190101/blob/d8b98e2172d922b713d4952268f91c00d50e6137/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "Namespace",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "MetricName",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "Period",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "StartTime",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "EndTime",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Dimensions",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NextToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Length",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Express",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "get",
+          "ramAction": {
+            "action": "cms:QueryMetricList",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "CloudMonitorService",
+                "resourceType": "全部资源",
+                "arn": "*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Cms",
+      "version": "2019-01-01",
+      "action": "DescribeSiteMonitorList",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Cms/versions/2019-01-01/apis/DescribeSiteMonitorList/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/cms-20190101/blob/d8b98e2172d922b713d4952268f91c00d50e6137/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "TaskId",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "TaskType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Keyword",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Page",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageSize",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "TaskState",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AgentGroup",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "get",
+          "ramAction": {
+            "action": "cms:DescribeSiteMonitorList",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "CloudMonitorService",
+                "resourceType": "全部资源",
+                "arn": "*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Cms",
+      "version": "2019-01-01",
+      "action": "DescribeSiteMonitorData",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Cms/versions/2019-01-01/apis/DescribeSiteMonitorData/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/cms-20190101/blob/d8b98e2172d922b713d4952268f91c00d50e6137/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "TaskId",
+          "type": "string",
+          "required": true,
+          "document_required": false
+        },
+        {
+          "name": "Type",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "MetricName",
+          "type": "string",
+          "required": true,
+          "document_required": false
+        },
+        {
+          "name": "StartTime",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "EndTime",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Period",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "NextToken",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Length",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "get",
+          "ramAction": {
+            "action": "cms:DescribeSiteMonitorData",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "CloudMonitorService",
+                "resourceType": "全部资源",
+                "arn": "*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Cms",
+      "version": "2019-01-01",
+      "action": "CreateSiteMonitor",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Cms/versions/2019-01-01/apis/CreateSiteMonitor/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/cms-20190101/blob/d8b98e2172d922b713d4952268f91c00d50e6137/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "write",
+      "parameters": [
+        {
+          "name": "Address",
+          "type": "string",
+          "required": true,
+          "document_required": false
+        },
+        {
+          "name": "TaskType",
+          "type": "string",
+          "required": true,
+          "document_required": false
+        },
+        {
+          "name": "TaskName",
+          "type": "string",
+          "required": true,
+          "document_required": false
+        },
+        {
+          "name": "Interval",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "IspCities",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "OptionsJson",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AlertIds",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "AgentGroup",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "CustomSchedule",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "VpcConfig",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "create",
+          "ramAction": {
+            "action": "cms:CreateSiteMonitor",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "CloudMonitorService",
+                "resourceType": "全部资源",
+                "arn": "*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "BssOpenApi",
+      "version": "2017-12-14",
+      "action": "QueryAccountBalance",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/BssOpenApi/versions/2017-12-14/apis/QueryAccountBalance/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/bssopenapi-20171214/blob/d1353175f37908d34008c1720c5b62b4e844d194/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [],
+      "ram_actions": [
+        {
+          "operationType": "get",
+          "ramAction": {
+            "action": "bss:DescribeAcccount",
+            "authLevel": "operate",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "BssOpenApi",
+                "resourceType": "全部资源",
+                "arn": "*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "BssOpenApi",
+      "version": "2017-12-14",
+      "action": "QueryBillOverview",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/BssOpenApi/versions/2017-12-14/apis/QueryBillOverview/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/bssopenapi-20171214/blob/d1353175f37908d34008c1720c5b62b4e844d194/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "BillingCycle",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "ProductCode",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ProductType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SubscriptionType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "BillOwnerId",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "get",
+          "ramAction": {
+            "action": "bss:DescribeBillList",
+            "authLevel": "operate",
+            "actionConditions": [
+              {
+                "conditionKey": "bssapi:ProductCode",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "bssapi:ProductType",
+                "validationType": "always"
+              }
+            ],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "BssOpenApi",
+                "resourceType": "全部资源",
+                "arn": "*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "BssOpenApi",
+      "version": "2017-12-14",
+      "action": "QueryInstanceBill",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/BssOpenApi/versions/2017-12-14/apis/QueryInstanceBill/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/bssopenapi-20171214/blob/d1353175f37908d34008c1720c5b62b4e844d194/client/client.go",
+      "sdk_method_found": true,
+      "operation_type": "read",
+      "parameters": [
+        {
+          "name": "BillingCycle",
+          "type": "string",
+          "required": true,
+          "document_required": true
+        },
+        {
+          "name": "ProductCode",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "ProductType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "SubscriptionType",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "IsBillingItem",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageNum",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "PageSize",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "IsHideZeroCharge",
+          "type": "boolean",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "BillingDate",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "Granularity",
+          "type": "string",
+          "required": false,
+          "document_required": false
+        },
+        {
+          "name": "BillOwnerId",
+          "type": "integer",
+          "required": false,
+          "document_required": false
+        }
+      ],
+      "ram_actions": [
+        {
+          "operationType": "get",
+          "ramAction": {
+            "action": "bss:DescribeBillList",
+            "authLevel": "operate",
+            "actionConditions": [
+              {
+                "conditionKey": "bssapi:ProductCode",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "bssapi:ProductType",
+                "validationType": "always"
+              }
+            ],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "BssOpenApi",
+                "resourceType": "全部资源",
+                "arn": "*"
+              }
+            ]
+          }
+        }
+      ],
+      "metadata_message": null
+    },
+    {
+      "product": "Cdt",
+      "version": "2021-08-13",
+      "action": "ListCdtInternetTraffic",
+      "metadata_url": "https://api.aliyun.com/meta/v1/products/Cdt/versions/2021-08-13/apis/ListCdtInternetTraffic/api.json",
+      "sdk_url": "https://github.com/alibabacloud-go/cdt-20210813/blob/8ee01491895e5288310195a9b49e147576243ce7/client/client.go",
+      "sdk_method_found": false,
+      "operation_type": null,
+      "parameters": [],
+      "ram_actions": null,
+      "metadata_message": "api not found"
+    }
+  ]
+}

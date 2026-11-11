@@ -1,0 +1,16 @@
+# Static frontend and API remain independently built and deployed.
+# Place web/dist contents in /srv/harbormaster-web; run hm-server with frontend=api.
+{$HM_DOMAIN:harbor.jasperxzy.com} {
+	encode zstd gzip
+	@backend path /api /api/* /agent /agent/* /healthz /readyz
+	handle @backend {
+		reverse_proxy 127.0.0.1:8080 {
+			flush_interval -1
+		}
+	}
+	handle {
+		root * /srv/harbormaster-web
+		try_files {path} /index.html
+		file_server
+	}
+}

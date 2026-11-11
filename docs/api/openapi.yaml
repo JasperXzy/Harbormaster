@@ -1,0 +1,1981 @@
+# Harbormaster 面板接口契约（面板 <-> hm-server）
+#
+# 状态：M1 草稿，待后端评审，尚未冻结。
+# 范围：PRD v0.5 第 12 节 M1 的页面——安装向导、登录、总览、实例、流量、通知、设置、agent 安装引导。
+# 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
+#
+# ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-11  前端  起草 M1 部分（v0.1.0-draft）。
+# 2026-11-11  Backend review: nullable unknown usage/eligibility, calendar reset, GET auth, data timezone; reasons in docs/m0/contract-review.md. Still draft.
+# 2026-11-11  Unified implementation: SystemInfo adds data_mode/read_only so independently deployed frontends identify demo data and unavailable writes.
+# 2026-11-11  Protection clarification: unprotected also includes missing/unalignable metering data; an online agent alone does not imply protection.
+#
+# ── 待后端确认 ──────────────────────────────────────────────────────────────
+# B1  流量单位：面板把字节换算成 GB 时用 1024^3 还是 10^9？需要与 CDT 账单口径一致（与 M0 的 V2 一起确认）。
+#     前端暂按 1024^3，只有一个常量，随时可改。
+# B2  CSRF：草稿约定登录 / 安装 / GET /session 的响应体里返回 csrf_token，之后所有非 GET 请求带
+#     X-CSRF-Token 请求头。是否可行？如果你更想用"双重提交 Cookie"，请直接改这里。
+# B3  会话 Cookie 名称草稿写的是 hm_session（HttpOnly、SameSite=Lax）。名称与有效期由你定。
+# B4  只有一个管理员、没有用户名（PRD 只写了"管理员密码"）。登录只提交密码，是否与你的设计一致？
+# B5  错误体在 WORK_SPLIT 约定的 {code, message} 之外，草稿加了两个可选字段：
+#     fields（表单字段 -> 错误码，用于把错误标在具体输入框上）与 retry_after_seconds（登录限速）。能否提供？
+# B6  SSE：一条事件流 GET /api/v1/events，事件名见该接口说明。需要确认：
+#     (a) 是否支持 Last-Event-ID 续传，还是断线重连后由前端整页重新拉取（草稿按后者）；
+#     (b) 心跳间隔（草稿 15 秒一条 ping）；
+#     (c) quota.updated 是每个 agent 上报周期（10 秒）都推一次，还是数值变化才推。
+# B7  总览页的四个数字、额度池、"需要留意"列表，草稿不设单独的汇总接口，前端用 /accounts、/instances、
+#     /traffic/quotas 的结果自己合计。实例很多时是否需要一个 /overview 汇总接口，由你判断。
+# B8  Instance.realtime_protection 由后端计算（见枚举说明）。"是否受实时保护"的判定是否能在后端统一给出？
+# B9  每日用量 /traffic/daily 的"一天"按哪个时区切分？草稿假设按业务时区（默认 Asia/Shanghai），
+#     并由后端在 date 字段里直接给出 YYYY-MM-DD。CDT 官方每日数据的切分方式见 M0 的 V3。
+# B10 "今天"这一天的数值 = 官方已出账部分 + 实时增量，草稿用 provisional=true 标记。能否提供？
+# B11 共享带宽每小时入 / 出（/bandwidth-packages/{id}/hourly）依赖"按小时聚合"的计费周期假设（M0 的 V4）。
+#     如果周期不是 1 小时，period_seconds 字段会告诉前端实际长度。
+# B12 计费对象的"官方 / 实时 / 差值"：CDT 官方只有账号合计（PRD 6.3），所以草稿把这三项放在账号级的
+#     QuotaStatus 里，计费对象只给今日入 / 出 / 计量值。这一点也已提给用户（PRD F17 流量页的描述需要澄清）。
+# B13 通知的 title / body：草稿约定由后端按前端提供的文案模板渲染成中文后返回（因为同一段文字还要发到
+#     Telegram）。模板放在 docs/design/ 下，M1 开始时提供。是否接受这种方式？
+# B14 告警规则 /alert-rules：后端只返回当前里程碑已经可用的规则；params 是一个固定结构的对象（见 AlertRuleParams），
+#     每条规则只用到其中一部分字段。M1 需要的 key：cdt_usage、cdt_forecast_exceed、account_api_failure、
+#     agent_offline、cdt_official_unavailable。
+# B15 安装命令 POST /instances/{id}/agent/install-command：每次调用是否会让上一次的注册码失效？
+#     注册码有效期多长（草稿 expires_at 由后端给出，前端显示倒计时）？
+# B16 撤销 agent token 后，实例上的 agent 状态变为 not_installed 还是 offline？草稿按 not_installed
+#     （需要重新安装），并且不触发掉线告警。
+# B17 权限测试、Telegram 测试消息都按 202 + job_id 处理，结果放在 Job.result 里（结构见 Job 说明）。
+#     如果你认为测试消息同步返回更合适，请改。
+# B18 删除账号时，其下的实例、agent、历史数据怎么处理？前端的确认文案需要如实告诉用户后果。
+# B19 "数据过期"的判定：草稿由前端按 updated_at 与固定时长比较（实时 60 秒、CDT 官方 2 小时、资源扫描 30 分钟）。
+#     如果后端更清楚各自的采集周期，可以改为在 /settings 里返回这些时长（草稿已放了 collection 只读字段）。
+# B20 分页：实例、通知用游标分页；账号、计费对象、共享带宽、告警规则数量很少，草稿不分页。
+# B21 OpenAPI 版本用 3.0.3（Go 侧的代码生成工具普遍支持）。如果你用的工具要求 3.1，请告知。
+
+openapi: 3.0.3
+info:
+  title: Harbormaster 面板接口
+  version: 0.1.0-draft
+  description: |
+    面板与 hm-server 之间的唯一接口契约。通用约定（见 docs/WORK_SPLIT.md 第 3 节）：
+
+    - 前缀 `/api/v1`，JSON，UTF-8。
+    - 时间一律 UTC、RFC 3339；时区换算与显示由前端做。
+    - 流量一律整数字节（int64）；速率为"字节每秒"。
+    - 枚举为英文 snake_case；中文显示由前端做。
+    - 错误体 `{"error": {"code": "...", "message": "..."}}`，`code` 稳定可枚举。
+    - 认证：Cookie 会话 + `X-CSRF-Token` 请求头；未登录 401，无权限 403。
+    - 耗时操作返回 `202` 与 `job_id`，用 `GET /jobs/{job_id}` 或事件流查询结果。
+    - 来自阿里云或 agent 的数据都带 `updated_at`。
+    - M0 development mode serves synthetic read data and local sessions only; unsupported operations return 501 with error.code=not_implemented. No cloud or Telegram calls occur.
+    - Session cookies use HttpOnly and SameSite=Lax; production HTTPS also uses Secure. GET does not require CSRF; authenticated mutations do.
+    - SSE uses a 15-second ping, no replay guarantee, and a fresh snapshot after reconnect. Updates may be coalesced per 10-second report interval.
+
+servers:
+  - url: /api/v1
+
+tags:
+  - name: setup
+    description: 首次安装向导
+  - name: session
+    description: 登录与会话
+  - name: system
+    description: 版本、设置、任务、事件流
+  - name: accounts
+    description: 阿里云账号
+  - name: instances
+    description: 实例与采集程序（hm-agent）
+  - name: traffic
+    description: 流量与额度
+  - name: notify
+    description: 通知渠道、告警规则、通知记录
+
+security:
+  - sessionCookie: []
+
+paths:
+  /setup/status:
+    get:
+      tags: [setup]
+      operationId: getSetupStatus
+      summary: 是否已完成首次安装
+      security: []
+      responses:
+        "200":
+          description: 安装状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupStatus"
+
+  /setup:
+    post:
+      tags: [setup]
+      operationId: completeSetup
+      summary: 用初始化 token 设置管理员密码
+      description: 成功后直接建立登录会话（Set-Cookie）。只能成功一次，之后返回 409 `already_initialized`。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupRequest"
+      responses:
+        "201":
+          description: 已初始化并登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "403":
+          description: 初始化 token 不正确（`invalid_setup_token`）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+  /session:
+    get:
+      tags: [session]
+      operationId: getSession
+      summary: 当前会话
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: 已登录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [session]
+      operationId: login
+      summary: 用管理员密码登录
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          description: 密码不正确（`invalid_credentials`）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+    delete:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [session]
+      operationId: logout
+      summary: 退出登录
+      responses:
+        "204":
+          description: 已退出
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /system/info:
+    get:
+      tags: [system]
+      operationId: getSystemInfo
+      summary: 版本信息
+      responses:
+        "200":
+          description: 版本信息
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /settings:
+    get:
+      tags: [system]
+      operationId: getSettings
+      summary: 通用设置
+      responses:
+        "200":
+          description: 通用设置
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    patch:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [system]
+      operationId: updateSettings
+      summary: 修改通用设置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SettingsUpdate"
+      responses:
+        "200":
+          description: 修改后的设置
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /regions:
+    get:
+      tags: [system]
+      operationId: listRegions
+      summary: 可扫描的阿里云地域（用于账号表单）
+      parameters:
+        - name: site
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/AccountSite"
+      responses:
+        "200":
+          description: 地域列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Region"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /jobs/{job_id}:
+    get:
+      tags: [system]
+      operationId: getJob
+      summary: 查询任务状态
+      parameters:
+        - $ref: "#/components/parameters/JobId"
+      responses:
+        "200":
+          description: 任务
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /events:
+    get:
+      tags: [system]
+      operationId: streamEvents
+      summary: 事件流（SSE）
+      description: |
+        `text/event-stream`。每条消息的 `event:` 是事件名，`data:` 是一行 JSON：
+
+        | 事件名 | data 的结构 | 触发时机 |
+        |---|---|---|
+        | `quota.updated` | `QuotaStatus` | 某账号某范围的实时估算或官方值变化 |
+        | `instance.realtime` | `InstanceRealtimeEvent` | agent 上报后该实例的最新公网速率 |
+        | `agent.status` | `AgentStatusEvent` | agent 上线、掉线、注册、被撤销 |
+        | `job.updated` | `Job` | 任务状态变化 |
+        | `notification.created` | `Notification` | 产生了一条新通知 |
+        | `ping` | `{}` | 心跳 |
+
+        断线后前端自动重连，重连成功后重新拉取当前页面的数据。
+      responses:
+        "200":
+          description: 事件流
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /accounts:
+    get:
+      tags: [accounts]
+      operationId: listAccounts
+      summary: 账号列表
+      responses:
+        "200":
+          description: 账号列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [accounts]
+      operationId: createAccount
+      summary: 添加账号
+      description: 创建后后端自动发起一次权限测试与资源扫描，响应里带回权限测试的 `job_id`。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountCreate"
+      responses:
+        "201":
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [account, permission_check_job_id]
+                properties:
+                  account:
+                    $ref: "#/components/schemas/Account"
+                  permission_check_job_id:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /accounts/{account_id}:
+    parameters:
+      - $ref: "#/components/parameters/AccountId"
+    patch:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [accounts]
+      operationId: updateAccount
+      summary: 修改账号（名称、AccessKey、地域、额度、阈值、启用 / 停用）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountUpdate"
+      responses:
+        "200":
+          description: 修改后的账号
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    delete:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [accounts]
+      operationId: deleteAccount
+      summary: 删除账号
+      responses:
+        "204":
+          description: 已删除
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /accounts/{account_id}/permission-check:
+    parameters:
+      - $ref: "#/components/parameters/AccountId"
+    post:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [accounts]
+      operationId: checkAccountPermissions
+      summary: 重新测试权限（不会真正开关机或创建资源）
+      description: 任务完成后 `Job.result` 为 `PermissionCheck`，同时写回 `Account.permission_check`。
+      responses:
+        "202":
+          $ref: "#/components/responses/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /instances:
+    get:
+      tags: [instances]
+      operationId: listInstances
+      summary: 实例列表
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            type: string
+        - name: kind
+          in: query
+          schema:
+            $ref: "#/components/schemas/InstanceKind"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: 实例列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor, updated_at]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Instance"
+                  next_cursor:
+                    type: string
+                    nullable: true
+                  updated_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: 最近一次资源扫描完成的时间；从未扫描过为 null。
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /instances/refresh:
+    post:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: refreshInstances
+      summary: 立即重新扫描资源与 CDT 官方数据
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                account_id:
+                  type: string
+                  description: 只刷新这个账号；不传则刷新全部启用的账号。
+      responses:
+        "202":
+          $ref: "#/components/responses/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /instances/{instance_id}/agent/install-command:
+    parameters:
+      - $ref: "#/components/parameters/InstanceId"
+    post:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: createAgentInstallCommand
+      summary: 生成一行安装命令（含一次性注册码）
+      responses:
+        "201":
+          description: 安装命令
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentInstallCommand"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: 该实例不支持安装（`agent_not_supported`，例如实例已释放）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /instances/{instance_id}/agent/token:
+    parameters:
+      - $ref: "#/components/parameters/InstanceId"
+    delete:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: revokeAgentToken
+      summary: 撤销该实例的 agent token
+      responses:
+        "204":
+          description: 已撤销
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /traffic/quotas:
+    get:
+      tags: [traffic]
+      operationId: listQuotas
+      summary: 各账号的 CDT 额度状态（官方 + 实时估算 + 预测）
+      description: 每个启用的账号返回两条：`mainland` 与 `overseas`。
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 额度状态
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/QuotaStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /traffic/daily:
+    get:
+      tags: [traffic]
+      operationId: getDailyTraffic
+      summary: 某账号当前计费周期的每日 CDT 用量
+      parameters:
+        - name: account_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 每日用量
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyTraffic"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /traffic/billing-subjects:
+    get:
+      tags: [traffic]
+      operationId: listBillingSubjects
+      summary: 计费对象列表（含今日入 / 出 / 计量值）
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: 计费对象
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BillingSubject"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /bandwidth-packages:
+    get:
+      tags: [traffic]
+      operationId: listBandwidthPackages
+      summary: 共享带宽列表
+      responses:
+        "200":
+          description: 共享带宽
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/BandwidthPackage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /bandwidth-packages/{package_id}/hourly:
+    parameters:
+      - name: package_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [traffic]
+      operationId: getBandwidthPackageHourly
+      summary: 共享带宽今日各计费周期的入 / 出方向流量
+      responses:
+        "200":
+          description: 各周期流量
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BandwidthPackageHourly"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /notify/telegram:
+    get:
+      tags: [notify]
+      operationId: getTelegramChannel
+      summary: Telegram 渠道设置
+      responses:
+        "200":
+          description: Telegram 设置（不返回 Bot Token）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramChannel"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [notify]
+      operationId: updateTelegramChannel
+      summary: 保存 Telegram 渠道设置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramChannelUpdate"
+      responses:
+        "200":
+          description: 保存后的设置
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TelegramChannel"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /notify/telegram/test:
+    post:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [notify]
+      operationId: sendTelegramTest
+      summary: 发送一条测试消息
+      description: 用已保存的设置发送。任务失败时 `Job.error.code` 说明原因（如 `telegram_unauthorized`、`telegram_chat_not_found`、`telegram_unreachable`）。
+      responses:
+        "202":
+          $ref: "#/components/responses/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: 还没有配置 Telegram（`telegram_not_configured`）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /alert-rules:
+    get:
+      tags: [notify]
+      operationId: listAlertRules
+      summary: 内置告警规则
+      responses:
+        "200":
+          description: 告警规则
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AlertRule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /alert-rules/{rule_key}:
+    parameters:
+      - name: rule_key
+        in: path
+        required: true
+        schema:
+          $ref: "#/components/schemas/AlertRuleKey"
+    patch:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [notify]
+      operationId: updateAlertRule
+      summary: 开关规则或调整阈值
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertRuleUpdate"
+      responses:
+        "200":
+          description: 修改后的规则
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertRule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /notifications:
+    get:
+      tags: [notify]
+      operationId: listNotifications
+      summary: 通知记录（新的在前）
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: 通知记录
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Notification"
+                  next_cursor:
+                    type: string
+                    nullable: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: hm_session
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+      description: Required for authenticated mutations; not required for GET, initial setup or login. Value comes from Session.csrf_token.
+
+  parameters:
+    AccountId:
+      name: account_id
+      in: path
+      required: true
+      schema:
+        type: string
+    InstanceId:
+      name: instance_id
+      in: path
+      required: true
+      description: Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。
+      schema:
+        type: string
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      schema:
+        type: string
+
+  responses:
+    Unauthorized:
+      description: 未登录（`unauthenticated`）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: 不存在（`not_found`）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: 与当前状态冲突（`already_initialized`、`account_name_taken` 等）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ValidationFailed:
+      description: 输入不合法（`validation_failed`，`fields` 指出具体字段）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: 尝试次数过多（`rate_limited`，`retry_after_seconds` 给出等待时间）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    JobAccepted:
+      description: 已进入任务队列
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/JobAccepted"
+
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: |
+                稳定的错误码。M1 已知取值：unauthenticated、forbidden、csrf_failed、not_found、validation_failed、
+                rate_limited、internal_error、invalid_setup_token、already_initialized、invalid_credentials、
+                account_name_taken、access_key_invalid、agent_not_supported、telegram_not_configured、
+                telegram_unauthorized、telegram_chat_not_found、telegram_unreachable、aliyun_unreachable。
+            message:
+              type: string
+              description: 给开发者看的英文说明；界面文案由前端按 code 决定。
+            fields:
+              type: object
+              description: 字段名 -> 错误码（required、too_short、invalid_format、out_of_range 等）。
+              additionalProperties:
+                type: string
+            retry_after_seconds:
+              type: integer
+
+    JobAccepted:
+      type: object
+      required: [job_id]
+      properties:
+        job_id:
+          type: string
+
+    JobType:
+      type: string
+      enum: [refresh, permission_check, telegram_test]
+
+    JobStatus:
+      type: string
+      enum: [queued, running, succeeded, failed]
+
+    Job:
+      type: object
+      required: [id, type, status, created_at, started_at, finished_at, error, result]
+      properties:
+        id:
+          type: string
+        type:
+          $ref: "#/components/schemas/JobType"
+        status:
+          $ref: "#/components/schemas/JobStatus"
+        created_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+        result:
+          type: object
+          nullable: true
+          description: |
+            成功时的结果，结构取决于 type：`permission_check` 为 PermissionCheck；
+            `refresh`、`telegram_test` 为 null。
+          additionalProperties: true
+
+    SetupStatus:
+      type: object
+      required: [initialized, password_min_length]
+      properties:
+        initialized:
+          type: boolean
+        password_min_length:
+          type: integer
+
+    SetupRequest:
+      type: object
+      required: [setup_token, password]
+      properties:
+        setup_token:
+          type: string
+          description: hm-server 首次启动时输出的初始化 token。
+        password:
+          type: string
+        business_timezone:
+          type: string
+          description: IANA 时区名，默认 Asia/Shanghai。
+
+    LoginRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+
+    Session:
+      type: object
+      required: [csrf_token, expires_at]
+      properties:
+        csrf_token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+
+    SystemInfo:
+      type: object
+      required: [version, commit, built_at, latest_agent_version, data_mode, read_only]
+      properties:
+        data_mode:
+          type: string
+          enum: [demo, live]
+          description: Whether the returned application data is synthetic or from live sources.
+        read_only:
+          type: boolean
+          description: Resource/configuration mutations are unavailable; session login/logout remain available.
+        version:
+          type: string
+        commit:
+          type: string
+        built_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Null when the binary has no build timestamp.
+        latest_agent_version:
+          type: string
+
+    Settings:
+      type: object
+      required: [business_timezone, collection]
+      properties:
+        business_timezone:
+          type: string
+          description: IANA 时区名，面板按它显示时间、切分"今天"。
+        collection:
+          type: object
+          description: 采集周期，只读，用于在界面上解释数据有多新。
+          required: [cdt_poll_interval_seconds, agent_report_interval_seconds, agent_offline_after_seconds, resource_scan_interval_seconds]
+          properties:
+            cdt_poll_interval_seconds:
+              type: integer
+            agent_report_interval_seconds:
+              type: integer
+            agent_offline_after_seconds:
+              type: integer
+            resource_scan_interval_seconds:
+              type: integer
+
+    SettingsUpdate:
+      type: object
+      properties:
+        business_timezone:
+          type: string
+
+    AccountSite:
+      type: string
+      enum: [china, international]
+      description: china = 国内站；international = 国际站。
+
+    Region:
+      type: object
+      required: [id, mainland]
+      properties:
+        id:
+          type: string
+          description: 阿里云地域 ID，如 cn-hongkong。中文名由前端维护。
+        mainland:
+          type: boolean
+          description: 是否属于中国内地（决定计入国内还是海外额度）。
+
+    PermissionKey:
+      type: string
+      enum: [ecs_read, swas_read, cdt_read, cms_read, instance_power, vpc_read, eip_manage, bss_read]
+
+    PermissionResult:
+      type: string
+      enum: [passed, missing, not_verified, check_failed]
+      description: 通过 / 缺少权限 / 未验证 / 检查失败（PRD F1.2）。
+
+    PermissionCheck:
+      type: object
+      required: [checked_at, items]
+      properties:
+        checked_at:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            type: object
+            required: [key, result]
+            properties:
+              key:
+                $ref: "#/components/schemas/PermissionKey"
+              result:
+                $ref: "#/components/schemas/PermissionResult"
+
+    AccountSyncStatus:
+      type: string
+      enum: [never_synced, ok, failing]
+      description: failing = 接口连续调用失败（PRD F11.4）。
+
+    Account:
+      type: object
+      required:
+        - id
+        - name
+        - site
+        - access_key_id_masked
+        - region_ids
+        - enabled
+        - quota_mainland_bytes
+        - quota_overseas_bytes
+        - reset_day
+        - alert_thresholds_percent
+        - sync_status
+        - last_sync_at
+        - last_error
+        - consecutive_failures
+        - permission_check
+        - instance_count
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        site:
+          $ref: "#/components/schemas/AccountSite"
+        access_key_id_masked:
+          type: string
+          description: 打码后的 AccessKey ID，如 LTAI5t…pgu。Secret 永不返回。
+        region_ids:
+          type: array
+          description: 要扫描的地域。
+          items:
+            type: string
+        enabled:
+          type: boolean
+        quota_mainland_bytes:
+          type: integer
+          format: int64
+        quota_overseas_bytes:
+          type: integer
+          format: int64
+        reset_day:
+          type: integer
+          enum: [1]
+          description: CDT calendar-month reset; custom budget cycles are separate.
+        alert_thresholds_percent:
+          type: array
+          description: 用量告警档位，升序，如 [80, 90, 95]。
+          items:
+            type: integer
+        sync_status:
+          $ref: "#/components/schemas/AccountSyncStatus"
+        last_sync_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+        consecutive_failures:
+          type: integer
+        permission_check:
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/PermissionCheck"
+          nullable: true
+        instance_count:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+
+    AccountCreate:
+      type: object
+      required: [name, site, access_key_id, access_key_secret, region_ids]
+      properties:
+        name:
+          type: string
+        site:
+          $ref: "#/components/schemas/AccountSite"
+        access_key_id:
+          type: string
+        access_key_secret:
+          type: string
+        region_ids:
+          type: array
+          items:
+            type: string
+        quota_mainland_bytes:
+          type: integer
+          format: int64
+        quota_overseas_bytes:
+          type: integer
+          format: int64
+        reset_day:
+          type: integer
+          enum: [1]
+        alert_thresholds_percent:
+          type: array
+          items:
+            type: integer
+
+    AccountUpdate:
+      type: object
+      description: 只传要改的字段。access_key_id 与 access_key_secret 必须同时传或同时不传。
+      properties:
+        name:
+          type: string
+        access_key_id:
+          type: string
+        access_key_secret:
+          type: string
+        region_ids:
+          type: array
+          items:
+            type: string
+        enabled:
+          type: boolean
+        quota_mainland_bytes:
+          type: integer
+          format: int64
+        quota_overseas_bytes:
+          type: integer
+          format: int64
+        reset_day:
+          type: integer
+          enum: [1]
+        alert_thresholds_percent:
+          type: array
+          items:
+            type: integer
+
+    InstanceKind:
+      type: string
+      enum: [ecs, swas]
+      description: ecs = 云服务器 ECS；swas = 轻量应用服务器。
+
+    InstanceStatus:
+      type: string
+      enum: [pending, starting, running, stopping, stopped, unknown]
+
+    ChargeType:
+      type: string
+      enum: [subscription, pay_as_you_go, spot]
+      description: 包年包月 / 按量付费 / 抢占式。
+
+    PublicIpType:
+      type: string
+      enum: [instance_public_ip, eip]
+
+    BillingSubjectKind:
+      type: string
+      enum:
+        - ecs_pay_by_traffic
+        - eip_pay_by_traffic
+        - cbwp_dominant_traffic
+        - cbwp_bandwidth
+        - cbwp_95
+        - ecs_fixed_bandwidth
+        - swas_traffic_package
+        - swas_no_traffic_package
+      description: 计费对象类型，对应 PRD 6.1 的表格。cbwp = 共享带宽。
+
+    MeteringRule:
+      type: string
+      enum: [outbound_only, max_in_out_per_period, plan_defined, not_metered]
+      description: 只算出方向 / 每个计费周期取入、出较大值 / 按套餐规则 / 不按流量计费。
+
+    QuotaScope:
+      type: string
+      enum: [mainland, overseas]
+      description: mainland = 中国内地额度；overseas = 非中国内地额度。
+
+    AgentStatus:
+      type: string
+      enum: [not_installed, online, offline]
+
+    RealtimeProtection:
+      type: string
+      enum: [protected, worst_case, unprotected, not_applicable]
+      description: |
+        - protected：CDT 归属、官方基准和计量口径已确认，agent 数据可用，实时估算包含这台实例。
+        - worst_case：计入 CDT，agent 掉线且实例仍在运行，正按最坏情况推算（PRD 6.2）。
+        - unprotected：计入 CDT，但缺少 agent 数据、官方截止时间或其他有效计量依据。不能仅由此状态推断没有安装 agent；应结合 Agent.status 解释原因。
+        - not_applicable：不计入 CDT（固定带宽、轻量等），不需要实时保护。
+
+    WorstCaseBasis:
+      type: string
+      enum: [recent_peak, bandwidth_cap]
+      description: 掉线前一段时间的峰值速率 / 带宽上限。
+
+    Agent:
+      type: object
+      required: [status, version, registered_at, last_report_at, offline_since, worst_case]
+      properties:
+        status:
+          $ref: "#/components/schemas/AgentStatus"
+        version:
+          type: string
+          nullable: true
+        registered_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_report_at:
+          type: string
+          format: date-time
+          nullable: true
+        offline_since:
+          type: string
+          format: date-time
+          nullable: true
+        worst_case:
+          type: object
+          nullable: true
+          description: 仅在按最坏情况推算时非空。
+          required: [basis, rate_bytes_per_second, accumulated_bytes]
+          properties:
+            basis:
+              $ref: "#/components/schemas/WorstCaseBasis"
+            rate_bytes_per_second:
+              type: integer
+              format: int64
+            accumulated_bytes:
+              type: integer
+              format: int64
+              description: 掉线以来按推算速率累计的字节数。
+
+    InstanceRealtime:
+      type: object
+      required: [rx_bytes_per_second, tx_bytes_per_second, sampled_at]
+      properties:
+        rx_bytes_per_second:
+          type: integer
+          format: int64
+          description: 公网入方向速率。
+        tx_bytes_per_second:
+          type: integer
+          format: int64
+          description: 公网出方向速率。
+        sampled_at:
+          type: string
+          format: date-time
+
+    Instance:
+      type: object
+      required:
+        - id
+        - cloud_instance_id
+        - name
+        - account_id
+        - kind
+        - region_id
+        - zone_id
+        - spec
+        - status
+        - public_ips
+        - charge_type
+        - expires_at
+        - billing_subject_id
+        - billing_subject_kind
+        - metering_rule
+        - bandwidth_mbps
+        - bandwidth_package_name
+        - counts_toward_cdt
+        - cdt_scope
+        - agent
+        - realtime_protection
+        - realtime
+        - updated_at
+      properties:
+        id:
+          type: string
+        cloud_instance_id:
+          type: string
+          description: 阿里云实例 ID。
+        name:
+          type: string
+        account_id:
+          type: string
+        kind:
+          $ref: "#/components/schemas/InstanceKind"
+        region_id:
+          type: string
+        zone_id:
+          type: string
+          nullable: true
+        spec:
+          type: string
+          description: ECS 为实例规格（如 ecs.e-c4m1.large）；轻量为套餐描述。
+        status:
+          $ref: "#/components/schemas/InstanceStatus"
+        public_ips:
+          type: array
+          description: 公网 IPv4。
+          items:
+            type: object
+            required: [address, type]
+            properties:
+              address:
+                type: string
+              type:
+                $ref: "#/components/schemas/PublicIpType"
+        charge_type:
+          $ref: "#/components/schemas/ChargeType"
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 包年包月的到期时间；按量为 null。
+        billing_subject_id:
+          type: string
+          nullable: true
+        billing_subject_kind:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/BillingSubjectKind"
+          nullable: true
+          description: 没有公网出口时为 null。
+        metering_rule:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/MeteringRule"
+          nullable: true
+        bandwidth_mbps:
+          type: integer
+          nullable: true
+          description: 实际生效的公网带宽上限（实例、EIP 或所在共享带宽）。
+        bandwidth_package_name:
+          type: string
+          nullable: true
+          description: 所在共享带宽的名称；不在共享带宽里为 null。
+        counts_toward_cdt:
+          type: boolean
+          nullable: true
+          description: Null until CDT upgrade, line eligibility and topology are verified; never treat null as false.
+        cdt_scope:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/QuotaScope"
+          nullable: true
+          description: 计入国内还是海外额度；不计入 CDT 为 null。
+        agent:
+          $ref: "#/components/schemas/Agent"
+        realtime_protection:
+          $ref: "#/components/schemas/RealtimeProtection"
+        realtime:
+          type: object
+          allOf:
+            - $ref: "#/components/schemas/InstanceRealtime"
+          nullable: true
+          description: 最近一次 agent 上报算出的公网速率；没有 agent 或掉线为 null。
+        updated_at:
+          type: string
+          format: date-time
+          description: 这台实例的资源信息最近一次从阿里云更新的时间。
+
+    AgentInstallCommand:
+      type: object
+      required: [command, expires_at]
+      properties:
+        command:
+          type: string
+          description: Installer command; setup may need elevated privileges, but the agent service must run with minimal capabilities.
+        expires_at:
+          type: string
+          format: date-time
+          description: 一次性注册码的失效时间。
+
+    OfficialDataStatus:
+      type: string
+      enum: [ok, unavailable, never_fetched, cutoff_unknown]
+      description: unavailable = CDT 官方接口连续取不到数据，正沿用最近一次官方值。
+
+    QuotaStatus:
+      type: object
+      description: Missing official values are null, never zero. An unknown official cutoff makes the aligned increment, estimate and effective value null; fetched_at must not be substituted for the cutoff.
+      required:
+        - account_id
+        - scope
+        - cycle_start
+        - cycle_end
+        - quota_bytes
+        - official_bytes
+        - official_as_of
+        - official_status
+        - realtime_increment_bytes
+        - worst_case_bytes
+        - estimated_bytes
+        - effective_bytes
+        - thresholds_percent
+        - forecast
+        - updated_at
+      properties:
+        account_id:
+          type: string
+        scope:
+          $ref: "#/components/schemas/QuotaScope"
+        cycle_start:
+          type: string
+          format: date-time
+          description: 当前计费周期的开始时刻。
+        cycle_end:
+          type: string
+          format: date-time
+          description: 当前计费周期的结束时刻（下一次重置）。
+        quota_bytes:
+          type: integer
+          format: int64
+        official_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: 最近一次 CDT 官方值。
+        official_as_of:
+          type: string
+          format: date-time
+          nullable: true
+          description: 官方数据的截止时刻（界面显示"官方（截至 hh:mm）"）。
+        official_status:
+          $ref: "#/components/schemas/OfficialDataStatus"
+        realtime_increment_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: 官方截止时刻之后，按各计费对象规则算出的增量（含最坏情况推算部分）。
+        worst_case_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: realtime_increment_bytes 中因 agent 掉线而按最坏情况推算出来的部分；没有则为 0。
+        estimated_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: 实时估算 = official_bytes + realtime_increment_bytes。
+        effective_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: 告警判断用的数值 = max(官方, 实时估算)。
+        thresholds_percent:
+          type: array
+          items:
+            type: integer
+        forecast:
+          type: object
+          nullable: true
+          description: 数据不足以预测时为 null。
+          required: [daily_average_bytes, cycle_end_bytes, exceeds_on]
+          properties:
+            daily_average_bytes:
+              type: integer
+              format: int64
+              description: 近 7 天日均用量。
+            cycle_end_bytes:
+              type: integer
+              format: int64
+              description: 按日均线性推算到周期结束时的用量。
+            exceeds_on:
+              type: string
+              format: date
+              nullable: true
+              description: 预计超出免费额度的日期（业务时区）；不会超额为 null。
+        updated_at:
+          type: string
+          format: date-time
+          description: 实时估算最近一次重新计算的时间。
+
+    DailyTraffic:
+      type: object
+      description: Aggregate in the returned data_timezone. Do not relabel provider daily totals as a different business timezone.
+      required: [account_id, cycle_start, cycle_end, days, updated_at, data_timezone]
+      properties:
+        data_timezone:
+          type: string
+          description: IANA timezone used to partition the returned daily values.
+        account_id:
+          type: string
+        cycle_start:
+          type: string
+          format: date-time
+        cycle_end:
+          type: string
+          format: date-time
+        days:
+          type: array
+          description: 从周期第一天到今天，按日期升序；没有数据的日期也返回（未知数值为 null，确认无用量才为 0）。
+          items:
+            type: object
+            required: [date, mainland_bytes, overseas_bytes, provisional]
+            properties:
+              date:
+                type: string
+                format: date
+              mainland_bytes:
+                type: integer
+                format: int64
+                nullable: true
+              overseas_bytes:
+                type: integer
+                format: int64
+                nullable: true
+              provisional:
+                type: boolean
+                description: true 表示这一天含尚未出账的实时增量（通常只有今天）。
+        updated_at:
+          type: string
+          format: date-time
+
+    TrafficDataSource:
+      type: string
+      enum: [agent, cloud_monitor, none]
+      description: 今日入 / 出数值的来源。
+
+    BillingSubject:
+      type: object
+      required:
+        - id
+        - name
+        - account_id
+        - kind
+        - metering_rule
+        - counts_toward_cdt
+        - cdt_scope
+        - public_ips
+        - instance_ids
+        - bandwidth_mbps
+        - data_source
+        - today_rx_bytes
+        - today_tx_bytes
+        - today_metered_bytes
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          description: 共享带宽为其名称；其余为所属实例的名称。
+        account_id:
+          type: string
+        kind:
+          $ref: "#/components/schemas/BillingSubjectKind"
+        metering_rule:
+          $ref: "#/components/schemas/MeteringRule"
+        counts_toward_cdt:
+          type: boolean
+          nullable: true
+          description: Null until CDT upgrade, line eligibility and topology are verified; never treat null as false.
+        cdt_scope:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/QuotaScope"
+          nullable: true
+        public_ips:
+          type: array
+          items:
+            type: string
+        instance_ids:
+          type: array
+          description: 使用这个公网出口的实例（Instance.id）。
+          items:
+            type: string
+        bandwidth_mbps:
+          type: integer
+          nullable: true
+        data_source:
+          $ref: "#/components/schemas/TrafficDataSource"
+        today_rx_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: 今日公网入方向；没有数据来源为 null。
+        today_tx_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        today_metered_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: 今日按计量规则算出的计费流量；不按流量计费为 null。
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    TrafficDirection:
+      type: string
+      enum: [inbound, outbound]
+
+    BandwidthPackage:
+      type: object
+      required:
+        - id
+        - cloud_id
+        - name
+        - account_id
+        - region_id
+        - bandwidth_mbps
+        - kind
+        - settled_by_cdt
+        - members
+        - today_rx_bytes
+        - today_tx_bytes
+        - today_metered_bytes
+        - dominant_direction
+        - updated_at
+      properties:
+        id:
+          type: string
+        cloud_id:
+          type: string
+        name:
+          type: string
+        account_id:
+          type: string
+        region_id:
+          type: string
+        bandwidth_mbps:
+          type: integer
+        kind:
+          $ref: "#/components/schemas/BillingSubjectKind"
+        settled_by_cdt:
+          type: boolean
+          nullable: true
+          description: Null until account billing status is verified; creation time alone is insufficient.
+        members:
+          type: array
+          items:
+            type: object
+            required: [eip_address, instance_id, instance_name]
+            properties:
+              eip_address:
+                type: string
+              instance_id:
+                type: string
+                nullable: true
+              instance_name:
+                type: string
+                nullable: true
+        today_rx_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        today_tx_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        today_metered_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        dominant_direction:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/TrafficDirection"
+          nullable: true
+          description: 今日流量较大的方向。
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    BandwidthPackageHourly:
+      type: object
+      required: [package_id, period_seconds, periods, updated_at]
+      properties:
+        package_id:
+          type: string
+        period_seconds:
+          type: integer
+          description: Dominant traffic uses 3600 seconds, confirmed by M0 V4.
+        periods:
+          type: array
+          description: 从今天（业务时区）零点到当前，按时间升序。
+          items:
+            type: object
+            required: [start, rx_bytes, tx_bytes, metered_bytes]
+            properties:
+              start:
+                type: string
+                format: date-time
+              rx_bytes:
+                type: integer
+                format: int64
+              tx_bytes:
+                type: integer
+                format: int64
+              metered_bytes:
+                type: integer
+                format: int64
+                description: 该周期的计费流量 = max(入, 出)。
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    TelegramProxyMode:
+      type: string
+      enum: [none, reverse_proxy, socks5]
+
+    TelegramStatus:
+      type: string
+      enum: [not_configured, ok, failing]
+
+    TelegramChannel:
+      type: object
+      required: [bot_token_set, chat_id, proxy_mode, proxy_url, status, last_error, last_success_at]
+      properties:
+        bot_token_set:
+          type: boolean
+          description: 是否已保存 Bot Token。Token 本身永不返回。
+        chat_id:
+          type: string
+        proxy_mode:
+          $ref: "#/components/schemas/TelegramProxyMode"
+        proxy_url:
+          type: string
+          description: Proxy URL without credentials or secret query parameters; empty when disabled. Never echo stored authentication material.
+        status:
+          $ref: "#/components/schemas/TelegramStatus"
+        last_error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+        last_success_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    TelegramChannelUpdate:
+      type: object
+      required: [chat_id, proxy_mode, proxy_url]
+      properties:
+        bot_token:
+          type: string
+          description: 不传表示保留已保存的 Token。
+        chat_id:
+          type: string
+        proxy_mode:
+          $ref: "#/components/schemas/TelegramProxyMode"
+        proxy_url:
+          type: string
+
+    AlertRuleKey:
+      type: string
+      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable]
+      description: M1 可用的内置规则；后续里程碑在此追加。
+
+    Severity:
+      type: string
+      enum: [info, warning, serious, critical]
+
+    AlertRuleParams:
+      type: object
+      description: 每条规则只用到其中一部分字段，用不到的字段不返回。
+      properties:
+        thresholds_percent:
+          type: array
+          description: cdt_usage 的默认档位（账号可以单独覆盖）。
+          items:
+            type: integer
+        consecutive_failures:
+          type: integer
+          description: account_api_failure、cdt_official_unavailable：连续失败多少次后告警。
+        offline_after_seconds:
+          type: integer
+          description: agent_offline：连续多少秒无上报视为掉线。
+
+    AlertRule:
+      type: object
+      required: [key, enabled, params, urgent]
+      properties:
+        key:
+          $ref: "#/components/schemas/AlertRuleKey"
+        enabled:
+          type: boolean
+        params:
+          $ref: "#/components/schemas/AlertRuleParams"
+        urgent:
+          type: boolean
+          description: 紧急告警不受静默时段影响（静默时段在 M2 提供）。
+
+    AlertRuleUpdate:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        params:
+          $ref: "#/components/schemas/AlertRuleParams"
+
+    NotificationKind:
+      type: string
+      enum: [alert, recovery, test]
+
+    DeliveryStatus:
+      type: string
+      enum: [pending, sent, failed, not_sent]
+      description: not_sent = 没有配置渠道，只记录不发送。
+
+    Notification:
+      type: object
+      required: [id, created_at, kind, severity, rule_key, title, body, account_id, instance_id, delivery_status]
+      properties:
+        id:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        kind:
+          $ref: "#/components/schemas/NotificationKind"
+        severity:
+          $ref: "#/components/schemas/Severity"
+        rule_key:
+          type: string
+          allOf:
+            - $ref: "#/components/schemas/AlertRuleKey"
+          nullable: true
+        title:
+          type: string
+          description: 已渲染好的中文标题（与发到 Telegram 的一致）。
+        body:
+          type: string
+        account_id:
+          type: string
+          nullable: true
+        instance_id:
+          type: string
+          nullable: true
+        delivery_status:
+          $ref: "#/components/schemas/DeliveryStatus"
+
+    InstanceRealtimeEvent:
+      type: object
+      description: 事件流 `instance.realtime` 的 data。
+      required: [instance_id, realtime]
+      properties:
+        instance_id:
+          type: string
+        realtime:
+          $ref: "#/components/schemas/InstanceRealtime"
+
+    AgentStatusEvent:
+      type: object
+      description: 事件流 `agent.status` 的 data。
+      required: [instance_id, agent, realtime_protection]
+      properties:
+        instance_id:
+          type: string
+        agent:
+          $ref: "#/components/schemas/Agent"
+        realtime_protection:
+          $ref: "#/components/schemas/RealtimeProtection"

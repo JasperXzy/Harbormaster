@@ -1,0 +1,68 @@
+2026-11-12 local verification; branch be/m0-foundation
+
+$ sh -n deploy/dev.sh deploy/build-backend.sh
+(no output; exit 0)
+$ go build ./...
+(no output; exit 0)
+$ go test -race ./...
+? github.com/JasperXzy/harbormaster/cmd/hm-agent [no test files]
+? github.com/JasperXzy/harbormaster/cmd/hm-server [no test files]
+? github.com/JasperXzy/harbormaster/internal/agentcli [no test files]
+? github.com/JasperXzy/harbormaster/internal/agentproto [no test files]
+ok github.com/JasperXzy/harbormaster/internal/api 1.738s
+? github.com/JasperXzy/harbormaster/internal/buildinfo [no test files]
+? github.com/JasperXzy/harbormaster/internal/cli [no test files]
+ok github.com/JasperXzy/harbormaster/internal/config 1.659s
+ok github.com/JasperXzy/harbormaster/internal/devmode 6.029s
+ok github.com/JasperXzy/harbormaster/internal/logging (cached)
+ok github.com/JasperXzy/harbormaster/internal/m0 (cached)
+ok github.com/JasperXzy/harbormaster/internal/security (cached)
+ok github.com/JasperXzy/harbormaster/internal/store (cached)
+? github.com/JasperXzy/harbormaster/internal/ui [no test files]
+ok github.com/JasperXzy/harbormaster/internal/ui/prepare (cached)
+$ go vet ./...
+(no output; exit 0)
+
+The following commands ran in web/ (all exit 0):
+$ npm run gen:api
+openapi-typescript 7.13.0: ../docs/api/openapi.yaml -> src/api/schema.gen.ts
+$ npm test
+tests 3; pass 3; fail 0
+- an unknown or missing account usage never becomes free capacity
+- confirmed zero is distinct from unknown; disabled accounts are excluded
+- a missing day breaks the cumulative series from that day onward
+$ npm run build
+tsc --noEmit && vite build
+44 modules transformed; built in 101ms
+dist/index.html 0.80 kB
+dist/assets/index-DnQxLSy5.css 20.18 kB
+dist/assets/index-CQRuNR4y.js 325.50 kB
+$ npm run build:mock
+tsc --noEmit && vite build --mode mock --outDir dist-mock
+47 modules transformed; built in 72ms
+dist-mock/index.html 0.80 kB
+dist-mock/assets/index-DnQxLSy5.css 20.18 kB
+dist-mock/assets/ScenePanel-BLd_zQNo.js 0.49 kB
+dist-mock/assets/server-D12m64bJ.js 23.47 kB
+dist-mock/assets/index-45ohTmqc.js 327.33 kB
+$ npm run lint:api
+../docs/api/openapi.yaml: validated in 18ms
+Your API description is valid.
+
+Browser verification:
+- Separate hm-server API on 18080; Vite API proxy on 5173.
+- Login with public demo password; overview / instances / traffic / notifications / settings loaded.
+- API root returned JSON 404; frontend root returned HTML 200.
+- Independent mock preview on 5174; desktop light/dark and mobile unknown-cutoff scene checked.
+- Mobile DOM result: width=390, scrollWidth=390, gapMessage=true, invalidNumbers=false.
+- Screenshots: docs/design/previews/overview-desktop.jpg and traffic-mobile-unknown.jpg.
+- Local temporary preview servers stopped after verification; no public deployment.
+
+$ sh deploy/dev.sh api
+server_started: listen=127.0.0.1:18080, development=true, frontend=api, cloud_writes=false
+VITE v8.3.8 api ready in 158 ms; Local: http://127.0.0.1:5173/
+$ curl --fail --silent http://127.0.0.1:5173/api/v1/setup/status
+{"initialized":true,"password_min_length":12}
+$ curl --fail --silent http://127.0.0.1:18080/readyz
+{"status":"ready"}
+Stopped the launcher with Ctrl-C; checked owned preview ports were no longer listening.

@@ -1,0 +1,17 @@
+# build output
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+
+# local config and secrets — never commit real keys, tokens or node parameters
+*.local.yaml
+*.secret.yaml
+.env
+/data/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
