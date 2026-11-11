@@ -21,11 +21,12 @@ func (s *apiScanner) Scan(_ context.Context, a model.Account, _ model.Credential
 		return model.ScanResult{Failure: "account_changed"}
 	}
 	items := []model.Snapshot{}
+	zero := int64(0)
 	for _, suffix := range []string{"1", "2"} {
 		id := a.ID + "_instance_" + suffix
 		items = append(items, model.Snapshot{Kind: "ecs", ID: id, Region: "cn-shanghai", Payload: map[string]any{"id": id, "cloud_instance_id": "i-test-" + suffix, "name": "test", "account_id": a.ID, "kind": "ecs", "region_id": "cn-shanghai", "status": "running", "updated_at": time.Now().UTC().Format(time.RFC3339)}})
 	}
-	return model.ScanResult{Snapshots: items, CompleteScopes: map[string]bool{"ecs:cn-shanghai": true}, Permissions: &model.PermissionCheck{CheckedAt: time.Now().UTC(), Items: []model.PermissionItem{{Key: "ecs_read", Result: "passed"}, {Key: "instance_power", Result: "not_verified"}}}}
+	return model.ScanResult{Snapshots: items, CompleteScopes: map[string]bool{"ecs:cn-shanghai": true}, CDT: &model.CDTObservation{AccountID: a.ID, FetchedAt: time.Now().UTC(), Overseas: &zero, Quality: "inferred"}, Permissions: &model.PermissionCheck{CheckedAt: time.Now().UTC(), Items: []model.PermissionItem{{Key: "ecs_read", Result: "passed"}, {Key: "instance_power", Result: "not_verified"}}}}
 }
 func TestAccountAPIUsesEncryptedTasksAndSnapshotReads(t *testing.T) {
 	p := testPanel(t)
@@ -89,6 +90,45 @@ func TestAccountAPIUsesEncryptedTasksAndSnapshotReads(t *testing.T) {
 	}
 	if scanner.calls != 1 {
 		t.Fatal("snapshot listing triggered cloud")
+	}
+	w = panelRequest(p, "GET", "/traffic/quotas?account_id="+created.Account.ID, nil, cookie, "")
+	var quotas struct {
+		Items []model.QuotaStatus `json:"items"`
+	}
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &quotas) != nil || len(quotas.Items) != 2 {
+		t.Fatal("quota response unavailable", w.Body)
+	}
+	for _, q := range quotas.Items {
+		if q.EstimatedBytes != nil || q.EffectiveBytes != nil || q.OfficialAsOf != nil {
+			t.Fatal("unverified source exposed as estimate")
+		}
+		if q.Scope == "overseas" && (q.OfficialBytes == nil || *q.OfficialBytes != 0 || q.FetchedAt == nil || q.OfficialQuality != "inferred") {
+			t.Fatal("explicit zero lost")
+		}
+		if q.Scope == "mainland" && q.OfficialBytes != nil {
+			t.Fatal("absent scope changed into zero")
+		}
+	}
+	w = panelRequest(p, "GET", "/traffic/daily?account_id="+created.Account.ID, nil, cookie, "")
+	var daily struct {
+		Source  string           `json:"source_status"`
+		Days    []map[string]any `json:"days"`
+		Updated any              `json:"updated_at"`
+	}
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &daily) != nil || daily.Source != "daily_source_unverified" || daily.Updated != nil || len(daily.Days) == 0 {
+		t.Fatal("daily source status incorrect")
+	}
+	for _, d := range daily.Days {
+		if d["mainland_bytes"] != nil || d["overseas_bytes"] != nil {
+			t.Fatal("daily usage invented from cumulative observations")
+		}
+	}
+	w = panelRequest(p, "GET", "/traffic/observations?account_id="+created.Account.ID, nil, cookie, "")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"official_quality":"inferred"`) {
+		t.Fatal("observation history unavailable")
+	}
+	if scanner.calls != 1 {
+		t.Fatal("traffic GET performed cloud query")
 	}
 	w = panelRequest(p, "DELETE", "/accounts/"+created.Account.ID, nil, cookie, csrf)
 	if w.Code != 204 {

@@ -282,6 +282,12 @@ export async function handle(method: string, fullPath: string, body: unknown): P
   /* 流量 */
   const byAccount = <X extends { account_id: string }>(xs: X[]) => xs.filter((x) => !q.get("account_id") || x.account_id === q.get("account_id"));
   if (is("GET", "/traffic/quotas")) return ok({ items: byAccount(db.quotas) });
+  if (is("GET", "/traffic/observations")) {
+    const id = q.get("account_id");
+    if (!db.accounts.some((a) => a.id === id)) return fail(404, "not_found");
+    const known = (scope: T.QuotaScope, i: number) => { const v = db.quotas.find((v) => v.account_id === id && v.scope === scope)?.official_bytes; return v == null ? null : Math.round(v * (1 - i * 0.002)); };
+    return ok({ items: Array.from({ length: 8 }, (_, i) => ({ id: String(8 - i), account_id: id, fetched_at: iso(Date.now() - i * 300_000), mainland_bytes: known("mainland", i), overseas_bytes: known("overseas", i), official_quality: "inferred", error: null })), next_cursor: null });
+  }
   if (is("GET", "/traffic/daily")) {
     const d = db.daily[q.get("account_id") ?? ""];
     return d ? ok(d) : fail(404, "not_found");

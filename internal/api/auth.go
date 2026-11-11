@@ -113,10 +113,12 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		scanSeconds := 300
+		cdtSeconds := 300
 		if p.engine != nil {
 			scanSeconds = int(p.engine.Interval.Seconds())
+			cdtSeconds = int(p.engine.TrafficInterval().Seconds())
 		}
-		writeJSON(w, 200, map[string]any{"business_timezone": zone, "collection": map[string]int{"cdt_poll_interval_seconds": 300, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": scanSeconds}})
+		writeJSON(w, 200, map[string]any{"business_timezone": zone, "collection": map[string]int{"cdt_poll_interval_seconds": cdtSeconds, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": scanSeconds}})
 	case "/events":
 		p.events(w, r)
 	case "/accounts", "/instances", "/traffic/quotas", "/traffic/daily", "/traffic/billing-subjects", "/bandwidth-packages", "/regions", "/notify/telegram", "/alert-rules", "/notifications":
@@ -366,6 +368,19 @@ func (p *productionPanel) events(w http.ResponseWriter, r *http.Request) {
 			for _, j := range jobs {
 				if !send("job.updated", j) {
 					return
+				}
+				if (j.Status == "succeeded" || j.Status == "failed") && (j.Type == "refresh" || j.Type == "permission_check") {
+					for _, id := range j.AccountIDs {
+						quotas, err := p.quotaRows(r.Context(), id)
+						if err != nil {
+							return
+						}
+						for _, q := range quotas {
+							if !send("quota.updated", q) {
+								return
+							}
+						}
+					}
 				}
 			}
 		}

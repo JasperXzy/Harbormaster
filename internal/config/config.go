@@ -28,11 +28,12 @@ type Config struct {
 	SessionTTLSeconds           int      `json:"session_ttl_seconds"`
 	WorkerCount                 int      `json:"worker_count"`
 	ResourceScanIntervalSeconds int      `json:"resource_scan_interval_seconds"`
+	CDTPollIntervalSeconds      int      `json:"cdt_poll_interval_seconds"`
 }
 
 // Load applies defaults, an optional JSON file, then environment overrides.
 func Load(path string) (Config, error) {
-	c := Config{Listen: "127.0.0.1:8080", DataDir: "data", LogLevel: "info", Timezone: "Asia/Shanghai", Frontend: "api", SessionTTLSeconds: 43200, WorkerCount: 2, ResourceScanIntervalSeconds: 300}
+	c := Config{Listen: "127.0.0.1:8080", DataDir: "data", LogLevel: "info", Timezone: "Asia/Shanghai", Frontend: "api", SessionTTLSeconds: 43200, WorkerCount: 2, ResourceScanIntervalSeconds: 300, CDTPollIntervalSeconds: 300}
 	if path != "" {
 		f, err := os.Open(path)
 		if err != nil {
@@ -77,7 +78,7 @@ func Load(path string) (Config, error) {
 		}
 		c.Dev = b
 	}
-	for k, p := range map[string]*int{"HM_WORKER_COUNT": &c.WorkerCount, "HM_RESOURCE_SCAN_INTERVAL_SECONDS": &c.ResourceScanIntervalSeconds} {
+	for k, p := range map[string]*int{"HM_WORKER_COUNT": &c.WorkerCount, "HM_RESOURCE_SCAN_INTERVAL_SECONDS": &c.ResourceScanIntervalSeconds, "HM_CDT_POLL_INTERVAL_SECONDS": &c.CDTPollIntervalSeconds} {
 		if v, ok := os.LookupEnv(k); ok {
 			n, err := strconv.Atoi(v)
 			if err != nil {
@@ -90,6 +91,9 @@ func Load(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if c.CDTPollIntervalSeconds < 60 || c.CDTPollIntervalSeconds > 86400 {
+		return errors.New("invalid CDT poll interval")
+	}
 	if c.WorkerCount < 1 || c.WorkerCount > 8 || c.ResourceScanIntervalSeconds < 60 || c.ResourceScanIntervalSeconds > 86400 {
 		return errors.New("invalid worker count or resource scan interval")
 	}

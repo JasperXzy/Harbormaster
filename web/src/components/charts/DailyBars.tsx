@@ -42,8 +42,8 @@ export function DailyBars({ bars, totalSlots, nameA, nameB, unit, ariaLabel, hei
             );
           })}
           {Array.from({ length: slots }, (_, i) =>
-            i % every === 0 || i === slots - 1 ? (
-              <text key={i} className="ticklabel" x={L + i * bw + bw / 2} y={height - 8} textAnchor="middle">
+            (i % every === 0 && (i === 0 || i < slots - 1 - every / 2)) || i === slots - 1 ? (
+              <text key={i} className="ticklabel" x={L + i * bw + bw / 2} y={height - 8} textAnchor={i === slots - 1 ? "end" : "middle"}>
                 {bars[i]?.label ?? bars[0]?.label.slice(0, 3) + String(i + 1).padStart(2, "0")}
               </text>
             ) : null,

@@ -21,13 +21,17 @@ func (e *ValidationError) Error() string { return "validation_failed" }
 type Scanner interface {
 	Scan(context.Context, model.Account, model.Credential, bool, func() error) model.ScanResult
 }
+type TrafficScanner interface {
+	Traffic(context.Context, model.Account, model.Credential, func() error) model.CDTObservation
+}
 type Engine struct {
-	Store    *store.Store
-	Box      *security.Box
-	Scanner  Scanner
-	Workers  int
-	Interval time.Duration
-	Log      *slog.Logger
+	Store       *store.Store
+	Box         *security.Box
+	Scanner     Scanner
+	Workers     int
+	Interval    time.Duration
+	CDTInterval time.Duration
+	Log         *slog.Logger
 }
 
 func (e *Engine) encrypt(id string, c model.Credential) ([]byte, error) {
@@ -97,6 +101,21 @@ func (e *Engine) scanInterval() time.Duration {
 	}
 	return e.Interval
 }
+func (e *Engine) TrafficInterval() time.Duration {
+	if e.CDTInterval < time.Minute {
+		return 5 * time.Minute
+	}
+	return e.CDTInterval
+}
+func (e *Engine) Schedule(ctx context.Context) error {
+	if err := e.Store.ScheduleScans(ctx, e.scanInterval(), time.Now().UTC()); err != nil {
+		return err
+	}
+	if _, ok := e.Scanner.(TrafficScanner); ok {
+		return e.Store.ScheduleCDT(ctx, e.TrafficInterval(), time.Now().UTC())
+	}
+	return nil
+}
 func (e *Engine) Enqueue(ctx context.Context, kind, id string) (model.Job, error) {
 	ids := []string{}
 	scope := id
@@ -148,14 +167,10 @@ func (e *Engine) Run(ctx context.Context) {
 			}
 		}()
 	}
-	interval := e.Interval
-	if interval < time.Minute {
-		interval = 5 * time.Minute
-	}
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
-		if err := e.Store.ScheduleScans(ctx, interval, time.Now().UTC()); err != nil && ctx.Err() == nil && e.Log != nil {
+		if err := e.Schedule(ctx); err != nil && ctx.Err() == nil && e.Log != nil {
 			e.Log.Warn("schedule_failed")
 		}
 		select {
@@ -291,7 +306,33 @@ func (e *Engine) scanAccount(ctx context.Context, j model.Job, a model.Account) 
 		}
 		return e.Store.CheckAccountScan(scanCtx, a.ID, j.Owner, a.Revision, time.Now().UTC())
 	}
+	if strings.HasPrefix(j.Scope, "cdt:") {
+		scanner, ok := e.Scanner.(TrafficScanner)
+		if !ok {
+			return model.ScanResult{Failure: "not_implemented"}, nil
+		}
+		o := scanner.Traffic(scanCtx, a, credential, before)
+		result := model.ScanResult{CDT: &o}
+		if o.Error != nil {
+			result.Failure = o.Error.Code
+		}
+		if err := before(); err != nil {
+			return result, err
+		}
+		return result, e.Store.SaveCDT(scanCtx, j, a, o, time.Now().UTC())
+	}
 	result := e.Scanner.Scan(scanCtx, a, credential, j.Type == "permission_check", before)
+	// An explicit refresh covers both resources and CDT; scheduled resource
+	// scans leave CDT to its independently configured poll interval.
+	if result.CDT == nil && !strings.HasPrefix(j.Scope, "inventory:") {
+		if scanner, ok := e.Scanner.(TrafficScanner); ok {
+			o := scanner.Traffic(scanCtx, a, credential, before)
+			result.CDT = &o
+			if o.Error != nil && result.Failure == "" {
+				result.Failure = o.Error.Code
+			}
+		}
+	}
 	if err := before(); err != nil {
 		return result, err
 	}

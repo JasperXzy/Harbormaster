@@ -34,6 +34,9 @@ func (p *productionPanel) business(w http.ResponseWriter, r *http.Request, path 
 	if p.engine == nil {
 		return false
 	}
+	if p.traffic(w, r, path) {
+		return true
+	}
 	switch {
 	case path == "/accounts":
 		switch r.Method {

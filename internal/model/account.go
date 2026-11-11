@@ -44,6 +44,7 @@ type Account struct {
 	InstanceCount       int              `json:"instance_count"`
 	UpdatedAt           time.Time        `json:"updated_at"`
 	Revision            int64            `json:"-"`
+	CredentialVersion   int64            `json:"-"`
 }
 
 // Credential is never an API response or job payload. Both fields are encrypted.
@@ -167,6 +168,7 @@ type Job struct {
 	AccountIDs []string   `json:"-"`
 	Owner      string     `json:"-"`
 	Attempts   int        `json:"-"`
+	Scope      string     `json:"-"`
 }
 type Snapshot struct {
 	Kind    string
@@ -180,6 +182,7 @@ type ScanResult struct {
 	CompleteScopes map[string]bool
 	Permissions    *PermissionCheck
 	Failure        string
+	CDT            *CDTObservation
 }
 
 func Scope(kind, region string) string { return kind + ":" + region }

@@ -5,11 +5,11 @@ import { RULE, SCOPE, SUBJECT_KIND } from "../api/labels";
 import type { BandwidthPackage, DailyTraffic, QuotaScope, QuotaStatus } from "../api/types";
 import { DailyBars } from "../components/charts/DailyBars";
 import { LineChart } from "../components/charts/LineChart";
-import { QuotaMeter } from "../components/QuotaMeter";
+import { QuotaMeter, QuotaUnknownNote } from "../components/QuotaMeter";
 import { TipRow } from "../components/charts/common";
 import { Async, Badge, Card, EmptyState, ErrorState, Fresh, SegToggle, Skeleton } from "../components/ui";
 import { useShared } from "../lib/data";
-import { gb, gbValue, num, shortDate, time } from "../lib/format";
+import { gb, gbValue, num, shortDate, time, stamp } from "../lib/format";
 import { Link } from "../lib/router";
 import { useResource } from "../lib/useResource";
 import { cumulativeBytes } from "../lib/usage";
@@ -41,14 +41,15 @@ export function Traffic() {
         <select id="traffic-account" value={accountId} onChange={(e) => setPicked(e.target.value)}>
           {accs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
-        <span className="sub">免费额度按账号计算，每月 {accs.find((a) => a.id === accountId)?.reset_day} 号重新开始。</span>
+        <span className="sub">免费额度按账号计算，这里按每月 {accs.find((a) => a.id === accountId)?.reset_day} 号重新开始来算；实际以阿里云账单为准。</span>
       </div>
 
-      <Card title="官方数据与实时估算" sub="只有官方截止时间已确认，才能把之后的采集增量与官方数据对齐">
+      <Card title="官方数据与实时估算" sub="阿里云的官方数据大约晚 1 小时；实时估算 = 官方数据 + 之后采集程序报上来的增量">
         {quotas.error ? <ErrorState error={quotas.error} onRetry={quotas.reload} /> : !quotas.data ? <Skeleton /> : !qs.length ? <EmptyState title="这个账号还没有额度数据" /> : <QuotaTable qs={qs} />}
       </Card>
 
       <DailySection key={accountId} accountId={accountId} quotas={qs} />
+      <Observations key={`observations-${accountId}`} accountId={accountId} />
 
       <Subjects accountId={accountId} instName={instName} />
       <Packages accountId={accountId} />
@@ -72,17 +73,18 @@ function QuotaTable({ qs }: { qs: QuotaStatus[] }) {
             <tr key={q.scope}>
               <td><b>{SCOPE[q.scope]}</b></td>
               <td className="num">{gb(q.quota_bytes, 0)}</td>
-              <td className="num">{gb(q.official_bytes)}<div className="sub">{q.official_as_of ? `截至 ${time(q.official_as_of)}` : q.official_bytes === null ? "还没有数据" : "截止时间未提供"}</div></td>
-              <td className="num"><b>{gb(q.estimated_bytes)}</b><div className="sub">{q.effective_bytes === null ? "暂不能作为保护依据" : "告警使用已确认的有效用量"}</div></td>
+              <td className="num">{gb(q.official_bytes)}<div className="sub">{q.official_as_of ? `截至 ${time(q.official_as_of)}` : q.official_bytes === null ? "还没有数据" : "统计时间不明"}</div></td>
+              <td className="num"><b>{gb(q.estimated_bytes)}</b><div className="sub">{q.effective_bytes === null ? "暂时算不出" : "告警按这个数判断"}</div></td>
               <td className="num">{q.estimated_bytes === null || q.official_bytes === null ? "待确认" : `+${gb(q.estimated_bytes - q.official_bytes)}`}{q.worst_case_bytes !== null && q.worst_case_bytes > 0 && <div className="sub">含推算 {gb(q.worst_case_bytes)}</div>}</td>
               <td className="num">{q.forecast ? gb(q.forecast.cycle_end_bytes) : "—"}</td>
               <td>{!q.forecast ? <span className="sub">数据不够，暂时无法预测</span> : q.forecast.exceeds_on ? <Badge level="critical">预计 {shortDate(q.forecast.exceeds_on)} 超出</Badge> : <Badge level="good">不会超额</Badge>}</td>
-              <td>{q.official_status === "cutoff_unknown" ? <Badge level="warning">截止时间待确认</Badge> : q.official_status === "unavailable" ? <Badge level="warning">官方数据取不到</Badge> : <Fresh at={q.updated_at} kind="realtime" prefix="更新" />}</td>
+              <td>{q.official_status === "cutoff_unknown" ? <Badge level="warning">统计时间不明</Badge> : q.official_status === "unavailable" ? <Badge level="warning">官方数据取不到</Badge> : <Fresh at={q.updated_at} kind="realtime" prefix="更新" />}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+    <QuotaUnknownNote quotas={rows} />
     </>
   );
 }
@@ -95,10 +97,12 @@ function DailySection({ accountId, quotas }: { accountId: string; quotas: QuotaS
   const [scope, setScope] = useState<QuotaScope>("overseas");
   return (
     <div className="grid g2">
-      <Card title="每天用了多少" sub={daily.data ? `按 ${daily.data.data_timezone} 划分日期；未确认数据保留空缺` : "未确认的数据不按零用量显示"} right={<SegToggle label="显示方式" value={view} onChange={setView} options={VIEW} />}>
+      <Card title="每天用了多少" sub="今天的数字包含官方还没算进去的实时增量" right={<SegToggle label="显示方式" value={view} onChange={setView} options={VIEW} />}>
         <Async res={daily} lines={6}>
           {(d) =>
-            !d.days.length ? <EmptyState title="这个计费周期还没有数据" /> : view === "chart" ? (
+            !d.days.length ? <EmptyState title="这个计费周期还没有数据" /> : d.days.every((x) => x.overseas_bytes === null && x.mainland_bytes === null) ? (
+              <EmptyState title="还拆不出每天的用量">阿里云目前只给了本月累计的总数，没法可靠地分到每一天。总数的变化可以在下面的“官方累计读取记录”里看。</EmptyState>
+            ) : view === "chart" ? (
               <>
                 <div className="legend" style={{ marginBottom: 8 }}>
                   <span><i style={{ background: "var(--series-1)" }} />{SCOPE.overseas}</span>
@@ -108,6 +112,7 @@ function DailySection({ accountId, quotas }: { accountId: string; quotas: QuotaS
                   ariaLabel="每日流量用量" unit="GB" nameA={SCOPE.overseas} nameB={SCOPE.mainland} totalSlots={cycleDays(d)}
                   bars={d.days.map((x) => ({ label: shortDate(x.date), a: x.overseas_bytes === null ? null : gbValue(x.overseas_bytes), b: x.mainland_bytes === null ? null : gbValue(x.mainland_bytes), provisional: x.provisional }))}
                 />
+                {d.days.some((x) => x.overseas_bytes === null || x.mainland_bytes === null) && <p className="note">有几天的数据没取到，图上用虚线框留空，不当作 0。</p>}
               </>
             ) : (
               <div className="table-wrap" style={{ maxHeight: 300, overflowY: "auto" }}>
@@ -129,12 +134,38 @@ function DailySection({ accountId, quotas }: { accountId: string; quotas: QuotaS
           {(d) => {
             const q = quotas.find((x) => x.scope === scope);
             if (!d.days.length || !q) return <EmptyState title="还没有足够的数据画图" />;
+            if (cumulativeBytes(d.days, scope)[0] === null) return <EmptyState title="暂时画不出累计曲线">每天的用量还没取全，累计和月底预测都算不出来。</EmptyState>;
             return <Cumulative d={d} q={q} scope={scope} />;
           }}
         </Async>
       </Card>
     </div>
   );
+}
+
+function Observations({ accountId }: { accountId: string }) {
+  const [cursor, setCursor] = useState<string>();
+  const [view, setView] = useState<View>("table"); // 两条线几乎是平的，表格更有用
+  const res = useResource(() => api.trafficObservations(accountId, cursor), [accountId, cursor], { refreshMs: cursor ? 0 : 60_000 });
+  return <Card title="官方累计读取记录" sub="每次从阿里云读到的本月累计总数" right={<SegToggle label="读取记录显示方式" value={view} onChange={setView} options={[["table", "表格"], ["chart", "图表"]]} />}>
+    <p className="note" style={{ margin: "0 0 10px" }}>这是总数的变化记录，不是每天的用量。阿里云没有说明每个数字统计到几点，所以相邻两次的差值不能当作这段时间的流量；数字的单位也还在核实。</p>
+    <Async res={res}>{(page) => {
+      const points = [...page.items].reverse();
+      return <>
+        {!points.length ? <EmptyState title="还没有读取记录" /> : view === "chart" ? <LineChart
+          ariaLabel="官方累计值的读取历史" unit="GB" labels={points.map((p) => stamp(p.fetched_at))}
+          series={[
+            { name: "海外累计", color: "var(--series-1)", data: points.map((p) => p.overseas_bytes === null ? null : gbValue(p.overseas_bytes)) },
+            { name: "国内累计", color: "var(--series-2)", data: points.map((p) => p.mainland_bytes === null ? null : gbValue(p.mainland_bytes)) },
+          ]}
+        /> : <div className="table-wrap"><table><thead><tr><th>读取时间</th><th className="num">海外累计</th><th className="num">国内累计</th><th>结果</th></tr></thead><tbody>{page.items.map((p) => <tr key={p.id}><td>{stamp(p.fetched_at)}</td><td className="num">{gb(p.overseas_bytes)}</td><td className="num">{gb(p.mainland_bytes)}</td><td>{p.error ? <Badge level="warning">这次没取到</Badge> : <span className="sub">已读取</span>}</td></tr>)}</tbody></table></div>}
+        {(cursor || page.next_cursor) && <div className="inline" style={{ marginTop: 12 }}>
+          {cursor && <button className="btn" onClick={() => setCursor(undefined)}>回到最新记录</button>}
+          {page.next_cursor && <button className="btn" onClick={() => setCursor(page.next_cursor!)}>查看更早记录</button>}
+        </div>}
+      </>;
+    }}</Async>
+  </Card>;
 }
 
 const cycleDays = (d: DailyTraffic) => Math.max(d.days.length, Math.round((Date.parse(d.cycle_end) - Date.parse(d.cycle_start)) / 86400_000));
@@ -222,7 +253,7 @@ function PackageHourly({ p }: { p: BandwidthPackage }) {
           const open = Date.parse(h.periods[h.periods.length - 1].start) + h.period_seconds * 1000 > Date.now();
           const done = open ? h.periods.slice(0, -1) : h.periods;
           const labels = done.map((x) => time(x.start));
-          if (view === "chart" && done.length < 2) return <EmptyState title="今天的数据还不够画图">过了凌晨 2 点之后这里会出现曲线。可以先切到表格查看。</EmptyState>;
+          if (view === "chart" && done.length < 2) return <EmptyState title="已完成的小时数据还不够画图">至少需要两个已完成的小时记录。可以先切到表格查看已有数据。</EmptyState>;
           return view === "chart" ? (
             <>
               <div className="legend" style={{ marginBottom: 8 }}>

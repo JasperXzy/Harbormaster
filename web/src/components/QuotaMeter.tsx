@@ -1,17 +1,38 @@
 // 额度条：官方已用 + 实时增量（未出账）+ 预测到月底，竖线标出免费额度。
 import type { QuotaStatus } from "../api/types";
 import { SCOPE } from "../api/labels";
-import { gb, pct, shortDate, time } from "../lib/format";
+import { gb, pct, shortDate, time, stamp } from "../lib/format";
 import { Badge, type Level } from "./ui";
 
 export function quotaLevel(q: QuotaStatus): [Level, string] {
-  if (q.effective_bytes === null) return ["warning", "用量尚待确认"];
+  if (q.effective_bytes === null) return ["warning", "用量待确认"];
   const ratio = q.quota_bytes ? q.effective_bytes / q.quota_bytes : 0;
   const hit = [...q.thresholds_percent].sort((a, b) => b - a).find((t) => ratio * 100 >= t);
   if (ratio >= 1) return ["critical", "已超出免费额度"];
   if (hit !== undefined) return [hit >= 95 ? "critical" : "serious", `已用超过 ${hit}%`];
   if (q.forecast?.exceeds_on) return ["warning", "预计会超额"];
   return ["good", "正常"];
+}
+
+/** 这条额度的用量还不完整，不能显示比例、余量和预测 */
+export const quotaUnknown = (q: QuotaStatus) =>
+  q.official_bytes === null || q.estimated_bytes === null || q.effective_bytes === null || q.realtime_increment_bytes === null || q.worst_case_bytes === null;
+
+/** 未知状态的解释。一张卡片里只放一次，不在每条额度条下重复。 */
+export function QuotaUnknownNote({ quotas }: { quotas: QuotaStatus[] }) {
+  const unknown = quotas.filter(quotaUnknown);
+  if (!unknown.length) return null;
+  const cutoff = unknown.some((q) => q.official_status === "cutoff_unknown");
+  const inferred = unknown.some((q) => q.official_quality === "inferred");
+  const fetched = unknown.map((q) => q.fetched_at).filter((x): x is string => !!x).sort().at(-1);
+  return (
+    <p className="note">
+      {cutoff ? "阿里云给了本月的累计用量，但没有说明统计到几点，所以暂时没法把之后的实时流量加上去。" : "这部分数据还不完整。"}
+      弄清之前，这里不显示已用比例、剩余额度和月底预测。
+      {inferred && "数字的单位也还在核实。"}
+      {fetched && `最近一次读取：${stamp(fetched)}。`}
+    </p>
+  );
 }
 
 export function QuotaLegend({ worstCase }: { worstCase?: boolean }) {
@@ -44,15 +65,20 @@ export function QuotaLegend({ worstCase }: { worstCase?: boolean }) {
 }
 
 export function QuotaMeter({ q }: { q: QuotaStatus }) {
-  if (q.official_bytes === null || q.estimated_bytes === null || q.effective_bytes === null || q.realtime_increment_bytes === null || q.worst_case_bytes === null) {
+  if (quotaUnknown(q)) {
     return <div className="meter">
-      <div className="meter-top"><span className="name">{SCOPE[q.scope]}</span><span className="val">实时用量待确认 / {gb(q.quota_bytes, 0)}</span></div>
+      <div className="meter-top">
+        <span className="name">{SCOPE[q.scope]}</span>
+        <span className="val">{q.official_bytes === null ? "还没有数据" : `官方 ${gb(q.official_bytes)}`} / {gb(q.quota_bytes, 0)}</span>
+        <div className="spacer" />
+        <span className="sub">实时用量待确认</span>
+      </div>
       <div className="track unknown-track" role="img" aria-label="数据不完整，暂不显示使用比例" />
-      <div className="meter-foot"><span>官方已用 <b>{gb(q.official_bytes)}</b>{q.official_as_of ? `（截至 ${time(q.official_as_of)}）` : q.official_bytes === null ? "（还没有数据）" : "（截止时间未提供）"}</span></div>
-      <p className="note">{q.official_status === "cutoff_unknown" ? "官方数据没有提供统计截止时间，暂时无法与实时增量对齐。" : "数据尚不完整，暂不计算剩余额度、使用比例或超额预测。"}</p>
-      <Badge level="warning">实时保护状态待确认</Badge>
+      {q.official_status === "unavailable" && <div style={{ marginTop: 6 }}><Badge level="warning">官方数据暂时取不到，显示的是上一次的数值</Badge></div>}
     </div>;
   }
+  // 上面已排除未知状态；这里收窄类型
+  if (q.official_bytes === null || q.estimated_bytes === null || q.effective_bytes === null || q.realtime_increment_bytes === null || q.worst_case_bytes === null) return null;
   const color = q.scope === "overseas" ? "var(--series-1)" : "var(--series-2)";
   const proj = q.forecast?.cycle_end_bytes ?? q.estimated_bytes;
   const max = Math.max(q.quota_bytes, proj, q.estimated_bytes) * 1.04 || 1;

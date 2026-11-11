@@ -53,6 +53,13 @@ export const PROTECTION: Record<T.RealtimeProtection, [Level, string, string]> =
   not_applicable: ["neutral", "不需要", "这台机器的流量不计入 CDT 免费额度。"],
 };
 
+/** 实例的实时保护状态。采集程序在线但额度暂时算不出时，不说“未受保护”，以免和没装的机器混在一起。 */
+export function protectionOf(i: Pick<T.Instance, "realtime_protection" | "agent">): [Level, string, string] {
+  if (i.realtime_protection === "unprotected" && i.agent.status === "online")
+    return ["warning", "暂无法估算", "采集程序在正常上报，但阿里云官方数据的统计时间还不明确，暂时没法把两者加在一起算出实时用量。"];
+  return PROTECTION[i.realtime_protection];
+}
+
 export const PERMISSION: Record<T.PermissionKey, string> = {
   ecs_read: "查看云服务器",
   swas_read: "查看轻量服务器",
@@ -124,6 +131,10 @@ const ERROR: Record<string, string> = {
   permission_denied: "阿里云拒绝了读取请求，请检查账号的只读权限。",
   aliyun_throttled: "阿里云接口暂时限流，任务会稍后重试。",
   retry_exhausted: "任务多次中断，已停止重试。请检查服务状态后重新刷新。",
+  cdt_line_unverified: "CDT 返回了尚未核实的线路类型，暂不将它计入额度合计。",
+  cdt_response_unrecognized: "CDT 返回格式未能确认，已保留旧记录，请检查数据来源。",
+  cdt_value_out_of_range: "CDT 返回值超出可准确处理的范围，暂不用于估算。",
+  cdt_international_endpoint_unverified: "这个站点的 CDT 查询端点尚未验证，暂不能提供官方用量。",
   access_key_invalid: "阿里云不认这组 AccessKey，请检查是否复制完整、是否已被禁用。",
   agent_not_supported: "这台实例暂时不能安装采集程序。",
   telegram_not_configured: "还没有保存 Telegram 设置。",

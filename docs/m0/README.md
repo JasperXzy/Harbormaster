@@ -48,7 +48,7 @@ sh deploy/dev.sh api
 ./deploy/bin/hm-server run-once --dev --data-dir /tmp/harbormaster-separated-dev
 ```
 
-开发 API 只供只读页面和会话联调，写入口暂返回 `501 not_implemented`，不会接受并保存真实 AccessKey/Telegram Token。demo 的业务数据是合成快照，agent 上报落库的验证与面板 fixture 分开，尚无真实计费估算。2026-11-12 已补齐[生产认证](production-auth.md)和[生产账号、任务及只读资源发现](production-discovery.md)。生产账号 API 可加密保存真实 AccessKey；CDT 持续计量、Telegram、自动化和真实 agent 采集继续在后续阶段实现。
+开发 API 只供只读页面和会话联调，写入口暂返回 `501 not_implemented`，不会接受并保存真实 AccessKey/Telegram Token。demo 的业务数据是合成快照，agent 上报落库的验证与面板 fixture 分开，尚无真实计费估算。2026-11-12 已补齐[生产认证](production-auth.md)、[生产账号、任务及只读资源发现](production-discovery.md)和[CDT 累计记录与页面](production-cdt.md)。生产账号 API 可加密保存真实 AccessKey；CDT 暂按字节展示且明确标为待核实，尚无跨源实时估算。Telegram、自动化和真实 agent 采集继续在后续阶段实现。
 
 reset-password 从 stdin 读取新密码，12–1024 字节，不支持明文命令行参数；开发库已有示例管理员，生产空库返回 administrator_not_initialized。生产模式须先通过仓库外的环境/密钥文件提供 HM_MASTER_KEY，配置示例见 `deploy/config.example.json`。数据库模式互斥，不把开发库改为生产库。
 

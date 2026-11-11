@@ -129,6 +129,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, object{"items": paged, "next_cursor": cursor, "updated_at": now.Format(time.RFC3339)})
 	case "/traffic/quotas":
 		respond(w, 200, object{"items": filter(f.Quotas, "account_id", r.URL.Query().Get("account_id"))})
+	case "/traffic/observations":
+		respond(w, 200, object{"items": []object{}, "next_cursor": nil})
 	case "/traffic/billing-subjects":
 		respond(w, 200, object{"items": filter(f.Subjects, "account_id", r.URL.Query().Get("account_id"))})
 	case "/bandwidth-packages":

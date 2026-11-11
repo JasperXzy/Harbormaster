@@ -26,7 +26,8 @@ func loadAccount(ctx context.Context, q queryRower, id string) (model.Account, e
 	var raw string
 	var revision int64
 	var count int
-	err := q.QueryRowContext(ctx, "SELECT config_json,revision,(SELECT count(*) FROM resource_snapshot WHERE account_id=? AND kind IN ('ecs','swas') AND present=1) FROM account_settings WHERE account_id=?", id, id).Scan(&raw, &revision, &count)
+	var credentialVersion int64
+	err := q.QueryRowContext(ctx, "SELECT config_json,revision,(SELECT count(*) FROM resource_snapshot WHERE account_id=? AND kind IN ('ecs','swas') AND present=1),credential_version FROM account_settings WHERE account_id=?", id, id).Scan(&raw, &revision, &count, &credentialVersion)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -38,13 +39,14 @@ func loadAccount(ctx context.Context, q queryRower, id string) (model.Account, e
 	}
 	a.Revision = revision
 	a.InstanceCount = count
+	a.CredentialVersion = credentialVersion
 	return a, nil
 }
 func (s *Store) Account(ctx context.Context, id string) (model.Account, error) {
 	return loadAccount(ctx, s.DB, id)
 }
 func (s *Store) Accounts(ctx context.Context) ([]model.Account, error) {
-	rows, err := s.DB.QueryContext(ctx, `SELECT a.config_json,a.revision,
+	rows, err := s.DB.QueryContext(ctx, `SELECT a.config_json,a.revision,a.credential_version,
  (SELECT count(*) FROM resource_snapshot r WHERE r.account_id=a.account_id AND r.kind IN ('ecs','swas') AND r.present=1)
  FROM account_settings a ORDER BY a.account_id`)
 	if err != nil {
@@ -56,7 +58,8 @@ func (s *Store) Accounts(ctx context.Context) ([]model.Account, error) {
 		var raw string
 		var revision int64
 		var count int
-		if err = rows.Scan(&raw, &revision, &count); err != nil {
+		var credentialVersion int64
+		if err = rows.Scan(&raw, &revision, &credentialVersion, &count); err != nil {
 			return nil, err
 		}
 		var a model.Account
@@ -64,6 +67,7 @@ func (s *Store) Accounts(ctx context.Context) ([]model.Account, error) {
 			return nil, err
 		}
 		a.Revision = revision
+		a.CredentialVersion = credentialVersion
 		a.InstanceCount = count
 		items = append(items, a)
 	}
@@ -140,15 +144,21 @@ func (s *Store) UpdateAccount(ctx context.Context, id string, change func(*model
 		return a, err
 	}
 	if cipher != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE account_settings SET credential_version=credential_version+1 WHERE account_id=?", id); err != nil {
+			return a, err
+		}
 		if _, err = tx.ExecContext(ctx, "UPDATE credential SET ciphertext=?,updated_at=? WHERE owner_field=?", cipher, timestamp(now), model.CredentialOwner(id)); err != nil {
 			return a, err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE job SET status='failed',error_code='account_changed',finished_at=?,lease_owner=NULL,lease_until=0 WHERE scope=? AND status IN ('queued','running')", timestamp(now), id); err != nil {
+	if _, err = tx.ExecContext(ctx, "UPDATE job SET status='failed',error_code='account_changed',finished_at=?,lease_owner=NULL,lease_until=0 WHERE scope IN (?,?,?) AND status IN ('queued','running')", timestamp(now), id, "cdt:"+id, "inventory:"+id); err != nil {
 		return a, err
 	}
 	// A newly enabled account is discovered even if its prior refresh was queued.
 	if a.Enabled {
+		if _, err = tx.ExecContext(ctx, "UPDATE account_settings SET next_cdt_at=0 WHERE account_id=?", id); err != nil {
+			return a, err
+		}
 		kind := "refresh"
 		if cipher != nil || a.PermissionCheck == nil {
 			kind = "permission_check"

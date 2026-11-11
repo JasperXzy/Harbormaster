@@ -32,6 +32,7 @@ export type MeteringRule = S["MeteringRule"];
 export type QuotaScope = S["QuotaScope"];
 export type QuotaStatus = S["QuotaStatus"];
 export type DailyTraffic = S["DailyTraffic"];
+export type TrafficObservation = S["TrafficObservation"];
 export type BillingSubject = S["BillingSubject"];
 export type BandwidthPackage = S["BandwidthPackage"];
 export type BandwidthPackageHourly = S["BandwidthPackageHourly"];

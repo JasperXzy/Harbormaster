@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  CDT observations: official_quality=inferred, fetched_at separate from unknown cutoff; user approved provisional byte display only. Add raw cumulative observation history; daily values remain unknown without a verified daily source. Quota/daily freshness is nullable before first collection.
 # 2026-11-12  Accounts/discovery: local quotas use configurable 1024^3-byte units (user approved; not official alignment). Account updates fence stale jobs; disabled accounts retain snapshots. Jobs persist/recover leases; GET reads snapshots only. Multi-exit instances expose billing_subject_ids; ambiguous billing/charge types remain unknown.
 # 2026-11-12  Production auth: single administrator confirmed; setup token supplied outside logs, one-use/24h; HTTPS origin and CSRF checks; configurable absolute session lifetime, persistent login limits. Account removal retains history and disables collection (user decision).
 # 2026-11-11  前端  起草 M1 部分（v0.1.0-draft）。
@@ -289,6 +290,43 @@ paths:
                       $ref: "#/components/schemas/Region"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /traffic/observations:
+    get:
+      tags: [traffic]
+      operationId: listTrafficObservations
+      summary: 官方累计值的抓取记录（不是按日真实用量）
+      description: 按抓取时间倒序返回。单位按字节暂解释，账期与统计截止时间均未由来源确认；不得对相邻记录求差冒充每日真实流量。
+      parameters:
+        - name: account_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: 已保存的抓取记录
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TrafficObservation"
+                  next_cursor:
+                    type: string
+                    nullable: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
 
   /jobs/{job_id}:
     get:
@@ -1558,11 +1596,11 @@ components:
         cycle_start:
           type: string
           format: date-time
-          description: 当前计费周期的开始时刻。
+          description: 本地保护额度的参考周期开始；不表示来源确认了官方账期。
         cycle_end:
           type: string
           format: date-time
-          description: 当前计费周期的结束时刻（下一次重置）。
+          description: 本地保护额度的参考周期结束。
         quota_bytes:
           type: integer
           format: int64
@@ -1576,6 +1614,15 @@ components:
           format: date-time
           nullable: true
           description: 官方数据的截止时刻（界面显示"官方（截至 hh:mm）"）。
+        official_quality:
+          type: string
+          enum: [verified, inferred, unknown]
+          description: inferred 表示按字节暂解释，单位与计费口径待核实；不能作为精确对齐依据。
+        fetched_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 当前显示的官方累计值被抓取的时间，不是统计截止时间。
         official_status:
           $ref: "#/components/schemas/OfficialDataStatus"
         realtime_increment_bytes:
@@ -1624,13 +1671,18 @@ components:
         updated_at:
           type: string
           format: date-time
-          description: 实时估算最近一次重新计算的时间。
+          nullable: true
+          description: 这份数据最近的实际检查时间；未抓取时为 null，不是官方统计截止时间。
 
     DailyTraffic:
       type: object
       description: Aggregate in the returned data_timezone. Do not relabel provider daily totals as a different business timezone.
       required: [account_id, cycle_start, cycle_end, days, updated_at, data_timezone]
       properties:
+        source_status:
+          type: string
+          enum: [available, daily_source_unverified]
+          description: 没有可靠日用量来源时返回空缺，不以累计抓取差值代替日用量。
         data_timezone:
           type: string
           description: IANA timezone used to partition the returned daily values.
@@ -1666,6 +1718,39 @@ components:
         updated_at:
           type: string
           format: date-time
+          nullable: true
+
+    TrafficObservation:
+      type: object
+      required: [id, account_id, fetched_at, mainland_bytes, overseas_bytes, official_quality, error]
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        fetched_at:
+          type: string
+          format: date-time
+        mainland_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        overseas_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        official_quality:
+          type: string
+          enum: [inferred, unknown]
+        error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
 
     TrafficDataSource:
       type: string

@@ -2,9 +2,11 @@ package collect
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/store"
 )
@@ -54,6 +56,28 @@ func TestCollectedLiveInventory(t *testing.T) {
 		}
 		if a.SyncStatus != "ok" {
 			t.Error("account scan is not fully successful", a.Name, code)
+		}
+	}
+	if os.Getenv("HM_TEST_CDT") == "1" {
+		loc, _ := time.LoadLocation("Asia/Shanghai")
+		rows, err := s.Quotas(context.Background(), accounts, loc, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		usable := 0
+		for _, q := range rows {
+			value := "unknown"
+			if q.OfficialBytes != nil {
+				value = fmt.Sprint(*q.OfficialBytes)
+				usable++
+			}
+			t.Logf("scope=%s official_bytes=%s quality=%s status=%s cutoff_known=%t estimate_known=%t", q.Scope, value, q.OfficialQuality, q.OfficialStatus, q.OfficialAsOf != nil, q.EstimatedBytes != nil)
+			if q.OfficialAsOf != nil || q.EstimatedBytes != nil || q.EffectiveBytes != nil {
+				t.Fatal("unverified source presented as aligned")
+			}
+		}
+		if usable == 0 {
+			t.Fatal("no usable provisional CDT observation")
 		}
 	}
 }

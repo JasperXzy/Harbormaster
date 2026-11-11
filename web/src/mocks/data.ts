@@ -229,8 +229,8 @@ export function buildDb(scene: Scene, now = Date.now()): Db {
   base.instances = instances;
   base.instancesUpdatedAt = iso(scanAt);
   if (scene === "cutoff_unknown") {
-    for (const q of base.quotas) Object.assign(q, { official_as_of: null, official_status: "cutoff_unknown", realtime_increment_bytes: null, worst_case_bytes: null, estimated_bytes: null, effective_bytes: null, forecast: null });
-    for (const d of Object.values(base.daily)) if (d.days.length) { d.days[0].mainland_bytes = null; d.days[0].overseas_bytes = null; }
+    for (const q of base.quotas) Object.assign(q, { official_as_of: null, official_status: "cutoff_unknown", official_quality: "inferred", fetched_at: iso(Date.now()), realtime_increment_bytes: null, worst_case_bytes: null, estimated_bytes: null, effective_bytes: null, forecast: null });
+    for (const d of Object.values(base.daily)) { d.source_status = "daily_source_unverified"; for (const day of d.days) { day.mainland_bytes = null; day.overseas_bytes = null; } }
     for (const i of base.instances) if (i.counts_toward_cdt) i.realtime_protection = "unprotected";
   }
   return base;

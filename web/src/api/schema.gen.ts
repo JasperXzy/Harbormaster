@@ -115,6 +115,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/traffic/observations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 官方累计值的抓取记录（不是按日真实用量）
+         * @description 按抓取时间倒序返回。单位按字节暂解释，账期与统计截止时间均未由来源确认；不得对相邻记录求差冒充每日真实流量。
+         */
+        get: operations["listTrafficObservations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -826,12 +846,12 @@ export interface components {
             scope: components["schemas"]["QuotaScope"];
             /**
              * Format: date-time
-             * @description 当前计费周期的开始时刻。
+             * @description 本地保护额度的参考周期开始；不表示来源确认了官方账期。
              */
             cycle_start: string;
             /**
              * Format: date-time
-             * @description 当前计费周期的结束时刻（下一次重置）。
+             * @description 本地保护额度的参考周期结束。
              */
             cycle_end: string;
             /** Format: int64 */
@@ -846,6 +866,16 @@ export interface components {
              * @description 官方数据的截止时刻（界面显示"官方（截至 hh:mm）"）。
              */
             official_as_of: string | null;
+            /**
+             * @description inferred 表示按字节暂解释，单位与计费口径待核实；不能作为精确对齐依据。
+             * @enum {string}
+             */
+            official_quality?: "verified" | "inferred" | "unknown";
+            /**
+             * Format: date-time
+             * @description 当前显示的官方累计值被抓取的时间，不是统计截止时间。
+             */
+            fetched_at?: string | null;
             official_status: components["schemas"]["OfficialDataStatus"];
             /**
              * Format: int64
@@ -888,12 +918,17 @@ export interface components {
             } | null;
             /**
              * Format: date-time
-             * @description 实时估算最近一次重新计算的时间。
+             * @description 这份数据最近的实际检查时间；未抓取时为 null，不是官方统计截止时间。
              */
-            updated_at: string;
+            updated_at: string | null;
         };
         /** @description Aggregate in the returned data_timezone. Do not relabel provider daily totals as a different business timezone. */
         DailyTraffic: {
+            /**
+             * @description 没有可靠日用量来源时返回空缺，不以累计抓取差值代替日用量。
+             * @enum {string}
+             */
+            source_status?: "available" | "daily_source_unverified";
             /** @description IANA timezone used to partition the returned daily values. */
             data_timezone: string;
             account_id: string;
@@ -913,7 +948,23 @@ export interface components {
                 provisional: boolean;
             }[];
             /** Format: date-time */
-            updated_at: string;
+            updated_at: string | null;
+        };
+        TrafficObservation: {
+            id: string;
+            account_id: string;
+            /** Format: date-time */
+            fetched_at: string;
+            /** Format: int64 */
+            mainland_bytes: number | null;
+            /** Format: int64 */
+            overseas_bytes: number | null;
+            /** @enum {string} */
+            official_quality: "inferred" | "unknown";
+            error: {
+                code: string;
+                message: string;
+            } | null;
         };
         /**
          * @description 今日入 / 出数值的来源。
@@ -1398,6 +1449,36 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    listTrafficObservations: {
+        parameters: {
+            query: {
+                account_id: string;
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已保存的抓取记录 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["TrafficObservation"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
         };
     };
     getJob: {

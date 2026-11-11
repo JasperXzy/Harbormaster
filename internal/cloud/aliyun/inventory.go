@@ -221,7 +221,12 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 		}
 		_, err := call("QueryAccountBalance", a.RegionIDs[0], map[string]string{})
 		observe("bss_read", err)
-		_, err = call("ListCdtInternetTraffic", "cn-hongkong", map[string]string{"RegionId": "cn-hongkong"})
+		body, err = call("ListCdtInternetTraffic", "cn-hongkong", map[string]string{"RegionId": "cn-hongkong"})
+		observation := model.CDTObservation{AccountID: a.ID, FetchedAt: time.Now().UTC(), Quality: "unknown", Error: model.Error(Code(err))}
+		if err == nil {
+			observation = parseCDT(a.ID, body, time.Now().UTC())
+		}
+		result.CDT = &observation
 		if Code(err) == "cdt_international_endpoint_unverified" {
 			checks["cdt_read"] = "not_verified"
 		} else {

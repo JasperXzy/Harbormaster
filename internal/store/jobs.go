@@ -10,7 +10,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/model"
 )
 
-const jobColumns = "id,type,status,created_at,started_at,finished_at,error_code,result_json,account_ids_json,coalesce(lease_owner,''),attempts"
+const jobColumns = "id,type,status,created_at,started_at,finished_at,error_code,result_json,account_ids_json,coalesce(lease_owner,''),attempts,scope"
 
 type rowScanner interface{ Scan(...any) error }
 
@@ -19,7 +19,7 @@ func readJob(row rowScanner) (model.Job, error) {
 	var created string
 	var started, finished, code, result sql.NullString
 	var ids string
-	err := row.Scan(&j.ID, &j.Type, &j.Status, &created, &started, &finished, &code, &result, &ids, &j.Owner, &j.Attempts)
+	err := row.Scan(&j.ID, &j.Type, &j.Status, &created, &started, &finished, &code, &result, &ids, &j.Owner, &j.Attempts, &j.Scope)
 	if errors.Is(err, sql.ErrNoRows) {
 		return j, ErrNotFound
 	}
@@ -250,7 +250,7 @@ func (s *Store) ScheduleScans(ctx context.Context, interval time.Duration, now t
 		return err
 	}
 	for _, id := range ids {
-		if _, err = enqueueJob(ctx, tx, "refresh", id, []string{id}, now); err != nil {
+		if _, err = enqueueJob(ctx, tx, "refresh", "inventory:"+id, []string{id}, now); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, "UPDATE account_settings SET next_scan_at=? WHERE account_id=?", now.Add(interval).Unix(), id); err != nil {

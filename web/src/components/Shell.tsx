@@ -57,7 +57,7 @@ export function Shell({ title, version, children, dataMode, readOnly }: { title:
 
   const q = quotas.data ?? [];
   const official = q.map((x) => x.official_as_of).filter((x): x is string => !!x).sort()[0];
-  const realtime = q.map((x) => x.updated_at).sort().at(-1);
+  const realtime = q.filter((x) => x.effective_bytes !== null).map((x) => x.updated_at).filter((x): x is string => !!x).sort().at(-1);
 
   return (
     <div className="app">
@@ -88,14 +88,14 @@ export function Shell({ title, version, children, dataMode, readOnly }: { title:
       <main className="main">
         <header className="top">
           <h1>{title}</h1>
-          {dataMode === "demo" && <span className="chip hide-sm">演示数据</span>}
+          {dataMode === "demo" && <span className="chip hide-sm" title="演示数据，不代表账号实际用量。页面操作只改变本地示例，不会调用阿里云或发送通知。">演示数据</span>}
           <div className="spacer" />
           {q.length > 0 && (
             <>
               <span className="hide-sm" title="统计截止时间由数据来源提供；未知时不会用获取时间替代">
-                <Fresh at={official} kind="official" prefix="官方数据截至" name="官方数据" />
+                {!official && q.some((x) => x.official_bytes !== null) ? <span className="chip stale">官方数据的统计时间不明</span> : <Fresh at={official} kind="official" prefix="官方数据截至" name="官方数据" />}
               </span>
-              <Fresh at={realtime} kind="realtime" prefix="实时" name="实时数据" />
+              {realtime ? <Fresh at={realtime} kind="realtime" prefix="实时" name="实时数据" /> : <span className="chip stale">实时估算待确认</span>}
             </>
           )}
           {conn === "reconnecting" && (
@@ -112,7 +112,7 @@ export function Shell({ title, version, children, dataMode, readOnly }: { title:
         </header>
         <div className="content">
           <div className="page">
-            {dataMode === "demo" && <div className="preview-note" role="status">演示数据，不代表账号实际用量。{readOnly ? "当前可查看页面，配置与资源操作尚未开放。" : "页面操作只改变本地示例，不会调用阿里云或发送通知。"}</div>}
+            {dataMode === "demo" && readOnly && <div className="preview-note" role="status">这是演示数据，不代表账号实际用量。目前只能查看，配置与资源操作尚未开放。</div>}
             {children}
           </div>
         </div>

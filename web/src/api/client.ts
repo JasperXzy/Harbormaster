@@ -97,6 +97,7 @@ export const api = {
 
   quotas: (account_id?: string) => request<{ items: T.QuotaStatus[] }>("GET", "/traffic/quotas" + qs({ account_id })).then((r) => r.items),
   dailyTraffic: (account_id: string) => request<T.DailyTraffic>("GET", "/traffic/daily" + qs({ account_id })),
+  trafficObservations: (account_id: string, cursor?: string) => request<{ items: T.TrafficObservation[]; next_cursor: string | null }>("GET", "/traffic/observations" + qs({ account_id, cursor, limit: 100 })),
   billingSubjects: (account_id?: string) => request<{ items: T.BillingSubject[] }>("GET", "/traffic/billing-subjects" + qs({ account_id })).then((r) => r.items),
   bandwidthPackages: () => request<{ items: T.BandwidthPackage[] }>("GET", "/bandwidth-packages").then((r) => r.items),
   bandwidthPackageHourly: (id: string) => request<T.BandwidthPackageHourly>("GET", `/bandwidth-packages/${id}/hourly`),

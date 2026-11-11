@@ -10,5 +10,6 @@
   "admin_allow_cidrs": [],
   "session_ttl_seconds": 43200,
   "worker_count": 2,
-  "resource_scan_interval_seconds": 300
+  "resource_scan_interval_seconds": 300,
+  "cdt_poll_interval_seconds": 300
 }
