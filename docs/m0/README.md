@@ -1,8 +1,10 @@
 # M0 验证与工程搭建
 
-日期：2026-11-11。基准 PRD v0.5、WORK_SPLIT。工作分支 `be/m0-foundation`；未提交、未推送、未合并。初始搭建之后，已完成首轮真实账号只读查询和机器只读检查，未执行云资源写操作。用户已允许生成 go.sum，以及构建时将前端产物复制到 internal 后嵌入。
+**当前状态入口：[后端实现与验收台账](backend-status.md)。** M1 整体验收尚未通过；不要把下文的 M0 初始范围当作当前功能清单。
 
-后续工具已补齐：`hm-server m0 import/set-regions/plan/query`，见[凭据导入与只读查询](credentials-and-queries.md)。账号文件 AES-256-GCM 加密、主密钥独立保存。最新真实环境结果见[首轮实测](live-verification-2026-11-11.md)，下表已同步。
+初始记录日期：2026-11-11，状态入口更新于 2026-11-12。基准 PRD v0.5、WORK_SPLIT。工作分支 `be/m0-foundation`；各阶段已按用户授权提交，未推送、未合并。初始搭建之后，已完成首轮真实账号只读查询和机器只读检查，未执行云资源写操作。用户已允许生成 go.sum，以及构建时将前端产物复制到 internal 后嵌入。
+
+后续工具已补齐：`hm-server m0 import/set-regions/plan/query`，见[凭据导入与只读查询](credentials-and-queries.md)。账号文件 AES-256-GCM 加密、主密钥独立保存。首轮真实环境结果见[首轮实测](live-verification-2026-11-11.md)，下表已同步。
 
 ## 验证状态
 
@@ -20,7 +22,7 @@
 
 每项记录均包含方法、实际结果、结论、PRD 修订建议与所需条件。PRD 原文未修改。V2/V4 的“与 PRD 不符”不表示已完成真实账号验收；表内同时说明已确认的文档部分与未验证部分。
 
-## 本轮实现
+## 初始 M0 实现（历史范围）
 
 - 两个 Go 程序、配置（JSON + HM_ 环境变量 + CLI 覆盖）、JSON 日志、SQLite WAL 与嵌入式事务迁移、AES-256-GCM 辅助和主密钥校验。
 - hm-server 的 serve、run-once、migrate、version、healthcheck、reset-password；run-once 只做 M0 本地检查，明确输出云查询/云写入为零。密码重置更新已存在管理员并撤销会话，不替代正式首次设置。
@@ -48,7 +50,7 @@ sh deploy/dev.sh api
 ./deploy/bin/hm-server run-once --dev --data-dir /tmp/harbormaster-separated-dev
 ```
 
-开发 API 只供只读页面和会话联调，写入口暂返回 `501 not_implemented`，不会接受并保存真实 AccessKey/Telegram Token。demo 的业务数据是合成快照，agent 上报落库的验证与面板 fixture 分开，尚无真实计费估算。2026-11-12 已补齐[生产认证](production-auth.md)、[生产账号、任务及只读资源发现](production-discovery.md)和[CDT 累计记录与页面](production-cdt.md)。生产账号 API 可加密保存真实 AccessKey；CDT 暂按字节展示且明确标为待核实，尚无跨源实时估算。Telegram、自动化和真实 agent 采集继续在后续阶段实现。
+开发 API 只供只读页面和会话联调，写入口暂返回 `501 not_implemented`，不会接受并保存真实 AccessKey/Telegram Token。demo 的业务数据是合成快照，agent 上报落库的验证与面板 fixture 分开，尚无真实计费估算。2026-11-12 已补齐[生产认证](production-auth.md)、[生产账号、任务及只读资源发现](production-discovery.md)和[CDT 累计记录与页面](production-cdt.md)。生产账号 API 可加密保存真实 AccessKey；CDT 暂按字节展示且明确标为待核实，尚无跨源实时估算。生产 agent 采集、费用、续费、API Key 管理和本地告警记录等后续进展见状态台账；真实 agent 安装验收、Telegram 发送和自动化尚未完成。
 
 reset-password 从 stdin 读取新密码，12–1024 字节，不支持明文命令行参数；开发库已有示例管理员，生产空库返回 administrator_not_initialized。生产模式须先通过仓库外的环境/密钥文件提供 HM_MASTER_KEY，配置示例见 `deploy/config.example.json`。数据库模式互斥，不把开发库改为生产库。
 
