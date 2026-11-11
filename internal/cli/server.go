@@ -15,10 +15,13 @@ import (
 
 	"github.com/JasperXzy/harbormaster/internal/api"
 	"github.com/JasperXzy/harbormaster/internal/buildinfo"
+	"github.com/JasperXzy/harbormaster/internal/cloud/aliyun"
+	"github.com/JasperXzy/harbormaster/internal/collect"
 	"github.com/JasperXzy/harbormaster/internal/config"
 	"github.com/JasperXzy/harbormaster/internal/devmode"
 	"github.com/JasperXzy/harbormaster/internal/logging"
 	"github.com/JasperXzy/harbormaster/internal/m0"
+	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
 	"github.com/JasperXzy/harbormaster/internal/ui"
@@ -37,11 +40,11 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		return m0.Run(ctx, args[1:], in, out, errOut)
 	}
 	if command == "help" || command == "--help" || command == "-h" {
-		_, _ = io.WriteString(out, "hm-server <serve|run-once|migrate|version|healthcheck|reset-password> [--config path] [--dev] [--data-dir path] [--listen IP:port] [--frontend api|embedded]\nhm-server m0 <import|set-regions|plan|query> --account NAME (m0 --help for details)\nreset-password reads the new password from stdin; run-once performs only local M0 checks.\n")
+		_, _ = io.WriteString(out, "hm-server <serve|run-once|migrate|version|healthcheck|reset-password|import-accounts> [--config path] [--dev] [--data-dir path] [--listen IP:port] [--frontend api|embedded]\nhm-server m0 <import|set-regions|plan|query> --account NAME (m0 --help for details)\nimport-accounts reads the encrypted M0 vault (--source-vault / --source-key-file); no cloud queries.\nreset-password reads the new password from stdin; run-once processes due read-only jobs in production; --dev performs local checks.\n")
 		return 0
 	}
 	switch command {
-	case "serve", "run-once", "migrate", "version", "healthcheck", "reset-password":
+	case "serve", "run-once", "migrate", "version", "healthcheck", "reset-password", "import-accounts":
 	default:
 		return fail("unknown_command")
 	}
@@ -52,6 +55,11 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 	dir := f.String("data-dir", "", "SQLite directory")
 	listen := f.String("listen", "", "listener")
 	frontend := f.String("frontend", "", "api or embedded")
+	var sourceVault, sourceKey string
+	if command == "import-accounts" {
+		f.StringVar(&sourceVault, "source-vault", "", "encrypted M0 vault")
+		f.StringVar(&sourceKey, "source-key-file", "", "M0 vault key file")
+	}
 	if err := f.Parse(args[1:]); err != nil || f.NArg() != 0 {
 		return fail("invalid_arguments")
 	}
@@ -97,8 +105,9 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		_, _ = io.WriteString(out, "ready\n")
 		return 0
 	}
+	var box *security.Box
 	if !c.Dev {
-		if _, err = security.LoadBox(c.DataDir); err != nil {
+		if box, err = security.LoadBox(c.DataDir); err != nil {
 			return fail(err.Error())
 		}
 	}
@@ -112,11 +121,52 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 			return fail("demo_seed_failed")
 		}
 	}
+	var engine *collect.Engine
+	if !c.Dev {
+		engine = &collect.Engine{Store: s, Box: box, Scanner: aliyun.Inventory{Caller: aliyun.NewClient(nil, 200*time.Millisecond)}, Workers: c.WorkerCount, Interval: time.Duration(c.ResourceScanIntervalSeconds) * time.Second, Log: log}
+	}
 	switch command {
 	case "migrate":
 		log.Info("migrations_applied")
 		return 0
+	case "import-accounts":
+		if engine == nil {
+			return fail("import_requires_production_database")
+		}
+		imported, skipped := 0, 0
+		err := m0.ImportAccounts(sourceVault, sourceKey, func(in model.AccountCreate) error {
+			_, _, err := engine.CreateAccount(ctx, in)
+			if errors.Is(err, store.ErrNameTaken) {
+				skipped++
+				return nil
+			}
+			if err == nil {
+				imported++
+			}
+			return err
+		})
+		if err != nil {
+			return fail("account_import_failed")
+		}
+		log.Info("account_import_complete", "imported", imported, "skipped_existing_names", skipped, "cloud_queries", 0, "cloud_writes", 0)
+		return 0
 	case "run-once":
+		if engine != nil {
+			if err = engine.Store.ScheduleScans(ctx, engine.Interval, time.Now().UTC()); err != nil {
+				return fail("schedule_failed")
+			}
+			for {
+				ran, err := engine.RunOne(ctx)
+				if err != nil {
+					return fail("worker_step_failed")
+				}
+				if !ran {
+					break
+				}
+			}
+			log.Info("run_once_complete", "cloud_writes", 0)
+			return 0
+		}
 		if err = s.Ready(ctx); err != nil {
 			return fail("local_check_failed")
 		}
@@ -163,10 +213,10 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 			log.Info("setup_required", "credential_source", "external_environment_or_file")
 		}
 	}
-	return serve(ctx, c, s, log)
+	return serve(ctx, c, s, engine, log)
 }
 
-func serve(ctx context.Context, c config.Config, s *store.Store, log *slog.Logger) int {
+func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect.Engine, log *slog.Logger) int {
 	listener, err := net.Listen("tcp", c.Listen)
 	if err != nil {
 		log.Error("listen_failed")
@@ -180,7 +230,13 @@ func serve(ctx context.Context, c config.Config, s *store.Store, log *slog.Logge
 	if c.Dev {
 		panel = devmode.New(s, c.Timezone)
 	} else {
-		panel = api.NewProductionPanel(s, c)
+		panel = api.NewProductionPanel(s, c, engine)
+	}
+	if engine != nil {
+		workerCtx, cancel := context.WithCancel(ctx)
+		finished := make(chan struct{})
+		go func() { defer close(finished); engine.Run(workerCtx) }()
+		defer func() { cancel(); <-finished }()
 	}
 	h := &http.Server{Handler: api.NewHandler(s, panel, frontend), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10, BaseContext: func(net.Listener) context.Context { return ctx }}
 	done := make(chan error, 1)

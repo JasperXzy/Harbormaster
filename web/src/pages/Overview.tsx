@@ -127,7 +127,7 @@ export function Overview() {
                 <Card key={p.id} title={`共享带宽 ${p.name}`} right={<Fresh at={p.updated_at} kind="realtime" />}>
                   <dl className="kv">
                     <dt>账号 / 地域</dt><dd>{accs.find((a) => a.id === p.account_id)?.name} · {regionName(p.region_id)}</dd>
-                    <dt>带宽上限</dt><dd>{p.bandwidth_mbps} Mbps</dd>
+                    <dt>带宽上限</dt><dd>{p.bandwidth_mbps === null ? "待确认" : `${p.bandwidth_mbps} Mbps`}</dd>
                     <dt>计费方式</dt><dd>{SUBJECT_KIND[p.kind].replace("共享带宽 · ", "")}{p.settled_by_cdt === null ? " · CDT 归属待确认" : p.settled_by_cdt ? " · 计入免费额度" : ""}</dd>
                     <dt>成员</dt><dd>{p.members.map((m) => <span key={m.eip_address}><span className="mono">{m.eip_address}</span>{m.instance_name ? `（${m.instance_name}）` : ""} </span>)}</dd>
                     <dt>今天收 / 发</dt><dd>{p.today_rx_bytes === null ? "—" : gb(p.today_rx_bytes)} / {p.today_tx_bytes === null ? "—" : gb(p.today_tx_bytes)}</dd>

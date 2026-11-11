@@ -151,7 +151,10 @@ func readPrivate(p string, max int64) ([]byte, error) {
 }
 
 func loadBox(vaultPath, keyFile string, create bool) (*security.Box, error) {
-	envKey, envFile := os.Getenv("HM_MASTER_KEY"), os.Getenv("HM_MASTER_KEY_FILE")
+	return loadBoxFromSources(vaultPath, keyFile, create, os.Getenv("HM_MASTER_KEY"), os.Getenv("HM_MASTER_KEY_FILE"))
+}
+
+func loadBoxFromSources(vaultPath, keyFile string, create bool, envKey, envFile string) (*security.Box, error) {
 	if envKey != "" && envFile != "" {
 		return nil, errors.New("ambiguous_master_key_sources")
 	}

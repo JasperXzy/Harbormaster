@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/buildinfo"
+	"github.com/JasperXzy/harbormaster/internal/collect"
 	"github.com/JasperXzy/harbormaster/internal/config"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
@@ -30,10 +31,11 @@ type productionPanel struct {
 	ttl      time.Duration
 	hashing  sync.Mutex
 	now      func() time.Time
+	engine   *collect.Engine
 }
 
-func NewProductionPanel(s *store.Store, c config.Config) http.Handler {
-	return &productionPanel{s: s, access: newPanelAccess(c), timezone: c.Timezone, ttl: time.Duration(c.SessionTTLSeconds) * time.Second, now: time.Now}
+func NewProductionPanel(s *store.Store, c config.Config, engine *collect.Engine) http.Handler {
+	return &productionPanel{s: s, access: newPanelAccess(c), timezone: c.Timezone, ttl: time.Duration(c.SessionTTLSeconds) * time.Second, now: time.Now, engine: engine}
 }
 
 func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -89,6 +91,9 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if p.business(w, r, path) {
+		return
+	}
 	if r.Method != "GET" {
 		writeError(w, 501, "not_implemented")
 		return
@@ -99,7 +104,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, buildinfo.BuildTime); err == nil {
 			builtAt = t.UTC().Format(time.RFC3339)
 		}
-		writeJSON(w, 200, map[string]any{"version": buildinfo.Version, "commit": buildinfo.Commit, "built_at": builtAt, "latest_agent_version": buildinfo.Version, "data_mode": "live", "read_only": true})
+		writeJSON(w, 200, map[string]any{"version": buildinfo.Version, "commit": buildinfo.Commit, "built_at": builtAt, "latest_agent_version": buildinfo.Version, "data_mode": "live", "read_only": p.engine == nil})
 	case "/settings":
 		zone := p.timezone
 		err := p.s.DB.QueryRowContext(r.Context(), "SELECT value FROM app_meta WHERE key='business_timezone'").Scan(&zone)
@@ -107,7 +112,11 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 503, "internal_error")
 			return
 		}
-		writeJSON(w, 200, map[string]any{"business_timezone": zone, "collection": map[string]int{"cdt_poll_interval_seconds": 300, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": 300}})
+		scanSeconds := 300
+		if p.engine != nil {
+			scanSeconds = int(p.engine.Interval.Seconds())
+		}
+		writeJSON(w, 200, map[string]any{"business_timezone": zone, "collection": map[string]int{"cdt_poll_interval_seconds": 300, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": scanSeconds}})
 	case "/events":
 		p.events(w, r)
 	case "/accounts", "/instances", "/traffic/quotas", "/traffic/daily", "/traffic/billing-subjects", "/bandwidth-packages", "/regions", "/notify/telegram", "/alert-rules", "/notifications":
@@ -313,27 +322,51 @@ func (p *productionPanel) events(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("X-Accel-Buffering", "no")
-	send := func() bool {
+	send := func(event string, payload any) bool {
 		ctl := http.NewResponseController(w)
 		_ = ctl.SetWriteDeadline(p.now().Add(5 * time.Second))
 		defer ctl.SetWriteDeadline(time.Time{})
-		if _, err := fmt.Fprint(w, "event: ping\ndata: {}\n\n"); err != nil {
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return false
+		}
+		if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b); err != nil {
 			return false
 		}
 		return ctl.Flush() == nil
 	}
-	if !send() {
+	seq, err := p.s.JobChangeHead(r.Context())
+	if err != nil {
+		return
+	}
+	if !send("ping", map[string]any{}) {
 		return
 	}
 	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
+	updates := time.NewTicker(5 * time.Second)
+	defer updates.Stop()
 	for {
 		select {
 		case <-r.Context().Done():
 			return
 		case <-ticker.C:
-			if _, _, err := p.session(r); err != nil || !send() {
+			if _, _, err := p.session(r); err != nil || !send("ping", map[string]any{}) {
 				return
+			}
+		case <-updates.C:
+			if _, _, err := p.session(r); err != nil {
+				return
+			}
+			jobs, next, err := p.s.JobChanges(r.Context(), seq)
+			if err != nil {
+				return
+			}
+			seq = next
+			for _, j := range jobs {
+				if !send("job.updated", j) {
+					return
+				}
 			}
 		}
 	}

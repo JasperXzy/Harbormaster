@@ -79,7 +79,7 @@ function Accounts() {
                 <PermissionList check={a.permission_check} pending={checking.has(a.id)} />
               </div>
               <div className="inline">
-                <button className="btn sm" onClick={() => check(a.id)} disabled={checking.has(a.id)}>重新测试权限</button>
+                <button className="btn sm" onClick={() => check(a.id)} disabled={checking.has(a.id) || !a.enabled}>重新测试权限</button>
                 <button className="btn sm" onClick={() => setForm({ account: a })}>修改</button>
                 <button className="btn sm" disabled={!a.enabled} onClick={() => setDel(a)}>停用并保留历史</button>
                 <Switch on={a.enabled} label={`启用 ${a.name}`} onChange={(v) => toggle(a, v)} />

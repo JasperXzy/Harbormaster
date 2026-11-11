@@ -23,7 +23,8 @@ function Rate({ i }: { i: Instance }) {
 }
 
 function Billing({ i }: { i: Instance }) {
-  if (!i.billing_subject_kind) return <span className="sub">没有公网</span>;
+  if ((i.billing_subject_ids?.length ?? 0) > 1) return <span className="sub">多个公网出口 · 分别计费</span>;
+  if (!i.billing_subject_kind) return <span className="sub">{i.public_ips.length ? "公网计费类型待确认" : "未发现公网出口"}</span>;
   return (
     <div className="cell-stack">
       <span>{i.bandwidth_package_name ? `共享带宽 ${i.bandwidth_package_name} · ${SUBJECT_KIND[i.billing_subject_kind].split(" · ")[1]}` : SUBJECT_KIND[i.billing_subject_kind]}</span>
@@ -182,9 +183,9 @@ function InstanceDetail({ i, account, onClose, onInstall }: { i: Instance; accou
         <dt>规格</dt><dd>{i.spec}</dd>
         <dt>阿里云实例 ID</dt><dd className="mono">{i.cloud_instance_id}</dd>
         <dt>公网 IP</dt><dd className="mono">{i.public_ips.map((p) => `${p.address}${p.type === "eip" ? "（弹性公网 IP）" : ""}`).join("、") || "—"}</dd>
-        <dt>公网怎么计费</dt><dd>{i.billing_subject_kind ? SUBJECT_KIND[i.billing_subject_kind] : "没有公网"}{i.bandwidth_package_name ? `（${i.bandwidth_package_name}）` : ""}</dd>
+        <dt>公网怎么计费</dt><dd>{(i.billing_subject_ids?.length ?? 0) > 1 ? "多个公网出口，按各自规则计费，详见流量页" : i.billing_subject_kind ? SUBJECT_KIND[i.billing_subject_kind] : i.public_ips.length ? "公网计费类型待确认" : "未发现公网出口"}{i.bandwidth_package_name ? `（${i.bandwidth_package_name}）` : ""}</dd>
         <dt>计量规则</dt><dd>{i.metering_rule ? RULE[i.metering_rule] : "—"}{i.counts_toward_cdt === null ? " · CDT 归属待确认" : i.counts_toward_cdt && i.cdt_scope ? ` · 计入${SCOPE[i.cdt_scope]}免费额度` : " · 不计入免费额度"}</dd>
-        {i.kind === "swas" && <><dt>套餐流量包</dt><dd>{i.billing_subject_kind === "swas_no_traffic_package" ? "无流量包（这个套餐不按流量计费）" : "有流量包"}</dd></>}
+        {i.kind === "swas" && <><dt>套餐流量包</dt><dd>{i.billing_subject_kind === "swas_no_traffic_package" ? "无流量包（这个套餐不按流量计费）" : i.billing_subject_kind === "swas_traffic_package" ? "有流量包" : "待确认"}</dd></>}
         <dt>带宽上限</dt><dd>{i.bandwidth_mbps ? `${i.bandwidth_mbps} Mbps` : "—"}</dd>
         <dt>资源信息更新于</dt><dd>{stamp(i.updated_at)}</dd>
       </dl>

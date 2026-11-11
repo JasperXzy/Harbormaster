@@ -690,19 +690,19 @@ export interface components {
          * @description 包年包月 / 按量付费 / 抢占式。
          * @enum {string}
          */
-        ChargeType: "subscription" | "pay_as_you_go" | "spot";
+        ChargeType: "subscription" | "pay_as_you_go" | "spot" | "unknown";
         /** @enum {string} */
         PublicIpType: "instance_public_ip" | "eip";
         /**
          * @description 计费对象类型，对应 PRD 6.1 的表格。cbwp = 共享带宽。
          * @enum {string}
          */
-        BillingSubjectKind: "ecs_pay_by_traffic" | "eip_pay_by_traffic" | "cbwp_dominant_traffic" | "cbwp_bandwidth" | "cbwp_95" | "ecs_fixed_bandwidth" | "swas_traffic_package" | "swas_no_traffic_package";
+        BillingSubjectKind: "unknown" | "ecs_pay_by_traffic" | "eip_pay_by_traffic" | "eip_fixed_bandwidth" | "cbwp_dominant_traffic" | "cbwp_bandwidth" | "cbwp_95" | "ecs_fixed_bandwidth" | "swas_traffic_package" | "swas_no_traffic_package";
         /**
          * @description 只算出方向 / 每个计费周期取入、出较大值 / 按套餐规则 / 不按流量计费。
          * @enum {string}
          */
-        MeteringRule: "outbound_only" | "max_in_out_per_period" | "plan_defined" | "not_metered";
+        MeteringRule: "outbound_only" | "max_in_out_per_period" | "plan_defined" | "not_metered" | "unknown";
         /**
          * @description mainland = 中国内地额度；overseas = 非中国内地额度。
          * @enum {string}
@@ -781,7 +781,10 @@ export interface components {
              * @description 包年包月的到期时间；按量为 null。
              */
             expires_at: string | null;
+            /** @description Single confirmed public billing exit; null for multiple exits or unresolved topology. Use billing_subject_ids for all discovered exits. */
             billing_subject_id: string | null;
+            /** @description All discovered public billing exits; singular summary fields are null when more than one exists. */
+            billing_subject_ids?: string[];
             /** @description 没有公网出口时为 null。 */
             billing_subject_kind: (string & components["schemas"]["BillingSubjectKind"]) | null;
             metering_rule: (string & components["schemas"]["MeteringRule"]) | null;
@@ -955,7 +958,7 @@ export interface components {
             name: string;
             account_id: string;
             region_id: string;
-            bandwidth_mbps: number;
+            bandwidth_mbps: number | null;
             kind: components["schemas"]["BillingSubjectKind"];
             /** @description Null until account billing status is verified; creation time alone is insufficient. */
             settled_by_cdt: boolean | null;

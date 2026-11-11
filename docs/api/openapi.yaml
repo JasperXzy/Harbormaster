@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Accounts/discovery: local quotas use configurable 1024^3-byte units (user approved; not official alignment). Account updates fence stale jobs; disabled accounts retain snapshots. Jobs persist/recover leases; GET reads snapshots only. Multi-exit instances expose billing_subject_ids; ambiguous billing/charge types remain unknown.
 # 2026-11-12  Production auth: single administrator confirmed; setup token supplied outside logs, one-use/24h; HTTPS origin and CSRF checks; configurable absolute session lifetime, persistent login limits. Account removal retains history and disables collection (user decision).
 # 2026-11-11  前端  起草 M1 部分（v0.1.0-draft）。
 # 2026-11-11  Backend review: nullable unknown usage/eligibility, calendar reset, GET auth, data timezone; reasons in docs/m0/contract-review.md. Still draft.
@@ -71,6 +72,8 @@ info:
     - Production browser API requires HTTPS and the configured public host. All mutations, including setup/login/logout, require an Origin matching HM_PUBLIC_URL. Forwarded headers are accepted only from configured trusted proxies; optional admin CIDRs apply only to panel APIs.
     - Production sessions have a configurable absolute lifetime (default 12 hours), without sliding renewal. Logout and CLI password reset revoke sessions server-side. Login/setup allow five attempts per source IP per five minutes, with a shared thirty-attempt ceiling; 429 includes Retry-After and retry_after_seconds.
     - SSE uses a 15-second ping, no replay guarantee, and a fresh snapshot after reconnect. Updates may be coalesced per 10-second report interval.
+    - Account quota values are locally configured protection budgets, defaulting to 20/200 x 1024^3 bytes; they do not establish CDT eligibility or a verified official cutoff. Account disable retains snapshots/history and stops new cloud requests; an already-sent request may finish but its stale result cannot replace the disabled account's snapshots.
+    - Refresh/permission jobs are persisted with leases and recover after restart. Repeated requests for the same active job scope/type may return the existing job ID. GET endpoints only read database snapshots and never query the cloud.
 
 servers:
   - url: /api/v1
@@ -1289,7 +1292,7 @@ components:
 
     ChargeType:
       type: string
-      enum: [subscription, pay_as_you_go, spot]
+      enum: [subscription, pay_as_you_go, spot, unknown]
       description: 包年包月 / 按量付费 / 抢占式。
 
     PublicIpType:
@@ -1299,8 +1302,10 @@ components:
     BillingSubjectKind:
       type: string
       enum:
+        - unknown
         - ecs_pay_by_traffic
         - eip_pay_by_traffic
+        - eip_fixed_bandwidth
         - cbwp_dominant_traffic
         - cbwp_bandwidth
         - cbwp_95
@@ -1311,7 +1316,7 @@ components:
 
     MeteringRule:
       type: string
-      enum: [outbound_only, max_in_out_per_period, plan_defined, not_metered]
+      enum: [outbound_only, max_in_out_per_period, plan_defined, not_metered, unknown]
       description: 只算出方向 / 每个计费周期取入、出较大值 / 按套餐规则 / 不按流量计费。
 
     QuotaScope:
@@ -1459,6 +1464,12 @@ components:
         billing_subject_id:
           type: string
           nullable: true
+          description: Single confirmed public billing exit; null for multiple exits or unresolved topology. Use billing_subject_ids for all discovered exits.
+        billing_subject_ids:
+          type: array
+          description: All discovered public billing exits; singular summary fields are null when more than one exists.
+          items:
+            type: string
         billing_subject_kind:
           type: string
           allOf:
@@ -1767,6 +1778,7 @@ components:
           type: string
         bandwidth_mbps:
           type: integer
+          nullable: true
         kind:
           $ref: "#/components/schemas/BillingSubjectKind"
         settled_by_cdt:

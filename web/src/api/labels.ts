@@ -17,11 +17,13 @@ export const INSTANCE_STATUS: Record<T.InstanceStatus, [Level, string]> = {
   unknown: ["warning", "状态未知"],
 };
 
-export const CHARGE: Record<T.Instance["charge_type"], string> = { subscription: "包年包月", pay_as_you_go: "按量付费", spot: "抢占式" };
+export const CHARGE: Record<T.Instance["charge_type"], string> = { subscription: "包年包月", pay_as_you_go: "按量付费", spot: "抢占式", unknown: "计费方式待确认" };
 
 export const SUBJECT_KIND: Record<T.BillingSubjectKind, string> = {
+  unknown: "公网计费类型待确认",
   ecs_pay_by_traffic: "实例公网 IP · 按流量",
   eip_pay_by_traffic: "弹性公网 IP · 按流量",
+  eip_fixed_bandwidth: "弹性公网 IP · 固定带宽",
   cbwp_dominant_traffic: "共享带宽 · 按主流量",
   cbwp_bandwidth: "共享带宽 · 按带宽",
   cbwp_95: "共享带宽 · 按 95 峰值",
@@ -31,6 +33,7 @@ export const SUBJECT_KIND: Record<T.BillingSubjectKind, string> = {
 };
 
 export const RULE: Record<T.MeteringRule, string> = {
+  unknown: "计量规则待确认",
   outbound_only: "只算发出的流量",
   max_in_out_per_period: "每小时取收、发中较大的一方",
   plan_defined: "按套餐规则",
@@ -102,7 +105,7 @@ export const regionName = (id: string) => REGION[id] ?? id;
 
 // 错误码 -> 给用户看的话
 const ERROR: Record<string, string> = {
-  not_implemented: "当前预览版本尚未开放这个操作。",
+  not_implemented: "当前版本尚未开放这个功能。",
   network_error: "连不上服务器。请检查网络，或确认 hm-server 正在运行。",
   internal_error: "服务器出错了，请稍后再试。",
   unauthenticated: "登录已过期，请重新登录。",
@@ -115,6 +118,12 @@ const ERROR: Record<string, string> = {
   already_initialized: "已经完成过首次设置，请直接登录。",
   invalid_credentials: "密码不正确。",
   account_name_taken: "已经有同名的账号了，请换一个名称。",
+  account_disabled: "这个账号已停用。重新启用后才能刷新或测试权限。",
+  account_changed: "账号配置已修改，旧任务已停止；启用的账号会按新配置重新读取。",
+  collection_failed: "这次读取没有完成，已保留上一次的数据。",
+  permission_denied: "阿里云拒绝了读取请求，请检查账号的只读权限。",
+  aliyun_throttled: "阿里云接口暂时限流，任务会稍后重试。",
+  retry_exhausted: "任务多次中断，已停止重试。请检查服务状态后重新刷新。",
   access_key_invalid: "阿里云不认这组 AccessKey，请检查是否复制完整、是否已被禁用。",
   agent_not_supported: "这台实例暂时不能安装采集程序。",
   telegram_not_configured: "还没有保存 Telegram 设置。",

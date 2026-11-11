@@ -16,21 +16,23 @@ import (
 )
 
 type Config struct {
-	Listen            string   `json:"listen"`
-	DataDir           string   `json:"data_dir"`
-	Dev               bool     `json:"dev"`
-	LogLevel          string   `json:"log_level"`
-	Timezone          string   `json:"timezone"`
-	Frontend          string   `json:"frontend"`
-	PublicURL         string   `json:"public_url"`
-	TrustedProxies    []string `json:"trusted_proxies"`
-	AdminAllowCIDRs   []string `json:"admin_allow_cidrs"`
-	SessionTTLSeconds int      `json:"session_ttl_seconds"`
+	Listen                      string   `json:"listen"`
+	DataDir                     string   `json:"data_dir"`
+	Dev                         bool     `json:"dev"`
+	LogLevel                    string   `json:"log_level"`
+	Timezone                    string   `json:"timezone"`
+	Frontend                    string   `json:"frontend"`
+	PublicURL                   string   `json:"public_url"`
+	TrustedProxies              []string `json:"trusted_proxies"`
+	AdminAllowCIDRs             []string `json:"admin_allow_cidrs"`
+	SessionTTLSeconds           int      `json:"session_ttl_seconds"`
+	WorkerCount                 int      `json:"worker_count"`
+	ResourceScanIntervalSeconds int      `json:"resource_scan_interval_seconds"`
 }
 
 // Load applies defaults, an optional JSON file, then environment overrides.
 func Load(path string) (Config, error) {
-	c := Config{Listen: "127.0.0.1:8080", DataDir: "data", LogLevel: "info", Timezone: "Asia/Shanghai", Frontend: "api", SessionTTLSeconds: 43200}
+	c := Config{Listen: "127.0.0.1:8080", DataDir: "data", LogLevel: "info", Timezone: "Asia/Shanghai", Frontend: "api", SessionTTLSeconds: 43200, WorkerCount: 2, ResourceScanIntervalSeconds: 300}
 	if path != "" {
 		f, err := os.Open(path)
 		if err != nil {
@@ -75,10 +77,22 @@ func Load(path string) (Config, error) {
 		}
 		c.Dev = b
 	}
+	for k, p := range map[string]*int{"HM_WORKER_COUNT": &c.WorkerCount, "HM_RESOURCE_SCAN_INTERVAL_SECONDS": &c.ResourceScanIntervalSeconds} {
+		if v, ok := os.LookupEnv(k); ok {
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return c, errors.New("invalid collection configuration")
+			}
+			*p = n
+		}
+	}
 	return c, c.Validate()
 }
 
 func (c Config) Validate() error {
+	if c.WorkerCount < 1 || c.WorkerCount > 8 || c.ResourceScanIntervalSeconds < 60 || c.ResourceScanIntervalSeconds > 86400 {
+		return errors.New("invalid worker count or resource scan interval")
+	}
 	if c.SessionTTLSeconds < 300 || c.SessionTTLSeconds > 604800 {
 		return errors.New("session_ttl_seconds must be between 300 and 604800")
 	}

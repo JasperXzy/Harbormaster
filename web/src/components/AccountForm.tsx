@@ -155,16 +155,17 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
         <div className="field-help">只勾选你有机器的地域，扫描会更快。</div>
       </div>
       <details open={edit}>
-        <summary className="sub" style={{ cursor: "pointer" }}>免费额度与告警（一般不用改）</summary>
+        <summary className="sub" style={{ cursor: "pointer" }}>本地保护额度与告警</summary>
         <div className="stack" style={{ marginTop: 12 }}>
+          <p className="note" style={{ margin: 0 }}>这里配置面板使用的保护额度，1 GB 按 1024³ 字节换算。修改不会改变阿里云的免费额度，也不代表实时计量已经与官方数据对齐。</p>
           <div className="grid g2" style={{ gap: 12 }}>
             <div>
-              <label className="lbl" htmlFor="acc-qo">海外免费额度（GB / 月）</label>
+              <label className="lbl" htmlFor="acc-qo">海外保护额度（GB / 月）</label>
               <input id="acc-qo" type="number" min="0" value={overseas} onChange={(e) => setOverseas(e.target.value)} aria-invalid={!!fields.quota_overseas_bytes} />
               {fe("quota_overseas_bytes")}
             </div>
             <div>
-              <label className="lbl" htmlFor="acc-qm">国内免费额度（GB / 月）</label>
+              <label className="lbl" htmlFor="acc-qm">国内保护额度（GB / 月）</label>
               <input id="acc-qm" type="number" min="0" value={mainland} onChange={(e) => setMainland(e.target.value)} aria-invalid={!!fields.quota_mainland_bytes} />
               {fe("quota_mainland_bytes")}
             </div>

@@ -29,7 +29,7 @@ func testPanel(t *testing.T) *productionPanel {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	p := NewProductionPanel(s, config.Config{PublicURL: "https://panel.example", Timezone: "Asia/Shanghai", SessionTTLSeconds: 43200}).(*productionPanel)
+	p := NewProductionPanel(s, config.Config{PublicURL: "https://panel.example", Timezone: "Asia/Shanghai", SessionTTLSeconds: 43200}, nil).(*productionPanel)
 	if err := s.PrepareSetup(context.Background(), []byte(testSetupToken), p.now()); err != nil {
 		t.Fatal(err)
 	}
@@ -80,6 +80,21 @@ func TestHTTPSCookieAndSSERevocation(t *testing.T) {
 		if err != nil || line != want {
 			t.Fatal("bad SSE handshake", err)
 		}
+	}
+	job, err := p.s.EnqueueJob(context.Background(), "refresh", "all", []string{}, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, err := r.ReadString('\n')
+	if err != nil || line != "event: job.updated\n" {
+		t.Fatal("job update not delivered", err)
+	}
+	line, err = r.ReadString('\n')
+	if err != nil || !strings.Contains(line, job.ID) || !strings.Contains(line, `"status":"queued"`) {
+		t.Fatal("incorrect job event", err)
+	}
+	if line, err = r.ReadString('\n'); err != nil || line != "\n" {
+		t.Fatal("incorrect event framing")
 	}
 	if err := p.s.ResetPassword(context.Background(), "$argon2id$test-replacement"); err != nil {
 		t.Fatal(err)
@@ -287,7 +302,7 @@ func TestProductionRateLimitPersists(t *testing.T) {
 		}
 	}
 	// A fresh handler models a process restart; the limit lives in SQLite.
-	q := NewProductionPanel(p.s, config.Config{PublicURL: "https://panel.example", Timezone: "Asia/Shanghai", SessionTTLSeconds: 43200}).(*productionPanel)
+	q := NewProductionPanel(p.s, config.Config{PublicURL: "https://panel.example", Timezone: "Asia/Shanghai", SessionTTLSeconds: 43200}, nil).(*productionPanel)
 	w := panelRequest(q, "POST", "/setup", map[string]string{"setup_token": testSetupToken, "password": testPassword}, nil, "")
 	if w.Code != 429 || w.Header().Get("Retry-After") == "" || !strings.Contains(w.Body.String(), "retry_after_seconds") {
 		t.Fatal("limit lost on handler restart")
