@@ -91,7 +91,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if p.business(w, r, path) {
+	if p.agentManagement(w, r, path) || p.business(w, r, path) {
 		return
 	}
 	if r.Method != "GET" {
@@ -348,6 +348,7 @@ func (p *productionPanel) events(w http.ResponseWriter, r *http.Request) {
 	defer ticker.Stop()
 	updates := time.NewTicker(5 * time.Second)
 	defer updates.Stop()
+	agentState := map[string]string{}
 	for {
 		select {
 		case <-r.Context().Done():
@@ -358,6 +359,9 @@ func (p *productionPanel) events(w http.ResponseWriter, r *http.Request) {
 			}
 		case <-updates.C:
 			if _, _, err := p.session(r); err != nil {
+				return
+			}
+			if !p.agentEvents(r.Context(), agentState, send) {
 				return
 			}
 			jobs, next, err := p.s.JobChanges(r.Context(), seq)

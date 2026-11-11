@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Agent ingestion: optional pending_first_report/data_quality distinguish registration from fresh samples. instance.realtime SSE can explicitly clear stale rates with null. New grant replaces the old code but retains the active token until successful registration; revocation gives not_installed. Metadata is not remote attestation. See docs/m0/agent-protocol.md.
 # 2026-11-12  CDT observations: official_quality=inferred, fetched_at separate from unknown cutoff; user approved provisional byte display only. Add raw cumulative observation history; daily values remain unknown without a verified daily source. Quota/daily freshness is nullable before first collection.
 # 2026-11-12  Accounts/discovery: local quotas use configurable 1024^3-byte units (user approved; not official alignment). Account updates fence stale jobs; disabled accounts retain snapshots. Jobs persist/recover leases; GET reads snapshots only. Multi-exit instances expose billing_subject_ids; ambiguous billing/charge types remain unknown.
 # 2026-11-12  Production auth: single administrator confirmed; setup token supplied outside logs, one-use/24h; HTTPS origin and CSRF checks; configurable absolute session lifetime, persistent login limits. Account removal retains history and disables collection (user decision).
@@ -1384,6 +1385,14 @@ components:
       type: object
       required: [status, version, registered_at, last_report_at, offline_since, worst_case]
       properties:
+        pending_first_report:
+          type: boolean
+          description: Registered but no fresh sample received; status remains offline until the first fresh report. Do not interpret registration as online.
+        data_quality:
+          type: string
+          nullable: true
+          enum: [baseline, ok, clock_skew, counter_reset, stale, gap, null]
+          description: Latest stored sample quality; absent samples or revoked tokens produce null. Online does not imply aligned CDT protection.
         status:
           $ref: "#/components/schemas/AgentStatus"
         version:
@@ -2089,7 +2098,11 @@ components:
         instance_id:
           type: string
         realtime:
-          $ref: "#/components/schemas/InstanceRealtime"
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/InstanceRealtime"
+          description: Null clears the prior rate on offline, revocation, counter reset or insufficient samples.
 
     AgentStatusEvent:
       type: object

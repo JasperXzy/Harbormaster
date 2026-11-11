@@ -287,7 +287,7 @@ func TestAuthOriginAndProxyBoundaries(t *testing.T) {
 		t.Fatal("health endpoint restricted by panel policy")
 	}
 	w = httptest.NewRecorder()
-	h.ServeHTTP(w, httptest.NewRequest("POST", "http://panel.example/agent/v1/reports", strings.NewReader(`{}`)))
+	h.ServeHTTP(w, httptest.NewRequest("POST", "https://panel.example/agent/v1/reports", strings.NewReader(`{}`)))
 	if w.Code != 401 {
 		t.Fatal("agent endpoint inherited panel policy")
 	}
