@@ -178,6 +178,7 @@ type Snapshot struct {
 }
 type ScanResult struct {
 	Snapshots []Snapshot
+	Finance   []FinanceObservation
 	// Only completely read scopes may hide old, now-absent resources.
 	CompleteScopes map[string]bool
 	Permissions    *PermissionCheck

@@ -24,6 +24,9 @@ type Scanner interface {
 type TrafficScanner interface {
 	Traffic(context.Context, model.Account, model.Credential, func() error) model.CDTObservation
 }
+type FinanceScanner interface {
+	Finance(context.Context, model.Account, model.Credential, string, func() error) []model.FinanceObservation
+}
 type Engine struct {
 	Store       *store.Store
 	Box         *security.Box
@@ -32,6 +35,7 @@ type Engine struct {
 	Interval    time.Duration
 	CDTInterval time.Duration
 	Log         *slog.Logger
+	Timezone    string
 }
 
 func (e *Engine) encrypt(id string, c model.Credential) ([]byte, error) {
@@ -333,6 +337,34 @@ func (e *Engine) scanAccount(ctx context.Context, j model.Job, a model.Account) 
 		return result, e.Store.SaveCDT(scanCtx, j, a, o, time.Now().UTC())
 	}
 	result := e.Scanner.Scan(scanCtx, a, credential, j.Type == "permission_check", before)
+	if scanner, ok := e.Scanner.(FinanceScanner); ok {
+		loc, err := e.Store.BusinessLocation(scanCtx, e.Timezone)
+		if err != nil {
+			return result, err
+		}
+		result.Finance = scanner.Finance(scanCtx, a, credential, time.Now().In(loc).Format("2006-01"), before)
+		permission := "passed"
+		for _, source := range result.Finance {
+			if source.Error == nil {
+				continue
+			}
+			if result.Failure == "" {
+				result.Failure = source.Error.Code
+			}
+			if source.Error.Code == "permission_denied" {
+				permission = "missing"
+			} else if permission != "missing" {
+				permission = "check_failed"
+			}
+		}
+		if result.Permissions != nil {
+			for i := range result.Permissions.Items {
+				if result.Permissions.Items[i].Key == "bss_read" {
+					result.Permissions.Items[i].Result = permission
+				}
+			}
+		}
+	}
 	// An explicit refresh covers both resources and CDT; scheduled resource
 	// scans leave CDT to its independently configured poll interval.
 	if result.CDT == nil && !strings.HasPrefix(j.Scope, "inventory:") {

@@ -108,6 +108,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
+	if h.finance(w, path, now) {
+		return
+	}
 	f := makeFixtures(now, h.loc)
 	switch path {
 	case "/system/info":

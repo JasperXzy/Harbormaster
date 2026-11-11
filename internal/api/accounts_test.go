@@ -59,7 +59,7 @@ func TestAccountAPIUsesEncryptedTasksAndSnapshotReads(t *testing.T) {
 	if scanner.calls != 0 {
 		t.Fatal("POST performed synchronous cloud I/O")
 	}
-	for _, path := range []string{"/accounts", "/instances", "/regions?site=china", "/jobs/" + created.JobID, "/traffic/billing-subjects", "/bandwidth-packages"} {
+	for _, path := range []string{"/accounts", "/accounts/" + created.Account.ID + "/finance", "/instances", "/regions?site=china", "/jobs/" + created.JobID, "/traffic/billing-subjects", "/bandwidth-packages"} {
 		w = panelRequest(p, "GET", path, nil, cookie, "")
 		if w.Code != 200 {
 			t.Fatal(path, w.Code, w.Body)
@@ -67,6 +67,18 @@ func TestAccountAPIUsesEncryptedTasksAndSnapshotReads(t *testing.T) {
 	}
 	if scanner.calls != 0 {
 		t.Fatal("GET performed cloud I/O")
+	}
+	financePath := "/accounts/" + created.Account.ID + "/finance"
+	if w := panelRequest(p, "GET", financePath, nil, nil, ""); w.Code != 401 {
+		t.Fatal("anonymous finance exposed", w.Code)
+	}
+	if w := panelRequest(p, "GET", "/accounts/missing/finance", nil, cookie, ""); w.Code != 404 {
+		t.Fatal(w.Code, w.Body)
+	}
+	w = panelRequest(p, "GET", financePath, nil, cookie, "")
+	var finance model.AccountFinance
+	if json.Unmarshal(w.Body.Bytes(), &finance) != nil || finance.Balance.Data != nil || finance.Bill.Data != nil || finance.Balance.Status != "never_synced" {
+		t.Fatal("missing finances fabricated", w.Body)
 	}
 	if _, err = p.engine.RunOne(context.Background()); err != nil {
 		t.Fatal(err)

@@ -223,8 +223,7 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 			_, err := call("DescribeMetricList", metricRegion, map[string]string{"Namespace": "acs_vpc_eip", "MetricName": "net.rx", "Dimensions": string(dim), "StartTime": end.Add(-5 * time.Minute).Format(time.RFC3339), "EndTime": end.Format(time.RFC3339), "Period": "60"})
 			observe("cms_read", err)
 		}
-		_, err := call("QueryAccountBalance", a.RegionIDs[0], map[string]string{})
-		observe("bss_read", err)
+		// The engine's finance stage checks both balance and bill permissions.
 		body, err = call("ListCdtInternetTraffic", "cn-hongkong", map[string]string{"RegionId": "cn-hongkong"})
 		observation := model.CDTObservation{AccountID: a.ID, FetchedAt: time.Now().UTC(), Quality: "unknown", Error: model.Error(Code(err))}
 		if err == nil {

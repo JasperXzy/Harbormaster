@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Account finance: GET /accounts/{account_id}/finance reads cached balance and current-month bill overview only. Money is decimal text with provider currency; bill types remain separate, no guessed net total. Sources retain last successful data on failure and are fenced by credential version; the configured business timezone selects the requested billing cycle.
 # 2026-11-12  Correct SystemInfo.latest_agent_version: nullable, sourced from the same verified local release as Agent.available_version, never the hm-server build version. Frontends must use Agent.update_available===true, not version-string inequality, to show upgrade hints.
 # 2026-11-12  Agent upgrade hints: optional nullable available_version/update_available refer to the server's locally configured, checksum-verified agent release. Semantic versions compare by precedence; dev/unknown versions yield null. Release checks are cached for at most 30 seconds; obtaining an upgrade command always revalidates artifacts and uses the existing install-command endpoint.
 # 2026-11-12  Read-only bandwidth checks: Instance.network_capacity optionally exposes ECS specification RX/TX limits in kbit/s, source timestamp/error and a nullable comparison against the configured public outbound ceiling. Unknown topology, multiple billing exits, missing specifications and SWAS do not produce a passing result. No GET-triggered cloud calls or protective action.
@@ -734,6 +735,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BandwidthPackageHourly"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /accounts/{account_id}/finance:
+    parameters:
+      - name: account_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [accounts]
+      operationId: getAccountFinance
+      summary: Cached account balance and current-month bill overview
+      description: Read-only snapshots refreshed by resource collection. No cloud call on GET. A refresh uses the existing instances/refresh job API. Disabled accounts retain cached data. The bill is the provider account overview, including its returned product categories; no exchange conversion or inferred refund netting.
+      responses:
+        "200":
+          description: Cached finance sources; missing data is null, never an inferred zero.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountFinance"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -1638,6 +1663,119 @@ components:
               type: string
             message:
               type: string
+
+    FinanceSource:
+      type: object
+      required: [status, fetched_at, last_attempt_at, last_error, data]
+      properties:
+        status:
+          type: string
+          enum: [never_synced, ok, failing]
+          description: Result of the latest attempt, not a guarantee that cached data is recent. Check timestamps and account enabled state.
+        fetched_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last successful retrieval; not a provider accounting cutoff.
+        last_attempt_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+        data:
+          type: object
+          nullable: true
+          description: Last successful payload; remains present with its original fetched_at on later failure.
+
+    AccountFinance:
+      type: object
+      required: [account_id, enabled, billing_cycle, updated_at, balance, bill]
+      properties:
+        account_id:
+          type: string
+        enabled:
+          type: boolean
+        billing_cycle:
+          type: string
+          pattern: '^\d{4}-\d{2}$'
+          description: Current YYYY-MM in the configured business timezone, sent explicitly to QueryBillOverview. Previous-month snapshots are not substituted.
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Most recent attempt across these two sources.
+        balance:
+          allOf:
+            - $ref: "#/components/schemas/FinanceSource"
+            - type: object
+              properties:
+                data:
+                  type: object
+                  nullable: true
+                  required: [currency, available_amount, available_cash_amount, credit_amount]
+                  properties:
+                    currency:
+                      type: string
+                      pattern: '^[A-Z]{3}$'
+                    available_amount:
+                      type: string
+                      description: Provider AvailableAmount (available credit), not necessarily cash balance.
+                    available_cash_amount:
+                      type: string
+                      description: Provider AvailableCashAmount.
+                    credit_amount:
+                      type: string
+                      nullable: true
+                      description: Provider CreditAmount, if supplied.
+        bill:
+          allOf:
+            - $ref: "#/components/schemas/FinanceSource"
+            - type: object
+              properties:
+                data:
+                  type: object
+                  nullable: true
+                  required: [billing_cycle, items]
+                  properties:
+                    billing_cycle:
+                      type: string
+                    items:
+                      type: array
+                      description: Provider overview rows. An empty successful response is an empty list, not a fabricated zero-value bill. Do not sum different currencies or assume the sign of refund/adjustment rows.
+                      items:
+                        $ref: "#/components/schemas/BillOverviewItem"
+
+    BillOverviewItem:
+      type: object
+      required: [bill_type, product_code, product_name, currency, pretax_amount, payment_amount, outstanding_amount]
+      properties:
+        bill_type:
+          type: string
+          description: Provider Item value, e.g. SubscriptionOrder, PayAsYouGoBill, Refund, Adjustment.
+        product_code:
+          type: string
+        product_name:
+          type: string
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        pretax_amount:
+          type: string
+          description: Provider PretaxAmount, decimal text.
+        payment_amount:
+          type: string
+          description: Provider PaymentAmount, cash payment including credit refund offsets.
+        outstanding_amount:
+          type: string
+          description: Provider OutstandingAmount, unpaid or credit settlement amount.
 
     AgentInstallCommand:
       type: object

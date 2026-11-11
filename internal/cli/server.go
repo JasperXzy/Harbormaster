@@ -130,7 +130,7 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 	}
 	var engine *collect.Engine
 	if !c.Dev {
-		engine = &collect.Engine{Store: s, Box: box, Scanner: aliyun.Inventory{Caller: aliyun.NewClient(nil, 200*time.Millisecond)}, Workers: c.WorkerCount, Interval: time.Duration(c.ResourceScanIntervalSeconds) * time.Second, CDTInterval: time.Duration(c.CDTPollIntervalSeconds) * time.Second, Log: log}
+		engine = &collect.Engine{Store: s, Box: box, Scanner: aliyun.Inventory{Caller: aliyun.NewClient(nil, 200*time.Millisecond)}, Workers: c.WorkerCount, Interval: time.Duration(c.ResourceScanIntervalSeconds) * time.Second, CDTInterval: time.Duration(c.CDTPollIntervalSeconds) * time.Second, Log: log, Timezone: c.Timezone}
 	}
 	switch command {
 	case "migrate":

@@ -2,9 +2,7 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"encoding/base64"
-	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,12 +13,7 @@ import (
 )
 
 func (p *productionPanel) businessLocation(ctx context.Context) (*time.Location, error) {
-	zone := p.timezone
-	err := p.s.DB.QueryRowContext(ctx, "SELECT value FROM app_meta WHERE key='business_timezone'").Scan(&zone)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
-	}
-	return time.LoadLocation(zone)
+	return p.s.BusinessLocation(ctx, p.timezone)
 }
 func (p *productionPanel) quotaRows(ctx context.Context, id string) ([]model.QuotaStatus, error) {
 	accounts, err := p.s.Accounts(ctx)

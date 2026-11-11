@@ -76,7 +76,7 @@ func TestDiscoverySharedTopologyAndNoPackage(t *testing.T) {
 		t.Fatal(instances, packages, subjects)
 	}
 	for _, p := range r.Permissions.Items {
-		if p.Key == "instance_power" || p.Key == "eip_manage" {
+		if p.Key == "instance_power" || p.Key == "eip_manage" || p.Key == "bss_read" {
 			if p.Result != "not_verified" {
 				t.Fatal("write permission falsely verified")
 			}

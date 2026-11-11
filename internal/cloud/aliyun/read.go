@@ -4,6 +4,7 @@ package aliyun
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -57,6 +58,7 @@ var reads = map[string]definition{
 	"DescribeMetricMetaList":          {"cms", "2019-01-01", "Namespace MetricName PageNumber PageSize"},
 	"DescribeMetricList":              {"cms", "2019-01-01", "Namespace MetricName Dimensions StartTime EndTime Period"},
 	"QueryAccountBalance":             {"bss", "2017-12-14", ""},
+	"QueryBillOverview":               {"bss", "2017-12-14", "BillingCycle"},
 }
 
 type Caller interface {
@@ -158,7 +160,11 @@ func (c *Client) Call(ctx context.Context, cred Credentials, action, region stri
 	if d.product == "cdt" {
 		sdk.SignatureAlgorithm = dara.String("v2")
 	}
-	params := &openapi.Params{Action: dara.String(action), Version: dara.String(d.version), Protocol: dara.String("HTTPS"), Pathname: dara.String("/"), Method: dara.String(method), AuthType: dara.String("AK"), Style: dara.String("RPC"), ReqBodyType: dara.String("formData"), BodyType: dara.String("json")}
+	bodyType := "json"
+	if d.product == "bss" {
+		bodyType = "string"
+	}
+	params := &openapi.Params{Action: dara.String(action), Version: dara.String(d.version), Protocol: dara.String("HTTPS"), Pathname: dara.String("/"), Method: dara.String(method), AuthType: dara.String("AK"), Style: dara.String("RPC"), ReqBodyType: dara.String("formData"), BodyType: dara.String(bodyType)}
 	q := map[string]*string{}
 	for k, v := range query {
 		q[k] = dara.String(v)
@@ -177,6 +183,18 @@ func (c *Client) Call(ctx context.Context, cred Credentials, action, region stri
 		return nil, failure("aliyun_unreachable")
 	}
 	body, ok := response["body"].(map[string]any)
+	if d.product == "bss" {
+		raw, valid := response["body"].(string)
+		if !valid {
+			return nil, failure("invalid_response")
+		}
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		decoder.UseNumber()
+		if decoder.Decode(&body) != nil || body == nil || decoder.Decode(new(any)) != io.EOF {
+			return nil, failure("invalid_response")
+		}
+		ok = true
+	}
 	if !ok {
 		return nil, failure("invalid_response")
 	}

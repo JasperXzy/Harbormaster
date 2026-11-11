@@ -26,6 +26,11 @@ func (s *Store) SaveScan(ctx context.Context, j model.Job, a model.Account, resu
 	if n != 1 {
 		return ErrAccountChanged
 	}
+	for _, observation := range result.Finance {
+		if err = saveFinance(ctx, tx, a, observation); err != nil {
+			return err
+		}
+	}
 	if result.CDT != nil {
 		if err = saveObservation(ctx, tx, j, a, *result.CDT); err != nil {
 			return err
