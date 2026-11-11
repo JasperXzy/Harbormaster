@@ -3,7 +3,7 @@ import { api } from "../api/client";
 import { useEvent } from "../api/events";
 import { SCOPE_SHORT, SEVERITY, SITE, SUBJECT_KIND, regionName } from "../api/labels";
 import type { Account, Instance, Notification, QuotaScope, QuotaStatus } from "../api/types";
-import { quotaLevel, QuotaLegend, QuotaMeter } from "../components/QuotaMeter";
+import { quotaLevel, QuotaLegend, QuotaMeter, quotaUnknown, QuotaUnknownNote } from "../components/QuotaMeter";
 import { Async, Badge, Banner, Card, EmptyState, ErrorState, Fresh, Skeleton, type Level } from "../components/ui";
 import { useShared } from "../lib/data";
 import { gb, stamp } from "../lib/format";
@@ -58,19 +58,20 @@ export function Overview() {
   const running = insts.filter((i) => i.status === "running").length;
   const failing = accs.filter((a) => a.sync_status === "failing");
   const worstCase = insts.filter((i) => i.realtime_protection === "worst_case");
-  const unprotected = insts.filter((i) => i.realtime_protection === "unprotected" && i.status === "running");
+  const unprotected = insts.filter((i) => i.realtime_protection === "unprotected" && i.status === "running" && i.agent.status === "not_installed");
+  const usageUnknown = qs.some((q) => q.effective_bytes === null);
   const officialDown = qs.some((q) => q.official_status === "unavailable");
   const po = pool(qs, accs, "overseas"), pm = pool(qs, accs, "mainland");
   const tiles: [string, string, string, string][] = [
     ["阿里云账号", String(accs.length), "个", failing.length ? `${failing.length} 个连接失败` : "全部连接正常"],
     ["实例", String(insts.length), "台", `运行中 ${running} · 其他 ${insts.length - running}`],
-    ["海外免费流量还剩", gb(po.left).replace(" GB", ""), po.left === null ? "" : "GB", po.left === null ? "部分用量未确认，暂不合计余量" : po.over ? `已超出 ${gb(po.over)}` : `共 ${gb(po.quota, 0)}${po.best ? ` · 剩得最多：${po.best}` : ""}`],
-    ["国内免费流量还剩", gb(pm.left).replace(" GB", ""), pm.left === null ? "" : "GB", pm.left === null ? "部分用量未确认，暂不合计余量" : pm.over ? `已超出 ${gb(pm.over)}` : `共 ${gb(pm.quota, 0)}${pm.best ? ` · 剩得最多：${pm.best}` : ""}`],
+    ["海外免费流量还剩", gb(po.left).replace(" GB", ""), po.left === null ? "" : "GB", po.left === null ? "有账号的用量还没确认，先不合计" : po.over ? `已超出 ${gb(po.over)}` : `共 ${gb(po.quota, 0)}${po.best ? ` · 剩得最多：${po.best}` : ""}`],
+    ["国内免费流量还剩", gb(pm.left).replace(" GB", ""), pm.left === null ? "" : "GB", pm.left === null ? "有账号的用量还没确认，先不合计" : pm.over ? `已超出 ${gb(pm.over)}` : `共 ${gb(pm.quota, 0)}${pm.best ? ` · 剩得最多：${pm.best}` : ""}`],
   ];
 
   return (
     <>
-      {(failing.length > 0 || worstCase.length > 0 || unprotected.length > 0 || officialDown || telegram.data?.status === "not_configured" || telegram.data?.status === "failing") && (
+      {(failing.length > 0 || worstCase.length > 0 || unprotected.length > 0 || usageUnknown || officialDown || telegram.data?.status === "not_configured" || telegram.data?.status === "failing") && (
         <div className="grid" style={{ gap: 8 }} aria-label="需要留意">
           {worstCase.map((i) => (
             <Banner key={i.id} level="critical" action={<Link className="btn sm" to="/instances">查看</Link>}>
@@ -88,8 +89,13 @@ export function Overview() {
             </Banner>
           )}
           {unprotected.length > 0 && (
-            <Banner level="warning" action={<Link className="btn sm" to="/instances">查看实例</Link>}>
-              <b>{unprotected.map((i) => i.name).join("、")} 未受实时保护。</b> 采集数据或官方计量依据尚未完整，请核对采集程序状态和流量数据。
+            <Banner level="warning" action={<Link className="btn sm" to="/instances">去安装</Link>}>
+              <b>{unprotected.map((i) => i.name).join("、")} 未受实时保护。</b> 它的流量计入免费额度，但没装采集程序，用量要等约 1 小时后才能看到。
+            </Banner>
+          )}
+          {usageUnknown && (
+            <Banner level="warning" action={<Link className="btn sm" to="/traffic">查看流量</Link>}>
+              <b>暂时算不出实时用量。</b> 阿里云的官方数据还不完整，没法和采集程序报上来的流量加在一起。下面只显示能确认的官方数字。
             </Banner>
           )}
           {telegram.data?.status === "not_configured" && (
@@ -128,7 +134,7 @@ export function Overview() {
                   <dl className="kv">
                     <dt>账号 / 地域</dt><dd>{accs.find((a) => a.id === p.account_id)?.name} · {regionName(p.region_id)}</dd>
                     <dt>带宽上限</dt><dd>{p.bandwidth_mbps === null ? "待确认" : `${p.bandwidth_mbps} Mbps`}</dd>
-                    <dt>计费方式</dt><dd>{SUBJECT_KIND[p.kind].replace("共享带宽 · ", "")}{p.settled_by_cdt === null ? " · CDT 归属待确认" : p.settled_by_cdt ? " · 计入免费额度" : ""}</dd>
+                    <dt>计费方式</dt><dd>{SUBJECT_KIND[p.kind].replace("共享带宽 · ", "")}{p.settled_by_cdt === null ? " · 是否计入免费额度待确认" : p.settled_by_cdt ? " · 计入免费额度" : ""}</dd>
                     <dt>成员</dt><dd>{p.members.map((m) => <span key={m.eip_address}><span className="mono">{m.eip_address}</span>{m.instance_name ? `（${m.instance_name}）` : ""} </span>)}</dd>
                     <dt>今天收 / 发</dt><dd>{p.today_rx_bytes === null ? "—" : gb(p.today_rx_bytes)} / {p.today_tx_bytes === null ? "—" : gb(p.today_tx_bytes)}</dd>
                     <dt>今天计费流量</dt><dd><b>{p.today_metered_bytes === null ? "—" : gb(p.today_metered_bytes)}</b>{p.dominant_direction ? ` · ${p.dominant_direction === "inbound" ? "收到的" : "发出的"}更多` : ""}</dd>
@@ -161,8 +167,9 @@ function AccountCard({ account, quotas, instances }: { account: Account; quotas:
     <Card title={account.name} sub={`${SITE[account.site]} · ${instances.length} 台实例`} right={<Badge level={level}>{text}</Badge>}>
       {quotas.length ? (
         <>
-          <QuotaLegend worstCase={quotas.some((q) => q.worst_case_bytes !== null && q.worst_case_bytes > 0)} />
+          {!quotas.every(quotaUnknown) && <QuotaLegend worstCase={quotas.some((q) => q.worst_case_bytes !== null && q.worst_case_bytes > 0)} />}
           {order.map((s) => quotas.filter((q) => q.scope === s).map((q) => <QuotaMeter key={s} q={q} />))}
+          <QuotaUnknownNote quotas={quotas} />
         </>
       ) : (
         <EmptyState title="还没有流量数据">{account.sync_status === "never_synced" ? "正在第一次读取这个账号，通常一两分钟内完成。" : "这个账号暂时没有可显示的额度数据。"}</EmptyState>

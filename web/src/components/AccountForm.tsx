@@ -155,26 +155,26 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
         <div className="field-help">只勾选你有机器的地域，扫描会更快。</div>
       </div>
       <details open={edit}>
-        <summary className="sub" style={{ cursor: "pointer" }}>本地保护额度与告警</summary>
+        <summary className="sub" style={{ cursor: "pointer" }}>免费额度与告警（一般不用改）</summary>
         <div className="stack" style={{ marginTop: 12 }}>
-          <p className="note" style={{ margin: 0 }}>这里配置面板使用的保护额度，1 GB 按 1024³ 字节换算。修改不会改变阿里云的免费额度，也不代表实时计量已经与官方数据对齐。</p>
+          <p className="note" style={{ margin: 0 }}>面板按这里的数字计算“还剩多少”并发告警。改它不会改变阿里云实际给你的免费额度。1 GB 按 1024³ 字节算。</p>
           <div className="grid g2" style={{ gap: 12 }}>
             <div>
-              <label className="lbl" htmlFor="acc-qo">海外保护额度（GB / 月）</label>
+              <label className="lbl" htmlFor="acc-qo">海外免费额度（GB / 月）</label>
               <input id="acc-qo" type="number" min="0" value={overseas} onChange={(e) => setOverseas(e.target.value)} aria-invalid={!!fields.quota_overseas_bytes} />
               {fe("quota_overseas_bytes")}
             </div>
             <div>
-              <label className="lbl" htmlFor="acc-qm">国内保护额度（GB / 月）</label>
+              <label className="lbl" htmlFor="acc-qm">国内免费额度（GB / 月）</label>
               <input id="acc-qm" type="number" min="0" value={mainland} onChange={(e) => setMainland(e.target.value)} aria-invalid={!!fields.quota_mainland_bytes} />
               {fe("quota_mainland_bytes")}
             </div>
           </div>
           <div className="grid g2" style={{ gap: 12 }}>
             <div>
-              <label className="lbl" htmlFor="acc-rd">官方额度重置日</label>
-              <input id="acc-rd" value="每月 1 日（自然月）" readOnly />
-              <div className="field-help">CDT 官方周期固定，修改面板时区不会改变计费周期。</div>
+              <span className="lbl" style={{ display: "block", fontSize: "var(--fs-md)", color: "var(--text-2)", marginBottom: 4 }}>每月几号重新计算</span>
+              <div style={{ padding: "8px 0" }}>每月 1 号（不能修改）</div>
+              <div className="field-help">阿里云固定按自然月计算，改面板的时区不会影响它。</div>
             </div>
             <div>
               <label className="lbl" htmlFor="acc-th">用到百分之几时通知</label>

@@ -81,8 +81,7 @@ function Accounts() {
               <div className="inline">
                 <button className="btn sm" onClick={() => check(a.id)} disabled={checking.has(a.id) || !a.enabled}>重新测试权限</button>
                 <button className="btn sm" onClick={() => setForm({ account: a })}>修改</button>
-                <button className="btn sm" disabled={!a.enabled} onClick={() => setDel(a)}>停用并保留历史</button>
-                <Switch on={a.enabled} label={`启用 ${a.name}`} onChange={(v) => toggle(a, v)} />
+                <Switch on={a.enabled} label={`启用 ${a.name}`} onChange={(v) => (v ? toggle(a, true) : setDel(a))} />
               </div>
             </div>
           ))}
@@ -99,13 +98,11 @@ function Accounts() {
       )}
       {del && (
         <Confirm
-          title={`停用账号 ${del.name}？`} okText="停用账号" typeToConfirm={del.name} onClose={() => setDel(undefined)}
-          body={<>停止这个账号的数据采集，保留其 {del.instance_count} 台实例和历史数据。之后可重新启用。这不会改变阿里云上的机器状态。</>}
+          title={`停用账号 ${del.name}？`} okText="停用" onClose={() => setDel(undefined)}
+          body={<>停用后，面板不再读取这个账号的数据，也不再为它发告警。它名下 {del.instance_count} 台实例的记录和历史数据都会保留，随时可以重新打开。这不会影响阿里云上的机器本身。</>}
           onOk={async () => {
             try {
-              await api.deleteAccount(del.id);
-              reloadAll();
-              toast(`已停用 ${del.name}，历史数据已保留`);
+              await toggle(del, false);
             } catch (e) {
               toast(errMsg(e), true);
               throw e;
@@ -131,7 +128,7 @@ function Agents() {
       ) : (
         <div className="table-wrap">
           <table>
-            <thead><tr><th>实例</th><th>状态</th><th>版本</th><th>最后上报</th><th>安装于</th><th></th></tr></thead>
+            <thead><tr><th>实例</th><th>状态</th><th className="only-wide">版本</th><th>最后上报</th><th className="only-wide">安装于</th><th></th></tr></thead>
             <tbody>
               {list.map((i) => {
                 const [l, t] = AGENT[i.agent.status];
@@ -140,9 +137,9 @@ function Agents() {
                   <tr key={i.id}>
                     <td><b>{i.name}</b><div className="sub">{accounts.data?.find((a) => a.id === i.account_id)?.name}</div></td>
                     <td><Badge level={l}>{t}</Badge>{i.agent.offline_since && <div className="sub">已掉线 {duration((now - new Date(i.agent.offline_since).getTime()) / 1000)}</div>}</td>
-                    <td>{i.agent.version ?? "—"}{old && <div className="sub">有新版本 {info.data!.latest_agent_version}</div>}</td>
+                    <td className="only-wide">{i.agent.version ?? "—"}{old && <div className="sub">有新版本 {info.data!.latest_agent_version}</div>}</td>
                     <td>{i.agent.last_report_at ? ago(i.agent.last_report_at, now) : "—"}</td>
-                    <td><span className="sub">{i.agent.registered_at ? stamp(i.agent.registered_at) : "—"}</span></td>
+                    <td className="only-wide"><span className="sub">{i.agent.registered_at ? stamp(i.agent.registered_at) : "—"}</span></td>
                     <td><button className="btn sm danger" onClick={() => setRevoke(i)}>撤销凭证</button></td>
                   </tr>
                 );

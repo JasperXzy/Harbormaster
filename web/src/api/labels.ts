@@ -49,8 +49,8 @@ export const AGENT: Record<T.AgentStatus, [Level, string]> = {
 export const PROTECTION: Record<T.RealtimeProtection, [Level, string, string]> = {
   protected: ["good", "实时保护中", "采集程序每 10 秒上报一次，用量越线时能立刻发现。"],
   worst_case: ["critical", "按最坏情况推算", "采集程序掉线了。掉线期间按它之前的最高速度估算用量，宁可多算。"],
-  unprotected: ["serious", "未受实时保护", "采集数据或官方计量依据尚未完整。请核对采集程序状态和官方数据截止时间。"],
-  not_applicable: ["neutral", "不需要", "这台机器的流量不计入 CDT 免费额度。"],
+  unprotected: ["serious", "未受实时保护", "这台机器的流量计入免费额度，但没有装采集程序。它的用量要等约 1 小时后的官方数据才能看到。"],
+  not_applicable: ["neutral", "不需要", "这台机器的流量不计入免费额度。"],
 };
 
 /** 实例的实时保护状态。采集程序在线但额度暂时算不出时，不说“未受保护”，以免和没装的机器混在一起。 */
@@ -63,7 +63,7 @@ export function protectionOf(i: Pick<T.Instance, "realtime_protection" | "agent"
 export const PERMISSION: Record<T.PermissionKey, string> = {
   ecs_read: "查看云服务器",
   swas_read: "查看轻量服务器",
-  cdt_read: "查看 CDT 流量",
+  cdt_read: "查看流量用量",
   cms_read: "查看云监控",
   instance_power: "开关机",
   vpc_read: "查看网络",
@@ -96,7 +96,7 @@ export const ALERT_RULE: Record<T.AlertRuleKey, { title: string; desc: string }>
   cdt_forecast_exceed: { title: "预计月底超额", desc: "按最近 7 天的日均用量推算，月底前会超出免费额度时通知。" },
   account_api_failure: { title: "账号连接失败", desc: "连续多次调用阿里云接口失败时通知，通常是 AccessKey 失效或权限被改。" },
   agent_offline: { title: "采集程序掉线", desc: "实例上的采集程序停止上报时立刻通知，并开始按最坏情况推算用量。" },
-  cdt_official_unavailable: { title: "官方数据取不到", desc: "连续多次取不到 CDT 官方数据时通知；期间沿用最近一次官方值继续估算。" },
+  cdt_official_unavailable: { title: "官方数据取不到", desc: "连续多次取不到阿里云的官方流量数据时通知；期间沿用最近一次官方值继续估算。" },
 };
 
 // 常见地域的中文名；不认识的直接显示地域 ID。
@@ -112,12 +112,12 @@ export const regionName = (id: string) => REGION[id] ?? id;
 
 // 错误码 -> 给用户看的话
 const ERROR: Record<string, string> = {
-  not_implemented: "当前版本尚未开放这个功能。",
+  not_implemented: "这个功能还没有开放。",
   network_error: "连不上服务器。请检查网络，或确认 hm-server 正在运行。",
   internal_error: "服务器出错了，请稍后再试。",
   unauthenticated: "登录已过期，请重新登录。",
   forbidden: "没有权限执行这个操作。",
-  csrf_failed: "请求来源或会话校验未通过。请从面板的正式地址重新打开页面。",
+  csrf_failed: "安全校验没有通过。请用面板的正式地址重新打开页面再试。",
   not_found: "要找的内容不存在，可能已被删除。",
   validation_failed: "填写的内容有问题，请检查标红的项目。",
   rate_limited: "尝试次数太多，请稍后再试。",
@@ -131,10 +131,10 @@ const ERROR: Record<string, string> = {
   permission_denied: "阿里云拒绝了读取请求，请检查账号的只读权限。",
   aliyun_throttled: "阿里云接口暂时限流，任务会稍后重试。",
   retry_exhausted: "任务多次中断，已停止重试。请检查服务状态后重新刷新。",
-  cdt_line_unverified: "CDT 返回了尚未核实的线路类型，暂不将它计入额度合计。",
-  cdt_response_unrecognized: "CDT 返回格式未能确认，已保留旧记录，请检查数据来源。",
-  cdt_value_out_of_range: "CDT 返回值超出可准确处理的范围，暂不用于估算。",
-  cdt_international_endpoint_unverified: "这个站点的 CDT 查询端点尚未验证，暂不能提供官方用量。",
+  cdt_line_unverified: "阿里云返回了一种还没核实的线路类型，先不把它算进额度。",
+  cdt_response_unrecognized: "看不懂阿里云这次返回的流量数据，先保留上一次的记录。",
+  cdt_value_out_of_range: "阿里云返回的数值大得不正常，先不用它估算。",
+  cdt_international_endpoint_unverified: "这个站点的流量查询还没有验证过，暂时拿不到官方用量。",
   access_key_invalid: "阿里云不认这组 AccessKey，请检查是否复制完整、是否已被禁用。",
   agent_not_supported: "这台实例暂时不能安装采集程序。",
   telegram_not_configured: "还没有保存 Telegram 设置。",

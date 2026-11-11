@@ -92,7 +92,7 @@ export function Shell({ title, version, children, dataMode, readOnly }: { title:
           <div className="spacer" />
           {q.length > 0 && (
             <>
-              <span className="hide-sm" title="统计截止时间由数据来源提供；未知时不会用获取时间替代">
+              <span className="hide-sm" title="阿里云没有说明统计到几点时，这里不会拿读取时间顶替">
                 {!official && q.some((x) => x.official_bytes !== null) ? <span className="chip stale">官方数据的统计时间不明</span> : <Fresh at={official} kind="official" prefix="官方数据截至" name="官方数据" />}
               </span>
               {realtime ? <Fresh at={realtime} kind="realtime" prefix="实时" name="实时数据" /> : <span className="chip stale">实时估算待确认</span>}

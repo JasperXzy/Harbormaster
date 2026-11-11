@@ -15,7 +15,8 @@ export function DailyBars({ bars, totalSlots, nameA, nameB, unit, ariaLabel, hei
   const [tip, setTip] = useState<TipState | null>(null);
   const L = 40, R = 10, T = 12, B = 28;
   const iw = Math.max(0, W - L - R), ih = height - T - B;
-  const axis = niceAxis(Math.max(0.001, ...bars.map((d) => d.a === null || d.b === null ? 0 : d.a + d.b)) * 1.05);
+  const peak = Math.max(0, ...bars.map((d) => d.a === null || d.b === null ? 0 : d.a + d.b));
+  const axis = niceAxis((peak || 1) * 1.05); // 没有任何已知数值时用 0–1 的占位刻度，避免出现一排 0.00
   const y = (v: number) => T + ih - (v / axis.max) * ih;
   const slots = Math.max(totalSlots, bars.length);
   const bw = iw / slots, barW = Math.max(3, Math.min(28, bw * 0.62));

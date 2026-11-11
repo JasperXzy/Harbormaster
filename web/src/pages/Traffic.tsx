@@ -183,7 +183,7 @@ function Cumulative({ d, q, scope }: { d: DailyTraffic; q: QuotaStatus; scope: Q
   const color = scope === "overseas" ? "var(--series-1)" : "var(--series-2)";
   return (
     <>
-      {cum.some((v) => v === null) && <p className="note">日用量存在缺口，缺口之后的累计值暂不连线或预测。</p>}
+      {cum.some((v) => v === null) && <p className="note">有几天的数据没取到，从那天起不画累计线，也不做预测。</p>}
       <div className="legend" style={{ marginBottom: 8 }}>
         <span><i className="line" style={{ background: color }} />已经用掉的</span>
         {q.forecast && <span><i className="dash" style={{ borderColor: color }} />预测</span>}
@@ -219,7 +219,7 @@ function Subjects({ accountId, instName }: { accountId: string; instName: (id: s
                       <td className="num">{s.today_rx_bytes === null ? <span className="sub">—</span> : gb(s.today_rx_bytes)}</td>
                       <td className="num">{s.today_tx_bytes === null ? <span className="sub">—</span> : gb(s.today_tx_bytes)}</td>
                       <td className="num">{s.today_metered_bytes === null ? <span className="sub">—</span> : <b>{gb(s.today_metered_bytes)}</b>}</td>
-                      <td>{s.counts_toward_cdt === null ? <Badge level="warning">归属待确认</Badge> : s.counts_toward_cdt && s.cdt_scope ? <Badge level="good">{SCOPE[s.cdt_scope]}</Badge> : <span className="sub">不计入</span>}</td>
+                      <td>{s.counts_toward_cdt === null ? <Badge level="warning">待确认</Badge> : s.counts_toward_cdt && s.cdt_scope ? <Badge level="good">{SCOPE[s.cdt_scope]}</Badge> : <span className="sub">不计入</span>}</td>
                       <td><span className="sub">{src[s.data_source]}</span></td>
                     </tr>
                   ))}

@@ -1,7 +1,7 @@
 // 实例：表格（手机上是卡片）、筛选、详情、采集程序安装引导。M1 只读，开关机等操作在 M2 加入。
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import { AGENT, CHARGE, INSTANCE_STATUS, KIND, KIND_SHORT, PROTECTION, regionName, RULE, SCOPE, SUBJECT_KIND } from "../api/labels";
+import { AGENT, CHARGE, INSTANCE_STATUS, KIND, KIND_SHORT, protectionOf, regionName, RULE, SCOPE, SUBJECT_KIND } from "../api/labels";
 import type { AgentInstallCommand, Instance } from "../api/types";
 import { Badge, Card, Confirm, CopyButton, EmptyState, ErrorState, errMsg, Fresh, Modal, Skeleton, Spinner, useToast } from "../components/ui";
 import { useShared } from "../lib/data";
@@ -28,14 +28,14 @@ function Billing({ i }: { i: Instance }) {
   return (
     <div className="cell-stack">
       <span>{i.bandwidth_package_name ? `共享带宽 ${i.bandwidth_package_name} · ${SUBJECT_KIND[i.billing_subject_kind].split(" · ")[1]}` : SUBJECT_KIND[i.billing_subject_kind]}</span>
-      <span className="sub">{i.counts_toward_cdt === null ? "CDT 归属待确认" : i.counts_toward_cdt && i.cdt_scope ? `计入${SCOPE[i.cdt_scope]}免费额度` : "不计入免费额度"}{i.bandwidth_mbps ? ` · ${i.bandwidth_mbps} Mbps` : ""}</span>
+      <span className="sub">{i.counts_toward_cdt === null ? "是否计入免费额度待确认" : i.counts_toward_cdt && i.cdt_scope ? `计入${SCOPE[i.cdt_scope]}免费额度` : "不计入免费额度"}{i.bandwidth_mbps ? ` · ${i.bandwidth_mbps} Mbps` : ""}</span>
     </div>
   );
 }
 
 function AgentCell({ i, onInstall }: { i: Instance; onInstall: () => void }) {
   const [al, at] = AGENT[i.agent.status];
-  const [pl, pt, pd] = PROTECTION[i.realtime_protection];
+  const [pl, pt, pd] = protectionOf(i);
   return (
     <div className="cell-stack" style={{ justifyItems: "start" }}>
       {i.realtime_protection === "not_applicable" ? <Badge level={al}>{at}</Badge> : <Badge level={pl} title={pd}>{pt}</Badge>}
@@ -60,7 +60,7 @@ export function Instances() {
   if (!instances.data || !accounts.data) return <div className="card"><Skeleton lines={6} height={18} /></div>;
   const all = instances.data.items, accs = accounts.data;
   const accName = (id: string) => accs.find((a) => a.id === id)?.name ?? "—";
-  const needs = (i: Instance) => i.realtime_protection === "worst_case" || (i.realtime_protection === "unprotected" && i.status === "running");
+  const needs = (i: Instance) => i.realtime_protection === "worst_case" || (i.realtime_protection === "unprotected" && i.status === "running" && i.agent.status === "not_installed");
   const rows = all.filter((i) => (!account || i.account_id === account) && (!kind || i.kind === kind) && (!only || needs(i)));
   const cur = all.find((i) => i.id === detail), inst = all.find((i) => i.id === install);
 
@@ -155,7 +155,7 @@ function InstanceDetail({ i, account, onClose, onInstall }: { i: Instance; accou
   const { instances } = useShared();
   const [sl, st] = INSTANCE_STATUS[i.status];
   const [al, at] = AGENT[i.agent.status];
-  const [pl, pt, pd] = PROTECTION[i.realtime_protection];
+  const [pl, pt, pd] = protectionOf(i);
   if (revoke)
     return (
       <Confirm
@@ -184,7 +184,7 @@ function InstanceDetail({ i, account, onClose, onInstall }: { i: Instance; accou
         <dt>阿里云实例 ID</dt><dd className="mono">{i.cloud_instance_id}</dd>
         <dt>公网 IP</dt><dd className="mono">{i.public_ips.map((p) => `${p.address}${p.type === "eip" ? "（弹性公网 IP）" : ""}`).join("、") || "—"}</dd>
         <dt>公网怎么计费</dt><dd>{(i.billing_subject_ids?.length ?? 0) > 1 ? "多个公网出口，按各自规则计费，详见流量页" : i.billing_subject_kind ? SUBJECT_KIND[i.billing_subject_kind] : i.public_ips.length ? "公网计费类型待确认" : "未发现公网出口"}{i.bandwidth_package_name ? `（${i.bandwidth_package_name}）` : ""}</dd>
-        <dt>计量规则</dt><dd>{i.metering_rule ? RULE[i.metering_rule] : "—"}{i.counts_toward_cdt === null ? " · CDT 归属待确认" : i.counts_toward_cdt && i.cdt_scope ? ` · 计入${SCOPE[i.cdt_scope]}免费额度` : " · 不计入免费额度"}</dd>
+        <dt>计量规则</dt><dd>{i.metering_rule ? RULE[i.metering_rule] : "—"}{i.counts_toward_cdt === null ? " · 是否计入免费额度待确认" : i.counts_toward_cdt && i.cdt_scope ? ` · 计入${SCOPE[i.cdt_scope]}免费额度` : " · 不计入免费额度"}</dd>
         {i.kind === "swas" && <><dt>套餐流量包</dt><dd>{i.billing_subject_kind === "swas_no_traffic_package" ? "无流量包（这个套餐不按流量计费）" : i.billing_subject_kind === "swas_traffic_package" ? "有流量包" : "待确认"}</dd></>}
         <dt>带宽上限</dt><dd>{i.bandwidth_mbps ? `${i.bandwidth_mbps} Mbps` : "—"}</dd>
         <dt>资源信息更新于</dt><dd>{stamp(i.updated_at)}</dd>
