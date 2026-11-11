@@ -1,0 +1,40 @@
+2026-11-12 local verification (macOS; no target-host installation)
+
+go build ./...
+exit 0, no output
+
+go test -race ./...
+? cmd/hm-agent [no test files]
+? cmd/hm-server [no test files]
+? internal/agentcli [no test files]
+ok internal/agentclient (cached; preceding focused run 1.450s)
+ok internal/agentmeter (cached)
+? internal/agentproto [no test files]
+ok internal/agentstate 1.730s
+ok internal/api 23.086s
+ok internal/cli 2.592s
+ok internal/cloud/aliyun (cached)
+ok internal/collect (cached)
+ok internal/config (cached)
+ok internal/devmode (cached)
+ok internal/logging (cached)
+ok internal/m0 (cached)
+ok internal/security (cached)
+ok internal/store (cached)
+ok internal/ui/prepare (cached)
+other packages [no test files]
+exit 0
+
+go vet ./...
+exit 0, no output
+
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o /tmp/hm-agent-linux-amd64 ./cmd/hm-agent
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -trimpath -o /tmp/hm-agent-linux-arm64 ./cmd/hm-agent
+both exit 0, no output
+
+Initial journal tests rejected macOS test-root directory permissions (not 0700).
+Tests now create a private child state directory matching the production requirement;
+no weakening of journal permissions. Focused race checks then passed.
+
+Linux nftables code was cross-compiled, not executed on a Linux kernel.
+No 24-hour metering accuracy, CPU or memory result is claimed.

@@ -1,6 +1,6 @@
 # hm-agent 上报协议 v1（后端内部）
 
-本协议不属于面板 OpenAPI。已实现服务端生产注册、单条/批量鉴权落库、ACK、撤销、实例状态和速率。Linux nftables 采集、客户端加密状态/离线缓冲、安装产物仍在下一批实现；尚未安装真实 agent。
+本协议不属于面板 OpenAPI。已实现服务端生产注册、单条/批量鉴权落库、ACK、撤销、实例状态和速率。Linux nftables 采集、客户端加密状态/离线缓冲已编码并通过本地测试与交叉编译；安装产物仍待实现，尚未安装真实 agent，原生 Linux 计数尚未实测。详见 production-agent-client.md。
 
 2026-11-11 实测与用户决定：sha-pro 的元数据 instance-id 是底层 ECS ID，和 SWAS API ID 不同。用户同意轻量使用预绑定已纳管 SWAS ID 的一次性注册码，元数据 ID 仅记录为辅助信息；服务端不可把两个 ID 当同一标识比较。ECS 的 sin-pro 已验证元数据 ID 与 ECS API 一致。此处是设计修订，本轮未安装真实 agent。
 
@@ -8,9 +8,9 @@
 
 生产上报只通过 HTTPS，实例不开放入站端口。注册入口 `POST /agent/v1/register`：一次性随机 256-bit 注册码在服务端预绑定 account/kind/region/instance，10 分钟过期，只存 SHA-256；事务内消费一次。客户端先持久化加密的注册码和随机 256-bit nonce（64 位十六进制），请求包含 version=1、registration_code、nonce、metadata(instance_id/region_id)、agent_version。双方以注册码为 HMAC-SHA256 密钥，对 `harbormaster-agent-token-v1\0` + nonce 派生长期 token（前缀 hm_agent_ + 十六进制摘要）。响应只含 agent_id、token_scheme=hmac-sha256-v1、report_interval_seconds=10、server_time，不回传秘密。相同 code+nonce 在原 10 分钟期限内可重试，以恢复丢失的注册响应；不同 nonce 不可重用已消费注册码。签发新注册码使旧注册码失效，但直到新注册成功才替换旧 agent token，避免用户只是复制安装命令就导致正在工作的 agent 掉线。请求必须匹配已纳管记录。元数据声明本身不是远程可信证明，安装者持有预绑定注册码是本设计的信任边界；如果要求证明请求确实来自这台云实例，须另确定可用的云侧身份机制，不能声称元数据文本可以防伪。
 
-服务端只存长期 token 的 SHA-256，不存明文；token 泄露仅授予对应 agent 的上报/未来固定测速权限，不接受管理 Cookie/API Key。撤销后立即 401。agent 本地凭据未来通过 systemd credential/仓库外受限来源注入，若需长期保存采用 AES-256-GCM 且密钥在状态目录之外；M0 没有真实 token 的保存实现。
+服务端只存长期 token 的 SHA-256，不存明文；token 泄露仅授予对应 agent 的上报/未来固定测速权限，不接受管理 Cookie/API Key。撤销后立即 401。agent 本地身份与离线队列使用 AES-256-GCM 日志，主密钥在状态目录之外；安装阶段将接入 systemd credential。
 
-当前客户端唯一可运行的 agent 模式为 `--dev`，只接受显式回环 HTTP 服务器，使用公开的假 token；生产模式直接报 `real_collection_not_available_in_m0`。不访问元数据、不申请能力、不修改防火墙。
+`--dev` 仅接受显式回环 HTTP 服务器，使用公开假 token，不访问元数据或防火墙。生产 Linux 客户端使用单独的 register/serve/run-once 流程，并要求外部主密钥及显式公网接口。
 
 ## 上报与 ACK
 
