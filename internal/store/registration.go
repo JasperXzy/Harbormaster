@@ -17,6 +17,7 @@ import (
 var ErrRegistration = errors.New("invalid_registration_code")
 var ErrIdentity = errors.New("instance_identity_mismatch")
 var ErrRegistrationConsumed = errors.New("registration_consumed")
+var ErrAgentUnsupported = errors.New("agent_not_supported")
 
 // A grant never revokes the current token. Rotation occurs only when a new
 // agent successfully completes registration against this prebound instance.
@@ -26,10 +27,10 @@ func (s *Store) AgentGrant(ctx context.Context, instanceID string, now time.Time
 		return "", time.Time{}, err
 	}
 	defer tx.Rollback()
-	var enabled bool
-	err = tx.QueryRowContext(ctx, `SELECT a.enabled FROM instance i JOIN account_settings a ON a.account_id=i.account_id
- JOIN resource_snapshot r ON r.id=i.id AND r.account_id=i.account_id AND r.kind=i.kind AND r.present=1
- WHERE i.id=? AND i.kind IN ('ecs','swas')`, instanceID).Scan(&enabled)
+	var enabled, present bool
+	err = tx.QueryRowContext(ctx, `SELECT a.enabled,EXISTS(SELECT 1 FROM resource_snapshot r WHERE r.id=i.id AND r.account_id=i.account_id AND r.kind=i.kind AND r.present=1)
+ FROM instance i JOIN account_settings a ON a.account_id=i.account_id
+ WHERE i.id=? AND i.kind IN ('ecs','swas')`, instanceID).Scan(&enabled, &present)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", time.Time{}, ErrNotFound
 	}
@@ -39,11 +40,14 @@ func (s *Store) AgentGrant(ctx context.Context, instanceID string, now time.Time
 	if !enabled {
 		return "", time.Time{}, ErrAccountDisabled
 	}
+	if !present {
+		return "", time.Time{}, ErrAgentUnsupported
+	}
 	var raw [32]byte
 	_, _ = rand.Read(raw[:])
 	code := "hm_reg_" + hex.EncodeToString(raw[:])
 	sum := sha256.Sum256([]byte(code))
-	expiry := now.Add(10 * time.Minute)
+	expiry := now.UTC().Add(10 * time.Minute)
 	_, err = tx.ExecContext(ctx, `INSERT INTO agent_registration(instance_id,code_hash,expires_at) VALUES(?,?,?)
  ON CONFLICT(instance_id) DO UPDATE SET code_hash=excluded.code_hash,expires_at=excluded.expires_at,consumed_at=NULL,nonce_hash=NULL,agent_id=NULL`, instanceID, sum[:], timestamp(expiry))
 	if err != nil {

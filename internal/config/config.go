@@ -23,6 +23,7 @@ type Config struct {
 	Timezone                    string   `json:"timezone"`
 	Frontend                    string   `json:"frontend"`
 	PublicURL                   string   `json:"public_url"`
+	AgentReleaseDir             string   `json:"agent_release_dir"`
 	TrustedProxies              []string `json:"trusted_proxies"`
 	AdminAllowCIDRs             []string `json:"admin_allow_cidrs"`
 	SessionTTLSeconds           int      `json:"session_ttl_seconds"`
@@ -49,7 +50,7 @@ func Load(path string) (Config, error) {
 			return c, errors.New("configuration must contain one JSON object")
 		}
 	}
-	for k, p := range map[string]*string{"HM_LISTEN": &c.Listen, "HM_DATA_DIR": &c.DataDir, "HM_LOG_LEVEL": &c.LogLevel, "HM_TIMEZONE": &c.Timezone, "HM_FRONTEND": &c.Frontend, "HM_PUBLIC_URL": &c.PublicURL} {
+	for k, p := range map[string]*string{"HM_LISTEN": &c.Listen, "HM_DATA_DIR": &c.DataDir, "HM_LOG_LEVEL": &c.LogLevel, "HM_TIMEZONE": &c.Timezone, "HM_FRONTEND": &c.Frontend, "HM_PUBLIC_URL": &c.PublicURL, "HM_AGENT_RELEASE_DIR": &c.AgentReleaseDir} {
 		if v, ok := os.LookupEnv(k); ok {
 			*p = v
 		}

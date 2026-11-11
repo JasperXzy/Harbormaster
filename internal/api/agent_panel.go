@@ -3,16 +3,41 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
+	"github.com/JasperXzy/harbormaster/internal/agentrelease"
 	"github.com/JasperXzy/harbormaster/internal/model"
+	"github.com/JasperXzy/harbormaster/internal/store"
 )
 
 func (p *productionPanel) agentManagement(w http.ResponseWriter, r *http.Request, path string) bool {
 	parts := strings.Split(strings.TrimPrefix(path, "/instances/"), "/")
-	if !strings.HasPrefix(path, "/instances/") || len(parts) != 3 || parts[1] != "agent" || parts[2] != "token" {
+	if !strings.HasPrefix(path, "/instances/") || len(parts) != 3 || parts[1] != "agent" || (parts[2] != "token" && parts[2] != "install-command") {
 		return false
+	}
+	if parts[2] == "install-command" {
+		if r.Method != "POST" {
+			writeError(w, 405, "method_not_allowed")
+			return true
+		}
+		manifest, err := agentrelease.Check(p.agentReleaseDir)
+		if err != nil {
+			writeError(w, 503, "agent_release_unavailable")
+			return true
+		}
+		code, expiry, err := p.s.AgentGrant(r.Context(), parts[0], p.now())
+		if errors.Is(err, store.ErrAccountDisabled) {
+			writeError(w, 409, "account_disabled")
+		} else if errors.Is(err, store.ErrAgentUnsupported) {
+			writeError(w, 409, "agent_not_supported")
+		} else if err != nil {
+			businessError(w, err)
+		} else {
+			writeJSON(w, 201, map[string]any{"command": agentrelease.Command(p.publicURL, code, manifest), "expires_at": expiry})
+		}
+		return true
 	}
 	if r.Method != "DELETE" {
 		writeError(w, 405, "method_not_allowed")

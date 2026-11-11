@@ -28,11 +28,13 @@ func NewHandler(s *store.Store, panel, frontend http.Handler) http.Handler {
 	var mode string
 	_ = s.DB.QueryRow("SELECT value FROM app_meta WHERE key='mode'").Scan(&mode)
 	var agentAccess *panelAccess
+	var agentReleaseDir string
 	if production, ok := panel.(*productionPanel); ok {
 		access := production.access
 		agentAccess = &access
+		agentReleaseDir = production.agentReleaseDir
 	}
-	m.Handle("/agent/", &agentAPI{s: s, development: mode == "development", access: agentAccess})
+	m.Handle("/agent/", &agentAPI{s: s, development: mode == "development", access: agentAccess, releaseDir: agentReleaseDir})
 	// API misses must never receive a successful SPA document.
 	if panel != nil {
 		m.Handle("/api/v1/", panel)

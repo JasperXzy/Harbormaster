@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/agentproto"
+	"github.com/JasperXzy/harbormaster/internal/agentrelease"
 	"github.com/JasperXzy/harbormaster/internal/store"
 )
 
@@ -18,6 +19,7 @@ type agentAPI struct {
 	s           *store.Store
 	development bool
 	access      *panelAccess
+	releaseDir  string
 }
 
 func (a *agentAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -33,6 +35,12 @@ func (a *agentAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 403, "https_required")
 			return
 		}
+	}
+	if (r.Method == "GET" || r.Method == "HEAD") && strings.HasPrefix(r.URL.Path, "/agent/v1/releases/") {
+		if !agentrelease.Serve(w, r, a.releaseDir, strings.TrimPrefix(r.URL.Path, "/agent/v1/releases/")) {
+			writeError(w, 404, "not_found")
+		}
+		return
 	}
 	if r.Method != "POST" {
 		writeError(w, 404, "not_found")

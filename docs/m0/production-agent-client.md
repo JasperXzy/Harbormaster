@@ -14,7 +14,7 @@
 
 ## 本地安全与持久化
 
-状态目录默认 `/var/lib/harbormaster-agent`，权限必须 0700。密钥按现有 `HM_MASTER_KEY` / `HM_MASTER_KEY_FILE` 规则加载，文件必须在状态目录之外；部署时将使用 `/etc/harbormaster/agent.key` 与 systemd credential，安装脚本尚未交付。代码不输出长期 token、注册码、元数据 token 或请求正文。
+状态目录默认 `/var/lib/harbormaster-agent`，权限必须 0700。密钥按现有 `HM_MASTER_KEY` / `HM_MASTER_KEY_FILE` 规则加载，文件必须在状态目录之外；部署使用 `/etc/harbormaster/agent.key` 与 systemd credential，参见后续交付的 [安装脚本与回滚](agent-installation.md)。代码不输出长期 token、注册码、元数据 token 或请求正文。
 
 `state.enc` 为 AES-256-GCM 加密追加日志，包含身份、最后序列及未 ACK 样本；每次追加后 fsync。帧带长度且整体认证，启动只裁去未写完的末帧，完整帧认证失败则停止。目录锁阻止两个 agent 进程并发写入。每 1000 次操作原子压缩，先同步新文件、再 rename 和同步目录；ACK 只有 epoch+sequence 完全匹配才清理对应前缀，序号账本不随队列清空。
 

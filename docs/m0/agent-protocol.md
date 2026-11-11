@@ -1,6 +1,6 @@
 # hm-agent 上报协议 v1（后端内部）
 
-本协议不属于面板 OpenAPI。已实现服务端生产注册、单条/批量鉴权落库、ACK、撤销、实例状态和速率。Linux nftables 采集、客户端加密状态/离线缓冲已编码并通过本地测试与交叉编译；安装产物仍待实现，尚未安装真实 agent，原生 Linux 计数尚未实测。详见 production-agent-client.md。
+本协议不属于面板 OpenAPI。已实现服务端生产注册、单条/批量鉴权落库、ACK、撤销、实例状态和速率。Linux nftables 采集、客户端加密状态/离线缓冲已编码并通过本地测试与交叉编译；安装产物及 API 也已准备，尚未安装真实 agent，原生 Linux 计数尚未实测。详见 production-agent-client.md 和 agent-installation.md。
 
 2026-11-11 实测与用户决定：sha-pro 的元数据 instance-id 是底层 ECS ID，和 SWAS API ID 不同。用户同意轻量使用预绑定已纳管 SWAS ID 的一次性注册码，元数据 ID 仅记录为辅助信息；服务端不可把两个 ID 当同一标识比较。ECS 的 sin-pro 已验证元数据 ID 与 ECS API 一致。此处是设计修订，本轮未安装真实 agent。
 
@@ -68,4 +68,4 @@ M3 的任务只能是有类型的 `icmp_ping`、`tcp_connect`、`trace_route`，
 
 SSE 每 5 秒合并变化，发送 agent.status 和 instance.realtime；后者允许 realtime=null 主动清除旧速率。前端需重新生成契约类型并处理 null。新增 data_quality 与 pending_first_report 为可选字段。CDT 对齐未确认期间 realtime_protection 始终为 unprotected 或 not_applicable，不产生 worst_case/protected。
 
-生产注册端点可供协议测试使用，但安装命令端点尚未交付；不会返回无法下载二进制的假安装命令。真实机器计数、CPU、吞吐、容器/NAT 重复计数、进程重启与系统重启测试仍需后续安装产物和用户授权。
+安装命令端点只在配置的发布目录完整且校验通过时签发注册码，否则返回 503，不返回假安装命令。真实机器计数、CPU、吞吐、容器/NAT 重复计数、进程重启与系统重启测试仍需真实主机操作授权。

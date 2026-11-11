@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Agent install-command validates a complete local release before issuing a code; missing/corrupt files return 503 agent_release_unavailable. Generated commands pin installer and manifest checksums, pass the one-time code via stdin and keep active tokens until registration succeeds.
 # 2026-11-12  Agent ingestion: optional pending_first_report/data_quality distinguish registration from fresh samples. instance.realtime SSE can explicitly clear stale rates with null. New grant replaces the old code but retains the active token until successful registration; revocation gives not_installed. Metadata is not remote attestation. See docs/m0/agent-protocol.md.
 # 2026-11-12  CDT observations: official_quality=inferred, fetched_at separate from unknown cutoff; user approved provisional byte display only. Add raw cumulative observation history; daily values remain unknown without a verified daily source. Quota/daily freshness is nullable before first collection.
 # 2026-11-12  Accounts/discovery: local quotas use configurable 1024^3-byte units (user approved; not official alignment). Account updates fence stale jobs; disabled accounts retain snapshots. Jobs persist/recover leases; GET reads snapshots only. Multi-exit instances expose billing_subject_ids; ambiguous billing/charge types remain unknown.
@@ -568,6 +569,7 @@ paths:
       tags: [instances]
       operationId: createAgentInstallCommand
       summary: 生成一行安装命令（含一次性注册码）
+      description: Requires a complete configured agent release. Creating a new command expires the previous registration code; the running agent token remains valid until a new registration succeeds. Commands contain a secret code valid for 10 minutes and must not be logged or shared. Linux systemd installation only.
       responses:
         "201":
           description: 安装命令
@@ -581,6 +583,12 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409":
           description: 该实例不支持安装（`agent_not_supported`，例如实例已释放）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Release artifacts are missing or fail checksum verification (`agent_release_unavailable`). No code is issued.
           content:
             application/json:
               schema:

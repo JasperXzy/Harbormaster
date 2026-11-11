@@ -25,17 +25,19 @@ import (
 )
 
 type productionPanel struct {
-	s        *store.Store
-	access   panelAccess
-	timezone string
-	ttl      time.Duration
-	hashing  sync.Mutex
-	now      func() time.Time
-	engine   *collect.Engine
+	s               *store.Store
+	access          panelAccess
+	timezone        string
+	ttl             time.Duration
+	hashing         sync.Mutex
+	now             func() time.Time
+	engine          *collect.Engine
+	publicURL       string
+	agentReleaseDir string
 }
 
 func NewProductionPanel(s *store.Store, c config.Config, engine *collect.Engine) http.Handler {
-	return &productionPanel{s: s, access: newPanelAccess(c), timezone: c.Timezone, ttl: time.Duration(c.SessionTTLSeconds) * time.Second, now: time.Now, engine: engine}
+	return &productionPanel{s: s, access: newPanelAccess(c), timezone: c.Timezone, ttl: time.Duration(c.SessionTTLSeconds) * time.Second, now: time.Now, engine: engine, publicURL: c.PublicURL, agentReleaseDir: c.AgentReleaseDir}
 }
 
 func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {

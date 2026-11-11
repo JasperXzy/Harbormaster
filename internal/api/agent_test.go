@@ -3,14 +3,19 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/agentproto"
+	"github.com/JasperXzy/harbormaster/internal/agentrelease"
 )
 
 func TestAgentHTTPRegistrationBatchAndIndependentAuth(t *testing.T) {
@@ -110,5 +115,79 @@ func TestAgentEventsClearRatesAndCoalesce(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatal("unchanged events repeated", calls)
+	}
+}
+
+func TestInstallCommandChecksArtifactsBeforeIssuingGrant(t *testing.T) {
+	p := testPanel(t)
+	for _, q := range []string{
+		"INSERT INTO account VALUES('a','test','china','now')",
+		"INSERT INTO account_settings(account_id,config_json,enabled) VALUES('a','{}',1)",
+		"INSERT INTO instance VALUES('ecs','a','i-test','ecs','test','cn-shanghai','running','stopped','now')",
+		`INSERT INTO resource_snapshot VALUES('a','ecs','ecs','cn-shanghai','{"id":"ecs"}',1,'now')`,
+	} {
+		if _, err := p.s.DB.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cookie, csrf := setupPanel(t, p)
+	path := "/instances/ecs/agent/install-command"
+	if w := panelRequest(p, "POST", path, nil, cookie, ""); w.Code != 403 {
+		t.Fatal("missing CSRF accepted")
+	}
+	if w := panelRequest(p, "POST", path, nil, cookie, csrf); w.Code != 503 {
+		t.Fatal(w.Code, w.Body)
+	}
+	var count int
+	if err := p.s.DB.QueryRow("SELECT count(*) FROM agent_registration").Scan(&count); err != nil || count != 0 {
+		t.Fatal("unavailable release issued grant")
+	}
+	dir := t.TempDir()
+	var manifest strings.Builder
+	for _, name := range agentrelease.Files {
+		raw := []byte("test artifact " + name)
+		if err := os.WriteFile(filepath.Join(dir, name), raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(&manifest, "%x  %s\n", sha256.Sum256(raw), name)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SHA256SUMS"), []byte(manifest.String()), 0600); err != nil {
+		t.Fatal(err)
+	}
+	p.agentReleaseDir = dir
+	w := panelRequest(p, "POST", path, nil, cookie, csrf)
+	if w.Code != 201 || !strings.Contains(w.Body.String(), "hm_reg_") || !strings.Contains(w.Body.String(), "sha256sum") {
+		t.Fatal(w.Code, w.Body)
+	}
+	var firstHash []byte
+	if err := p.s.DB.QueryRow("SELECT code_hash FROM agent_registration WHERE instance_id='ecs'").Scan(&firstHash); err != nil {
+		t.Fatal(err)
+	}
+	w = panelRequest(p, "POST", path, nil, cookie, csrf)
+	if w.Code != 201 {
+		t.Fatal(w.Code, w.Body)
+	}
+	var secondHash []byte
+	if err := p.s.DB.QueryRow("SELECT code_hash FROM agent_registration WHERE instance_id='ecs'").Scan(&secondHash); err != nil || bytes.Equal(firstHash, secondHash) {
+		t.Fatal("grant did not rotate")
+	}
+	h := NewHandler(p.s, p, nil)
+	for _, origin := range []string{"https://panel.example", "http://panel.example"} {
+		r := httptest.NewRequest("GET", origin+"/agent/v1/releases/hm-agent.service", nil)
+		w = httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		expected := 200
+		if strings.HasPrefix(origin, "http:") {
+			expected = 403
+		}
+		if w.Code != expected {
+			t.Fatal(w.Code, w.Body)
+		}
+	}
+	if _, err := p.s.DB.Exec("UPDATE resource_snapshot SET present=0"); err != nil {
+		t.Fatal(err)
+	}
+	if w = panelRequest(p, "POST", path, nil, cookie, csrf); w.Code != 409 || !strings.Contains(w.Body.String(), "agent_not_supported") {
+		t.Fatal(w.Code, w.Body)
 	}
 }
