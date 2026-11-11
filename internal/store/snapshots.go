@@ -36,6 +36,9 @@ func (s *Store) SaveScan(ctx context.Context, j model.Job, a model.Account, resu
 			return err
 		}
 	}
+	if err = recordInstanceEvents(ctx, tx, a.ID, result, now); err != nil {
+		return err
+	}
 	for scope, complete := range result.CompleteScopes {
 		if !complete {
 			continue

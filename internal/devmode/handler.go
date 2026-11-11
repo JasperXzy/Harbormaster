@@ -137,6 +137,18 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		respond(w, 200, object{"items": paged, "next_cursor": cursor, "updated_at": now.Format(time.RFC3339)})
+	case "/instance-events":
+		items := []object{
+			{"id": "demo-event-1", "account_id": "demo-account-1", "instance_id": "demo-sin", "cloud_instance_id": "i-demo-sin", "instance_kind": "ecs", "region_id": "ap-southeast-1", "instance_name": "sin-pro (demo)", "kind": "status_changed", "observed_at": now.Add(-time.Minute).Format(time.RFC3339), "before": object{"status": "starting"}, "after": object{"status": "running"}},
+			{"id": "demo-event-2", "account_id": "demo-account-1", "instance_id": "demo-sin", "cloud_instance_id": "i-demo-sin", "instance_kind": "ecs", "region_id": "ap-southeast-1", "instance_name": "sin-pro (demo)", "kind": "discovered", "observed_at": now.Add(-time.Hour).Format(time.RFC3339), "before": nil, "after": object{"present": true}},
+		}
+		items = filter(filter(items, "account_id", r.URL.Query().Get("account_id")), "instance_id", r.URL.Query().Get("instance_id"))
+		paged, cursor, err := paginate(items, r)
+		if err != nil {
+			failure(w, 422, "validation_failed")
+			return
+		}
+		respond(w, 200, object{"items": paged, "next_cursor": cursor})
 	case "/traffic/quotas":
 		respond(w, 200, object{"items": filter(f.Quotas, "account_id", r.URL.Query().Get("account_id"))})
 	case "/traffic/observations":

@@ -53,6 +53,18 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 		}
 	}
 	w = call("GET", "/instances?limit=1", "", cookie, "")
+	events := call("GET", "/instance-events?instance_id=demo-sin&limit=1", "", cookie, "")
+	var eventPage struct {
+		Items []object `json:"items"`
+		Next  string   `json:"next_cursor"`
+	}
+	if events.Code != 200 || json.Unmarshal(events.Body.Bytes(), &eventPage) != nil || len(eventPage.Items) != 1 || eventPage.Next == "" || eventPage.Items[0]["kind"] != "status_changed" {
+		t.Fatal("demo events unavailable", events.Code, events.Body)
+	}
+	events = call("GET", "/instance-events?instance_id=demo-sin&limit=1&cursor="+eventPage.Next, "", cookie, "")
+	if events.Code != 200 || json.Unmarshal(events.Body.Bytes(), &eventPage) != nil || len(eventPage.Items) != 1 || eventPage.Items[0]["kind"] != "discovered" {
+		t.Fatal("demo event cursor repeated newest", events.Code, events.Body)
+	}
 	var page struct {
 		Items []object `json:"items"`
 		Next  string   `json:"next_cursor"`

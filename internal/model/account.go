@@ -175,6 +175,9 @@ type Snapshot struct {
 	ID      string
 	Region  string
 	Payload map[string]any
+	// True only when all IPv4 sources for this instance were read completely.
+	// Used by event comparisons; it is not a claim about CDT eligibility.
+	IPv4Complete bool
 }
 type ScanResult struct {
 	Snapshots []Snapshot

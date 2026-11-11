@@ -225,6 +225,7 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 		}
 		checkedAt := time.Now().UTC()
 		part := normalizeRegion(a, region, ecs, eni, eips, packages, swas, traffic, trafficKnown, checkedAt)
+		attachIPv4Quality(part.Snapshots, ecs, eni, eips, swas)
 		c.attachIPv6(ctx, cred, region, ecs, part.Snapshots, before, observe)
 		attachNetworkCapacity(part.Snapshots, types, checkedAt)
 		attachRenewals(part.Snapshots, ecsRenewal, swasRenewal, checkedAt)

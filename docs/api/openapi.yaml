@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Instance change history: GET /instance-events lists persisted discovery, disappearance/reappearance, status and IP changes with cursor/account/instance filters. Events describe scan observations, not proven cloud creation/deletion or operator intent. Only complete product scans infer disappearance; unknown status, incomplete IPv4 topology and stale IPv6 do not overwrite comparison baselines. Existing installations start field baselines without inventing historical changes.
 # 2026-11-12  IPv6 discovery: optional Instance.ipv6 exposes assigned ECS IPv6 addresses separately from public IPv4 and billing topology. Read instance extensions first, then per-instance ENIs with a 3-second total fallback deadline. Failed refreshes retain the previous result as stale, including its original observation time; only a successful complete read may clear addresses. SWAS is null pending a verified source.
 # 2026-11-12  Bandwidth mismatch alerts: add spec_bandwidth_insufficient (empty params, non-urgent). Fresh ECS network_capacity comparisons drive incident/recovery; unknown data is not recovery. The comparison concerns configured public outbound ceiling versus specification capability, not measured traffic.
 # 2026-11-12  Expiration reminders: add instance_expiring with before_days=7 by default. Evaluate only freshly collected subscription expiry dates, deduplicate active incidents and track renewal-date changes; disabled/released targets cancel pending reminders. Auto-renew enabled does not suppress a reminder. Notifications are persisted only; Telegram dispatch remains unwired.
@@ -547,6 +548,45 @@ paths:
                     description: 最近一次资源扫描完成的时间；从未扫描过为 null。
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /instance-events:
+    get:
+      tags: [instances]
+      operationId: listInstanceEvents
+      summary: 实例变化事件
+      description: Newest first, persisted independently of present resources. Includes disabled accounts and disappeared instances. Reads never call cloud APIs. observed_at is detection time; disappearance may also result from changed resource visibility and does not prove a cloud deletion.
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            type: string
+        - name: instance_id
+          in: query
+          description: Harbormaster Instance.id, including instances no longer in the current list.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Instance observation history; no matching records returns an empty page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InstanceEvent"
+                  next_cursor:
+                    type: string
+                    nullable: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
 
   /instances/refresh:
     post:
@@ -1606,6 +1646,53 @@ components:
         sampled_at:
           type: string
           format: date-time
+
+    InstanceEventValue:
+      type: object
+      description: Exactly one field according to event kind. Lifecycle events use present, status changes use status, address changes use addresses. Address arrays are normalized sets, not interface ordering; an empty array is a confirmed empty set.
+      properties:
+        present:
+          type: boolean
+        status:
+          $ref: "#/components/schemas/InstanceStatus"
+        addresses:
+          type: array
+          items:
+            type: string
+
+    InstanceEvent:
+      type: object
+      required: [id, account_id, instance_id, cloud_instance_id, instance_kind, region_id, instance_name, kind, observed_at, before, after]
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        instance_id:
+          type: string
+        cloud_instance_id:
+          type: string
+        instance_kind:
+          $ref: "#/components/schemas/InstanceKind"
+        region_id:
+          type: string
+        instance_name:
+          type: string
+          description: Name at observation time; retained for disappeared instances.
+        kind:
+          type: string
+          enum: [discovered, disappeared, reappeared, status_changed, public_ipv4_changed, ipv6_changed]
+        observed_at:
+          type: string
+          format: date-time
+        before:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/InstanceEventValue"
+          description: Null on first discovery. Existing data at feature rollout establishes a baseline without fabricating old changes.
+        after:
+          $ref: "#/components/schemas/InstanceEventValue"
 
     InstanceIPv6:
       type: object
