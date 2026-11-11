@@ -4,6 +4,8 @@
 
 后续新增的 instance_expiring 规则见 [到期提醒](expiration-alerts.md)，由成功采集的到期时间驱动，不属于本文的三个数据源健康规则。
 
+规格配置不匹配的 spec_bandwidth_insufficient 规则见 [规格带宽告警](bandwidth-alerts.md)，同样由新采集快照驱动。
+
 ## 已实现
 
 | 规则 | 默认值 | 判断来源 |

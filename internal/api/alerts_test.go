@@ -15,7 +15,7 @@ func TestAlertRuleAPIUsesAvailableSourcesAndSharedOfflineTimeout(t *testing.T) {
 	var list struct {
 		Items []model.AlertRule `json:"items"`
 	}
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 4 {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 5 {
 		t.Fatal(w.Code, w.Body)
 	}
 	for _, rule := range list.Items {
@@ -52,5 +52,11 @@ func TestAlertRuleAPIUsesAvailableSourcesAndSharedOfflineTimeout(t *testing.T) {
 	}
 	if w = panelRequest(p, "PATCH", "/alert-rules/account_api_failure", map[string]any{"params": map[string]int{"consecutive_failures": 3, "before_days": 7}}, cookie, csrf); w.Code != 422 {
 		t.Fatal("expiry params accepted on another rule", w.Code)
+	}
+	if w = panelRequest(p, "PATCH", "/alert-rules/spec_bandwidth_insufficient", map[string]any{"params": map[string]int{}}, cookie, csrf); w.Code != 200 || !strings.Contains(w.Body.String(), `"urgent":false`) {
+		t.Fatal(w.Code, w.Body)
+	}
+	if w = panelRequest(p, "PATCH", "/alert-rules/spec_bandwidth_insufficient", map[string]any{"params": map[string]int{"consecutive_failures": 3}}, cookie, csrf); w.Code != 422 {
+		t.Fatal("parameterless rule accepted a threshold", w.Code)
 	}
 }

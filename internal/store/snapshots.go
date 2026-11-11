@@ -63,6 +63,9 @@ func (s *Store) SaveScan(ctx context.Context, j model.Job, a model.Account, resu
 	if err = checkExpirationSnapshots(ctx, tx, a.ID, result.Snapshots, now); err != nil {
 		return err
 	}
+	if err = checkBandwidthSnapshots(ctx, tx, a.ID, result.Snapshots, now); err != nil {
+		return err
+	}
 	a.UpdatedAt = now
 	if result.Permissions != nil {
 		a.PermissionCheck = result.Permissions

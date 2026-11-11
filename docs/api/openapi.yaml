@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Bandwidth mismatch alerts: add spec_bandwidth_insufficient (empty params, non-urgent). Fresh ECS network_capacity comparisons drive incident/recovery; unknown data is not recovery. The comparison concerns configured public outbound ceiling versus specification capability, not measured traffic.
 # 2026-11-12  Expiration reminders: add instance_expiring with before_days=7 by default. Evaluate only freshly collected subscription expiry dates, deduplicate active incidents and track renewal-date changes; disabled/released targets cancel pending reminders. Auto-renew enabled does not suppress a reminder. Notifications are persisted only; Telegram dispatch remains unwired.
 # 2026-11-12  Instance renewal snapshot: optional renewal object reports auto/manual/no-renewal/unknown/not-applicable with source, check time and safe error. ECS uses its subscription-only API; SWAS uses BSS records matched by instance ID, region and subscription type. Missing or conflicting records never mean disabled auto-renewal. No renewal write operations are added.
 # 2026-11-12  API Key management: session/CSRF-protected create, paginated list and soft revocation. Creation returns the secret once; subsequent responses expose metadata only. Scopes are fixed to summary:read, instance:control and cron:run; they do not grant browser-session or agent-report access. Integration consumers are separate from this management API.
@@ -934,7 +935,7 @@ paths:
       tags: [notify]
       operationId: listAlertRules
       summary: 内置告警规则
-      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline and instance_expiring. Usage/forecast rules are not returned until their metering source and policy are available.
+      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring and spec_bandwidth_insufficient. Usage/forecast rules are not returned until their metering source and policy are available.
       responses:
         "200":
           description: 告警规则
@@ -2385,7 +2386,7 @@ components:
 
     AlertRuleKey:
       type: string
-      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring]
+      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient]
       description: 内置规则；仅返回当前已实现且有可用来源的规则。
 
     Severity:
@@ -2394,7 +2395,7 @@ components:
 
     AlertRuleParams:
       type: object
-      description: 每条规则只用到其中一部分字段，用不到的字段不返回。
+      description: 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient 使用空对象，无额外阈值。
       properties:
         before_days:
           type: integer

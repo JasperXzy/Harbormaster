@@ -150,11 +150,15 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 			return err
 		}
 	}
-	// Expiry transitions are driven by successful collection, not cached clock
-	// extrapolation. Keep present targets unknown here; absence still closes them.
-	if r := rules["instance_expiring"]; r.Enabled {
+	// Snapshot-based transitions require fresh collection. Keep present targets
+	// unknown here; confirmed absence still closes their incidents.
+	for _, key := range []string{"instance_expiring", "spec_bandwidth_insufficient"} {
+		r := rules[key]
+		if !r.Enabled {
+			continue
+		}
 		rows, err = tx.QueryContext(ctx, `SELECT i.id,i.account_id FROM instance i JOIN account_settings a ON a.account_id=i.account_id AND a.enabled=1
- WHERE EXISTS(SELECT 1 FROM resource_snapshot rs WHERE rs.account_id=i.account_id AND rs.id=i.id AND rs.kind=i.kind AND rs.present=1)`)
+ WHERE (?='instance_expiring' OR i.kind='ecs') AND EXISTS(SELECT 1 FROM resource_snapshot rs WHERE rs.account_id=i.account_id AND rs.id=i.id AND rs.kind=i.kind AND rs.present=1)`, key)
 		if err != nil {
 			return err
 		}

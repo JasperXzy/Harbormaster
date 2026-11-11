@@ -22,6 +22,13 @@ func (r AlertRule) Validate() map[string]string {
 		fields["params.before_days"] = "not_applicable"
 	}
 	switch r.Key {
+	case "spec_bandwidth_insufficient":
+		if r.Params.ConsecutiveFailures != nil {
+			fields["params.consecutive_failures"] = "not_applicable"
+		}
+		if r.Params.OfflineAfterSeconds != nil {
+			fields["params.offline_after_seconds"] = "not_applicable"
+		}
 	case "instance_expiring":
 		if r.Params.BeforeDays == nil {
 			fields["params.before_days"] = "required"
