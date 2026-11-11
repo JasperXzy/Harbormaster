@@ -121,6 +121,13 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, object{"items": []object{{"id": "ap-southeast-1", "mainland": false}, {"id": "cn-hongkong", "mainland": false}, {"id": "cn-shanghai", "mainland": true}}})
 	case "/accounts":
 		respond(w, 200, object{"items": f.Accounts})
+	case "/api-keys":
+		items, cursor, err := paginate([]object{{"id": "demo-key-widget", "name": "Widget (demo)", "scopes": []string{"summary:read"}, "created_at": now.Add(-time.Hour).Format(time.RFC3339), "last_used_at": nil, "revoked_at": nil}}, r)
+		if err != nil {
+			failure(w, 422, "validation_failed")
+			return
+		}
+		respond(w, 200, object{"items": items, "next_cursor": cursor})
 	case "/instances":
 		items := filter(f.Instances, "account_id", r.URL.Query().Get("account_id"))
 		items = filter(items, "kind", r.URL.Query().Get("kind"))

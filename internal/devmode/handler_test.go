@@ -46,7 +46,7 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 	}
 	var session map[string]string
 	_ = json.Unmarshal(w.Body.Bytes(), &session)
-	for _, path := range []string{"/system/info", "/settings", "/accounts", "/accounts/demo-account-1/finance", "/accounts/demo-account-2/finance", "/instances?limit=1", "/traffic/quotas", "/traffic/daily?account_id=demo-account-1", "/traffic/billing-subjects", "/bandwidth-packages", "/bandwidth-packages/demo-package/hourly", "/notify/telegram", "/alert-rules", "/notifications"} {
+	for _, path := range []string{"/system/info", "/settings", "/accounts", "/api-keys", "/accounts/demo-account-1/finance", "/accounts/demo-account-2/finance", "/instances?limit=1", "/traffic/quotas", "/traffic/daily?account_id=demo-account-1", "/traffic/billing-subjects", "/bandwidth-packages", "/bandwidth-packages/demo-package/hourly", "/notify/telegram", "/alert-rules", "/notifications"} {
 		w = call("GET", path, "", cookie, "")
 		if w.Code != 200 || !json.Valid(w.Body.Bytes()) {
 			t.Errorf("%s: %d %s", path, w.Code, w.Body.String())

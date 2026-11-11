@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  API Key management: session/CSRF-protected create, paginated list and soft revocation. Creation returns the secret once; subsequent responses expose metadata only. Scopes are fixed to summary:read, instance:control and cron:run; they do not grant browser-session or agent-report access. Integration consumers are separate from this management API.
 # 2026-11-12  Account finance: GET /accounts/{account_id}/finance reads cached balance and current-month bill overview only. Money is decimal text with provider currency; bill types remain separate, no guessed net total. Sources retain last successful data on failure and are fenced by credential version; the configured business timezone selects the requested billing cycle.
 # 2026-11-12  Correct SystemInfo.latest_agent_version: nullable, sourced from the same verified local release as Agent.available_version, never the hm-server build version. Frontends must use Agent.update_available===true, not version-string inequality, to show upgrade hints.
 # 2026-11-12  Agent upgrade hints: optional nullable available_version/update_available refer to the server's locally configured, checksum-verified agent release. Semantic versions compare by precedence; dev/unknown versions yield null. Release checks are cached for at most 30 seconds; obtaining an upgrade command always revalidates artifacts and uses the existing install-command endpoint.
@@ -761,6 +762,108 @@ paths:
                 $ref: "#/components/schemas/AccountFinance"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api-keys:
+    get:
+      tags: [system]
+      operationId: listAPIKeys
+      summary: List API Key metadata, including revoked keys
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Newest first; no secret or token hash is returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/APIKey"
+                  next_cursor:
+                    type: string
+                    nullable: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    post:
+      tags: [system]
+      operationId: createAPIKey
+      summary: Create an API Key and return its secret once
+      description: Grants are immutable; create a replacement and revoke the old key to change scopes. Keys remain valid until revoked. Losing this response does not permit secret retrieval; use the metadata list to revoke and replace the key. Creating a grant does not implement or enable unavailable control/cron operations.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, scopes]
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 80
+                scopes:
+                  type: array
+                  minItems: 1
+                  maxItems: 3
+                  uniqueItems: true
+                  items:
+                    $ref: "#/components/schemas/APIKeyScope"
+      responses:
+        "201":
+          description: Secret appears only in this response; do not log or persist it in frontend state storage.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [api_key, token]
+                properties:
+                  api_key:
+                    $ref: "#/components/schemas/APIKey"
+                  token:
+                    type: string
+                    description: One-time creation response secret. This field is deliberately absent from list responses.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /api-keys/{key_id}:
+    parameters:
+      - name: key_id
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      tags: [system]
+      operationId: revokeAPIKey
+      summary: Revoke an API Key
+      description: Idempotent for an existing key. Metadata is retained; subsequent authentication fails. Does not create or execute a cloud job.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "204":
+          description: Revoked, or already revoked.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -1776,6 +1879,35 @@ components:
         outstanding_amount:
           type: string
           description: Provider OutstandingAmount, unpaid or credit settlement amount.
+
+    APIKeyScope:
+      type: string
+      enum: ['summary:read', 'instance:control', 'cron:run']
+
+    APIKey:
+      type: object
+      required: [id, name, scopes, created_at, last_used_at, revoked_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/APIKeyScope"
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Last successful scope authentication, not proof of a completed cloud action.
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
 
     AgentInstallCommand:
       type: object
