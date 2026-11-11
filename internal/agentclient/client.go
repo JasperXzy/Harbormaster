@@ -24,9 +24,10 @@ var ErrCredentials = errors.New("agent_registration_or_token_rejected")
 var ErrMetadata = errors.New("aliyun_metadata_unavailable")
 
 type Client struct {
-	HTTP    *http.Client
-	Journal *agentstate.Journal
-	Version string
+	ReportIntervalSeconds int
+	HTTP                  *http.Client
+	Journal               *agentstate.Journal
+	Version               string
 }
 
 func NewHTTP() *http.Client {
@@ -123,7 +124,7 @@ func (c *Client) Register(ctx context.Context) error {
 	return c.Journal.SetIdentity(identity)
 }
 
-// Sample is called by the fixed ten-second collector, independent of network I/O.
+// Sample is called at the configured cadence, independent of network I/O.
 func (c *Client) Sample(sample agentmeter.Sample, at time.Time) error {
 	state := c.Journal.Meta()
 	if state.Identity.AgentID == "" || state.Identity.Token == "" {
@@ -148,6 +149,9 @@ func (c *Client) Sample(sample agentmeter.Sample, at time.Time) error {
 		epoch = hex.EncodeToString(raw[:])
 	}
 	r := agentproto.Report{Version: 1, AgentID: state.Identity.AgentID, CounterEpoch: epoch, Sequence: sequence, SampledAt: at.UTC(), UptimeMS: sample.UptimeMS, RXBytes: sample.IPv4RX + sample.IPv6RX, TXBytes: sample.IPv4TX + sample.IPv6TX, AgentVersion: c.Version, RulesVersion: agentmeter.RulesVersion, FamilyCounters: &agentproto.FamilyCounters{IPv4RX: sample.IPv4RX, IPv4TX: sample.IPv4TX, IPv6RX: sample.IPv6RX, IPv6TX: sample.IPv6TX}}
+	if c.ReportIntervalSeconds != agentproto.DefaultReportIntervalSeconds {
+		r.ReportIntervalSeconds = c.ReportIntervalSeconds
+	}
 	if r.Validate(at) != nil {
 		return ErrProtocol
 	}

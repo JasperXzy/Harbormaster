@@ -3,14 +3,15 @@ package model
 import "time"
 
 type AgentStatus struct {
-	Status       string     `json:"status"`
-	Version      *string    `json:"version"`
-	RegisteredAt *time.Time `json:"registered_at"`
-	LastReportAt *time.Time `json:"last_report_at"`
-	OfflineSince *time.Time `json:"offline_since"`
-	WorstCase    any        `json:"worst_case"`
-	Pending      bool       `json:"pending_first_report"`
-	Quality      *string    `json:"data_quality"`
+	ReportIntervalSeconds *int       `json:"report_interval_seconds"`
+	Status                string     `json:"status"`
+	Version               *string    `json:"version"`
+	RegisteredAt          *time.Time `json:"registered_at"`
+	LastReportAt          *time.Time `json:"last_report_at"`
+	OfflineSince          *time.Time `json:"offline_since"`
+	WorstCase             any        `json:"worst_case"`
+	Pending               bool       `json:"pending_first_report"`
+	Quality               *string    `json:"data_quality"`
 }
 type InstanceRealtime struct {
 	RX        int64     `json:"rx_bytes_per_second"`

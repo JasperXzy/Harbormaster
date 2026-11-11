@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/JasperXzy/harbormaster/internal/agentproto"
 	"github.com/JasperXzy/harbormaster/internal/model"
 )
 
@@ -18,7 +19,7 @@ func (s *Store) AgentViews(ctx context.Context, now time.Time) (map[string]model
 	}
 	rows, err := s.DB.QueryContext(ctx, `SELECT a.instance_id,a.version,a.registered_at,a.last_received_at,a.revoked_at,
  coalesce(cfg.enabled,0),c.sampled_at,c.received_at,c.quality,c.uptime_ms,c.rx_bytes,c.tx_bytes,
- p.uptime_ms,p.rx_bytes,p.tx_bytes,p.sampled_at
+ p.uptime_ms,p.rx_bytes,p.tx_bytes,p.sampled_at,c.report_interval_seconds
  FROM agent a JOIN instance i ON i.id=a.instance_id LEFT JOIN account_settings cfg ON cfg.account_id=i.account_id
  LEFT JOIN agent_counter_state c ON c.agent_id=a.id
  LEFT JOIN traffic_sample p ON p.agent_id=c.agent_id AND p.counter_epoch=c.counter_epoch AND p.sequence=
@@ -31,9 +32,9 @@ func (s *Store) AgentViews(ctx context.Context, now time.Time) (map[string]model
 	for rows.Next() {
 		var id, version string
 		var registered, received, revoked, sampled, ledgerReceived, quality, previousAt sql.NullString
-		var uptime, rx, tx, prevUptime, prevRX, prevTX sql.NullInt64
+		var uptime, rx, tx, prevUptime, prevRX, prevTX, interval sql.NullInt64
 		var enabled bool
-		if err = rows.Scan(&id, &version, &registered, &received, &revoked, &enabled, &sampled, &ledgerReceived, &quality, &uptime, &rx, &tx, &prevUptime, &prevRX, &prevTX, &previousAt); err != nil {
+		if err = rows.Scan(&id, &version, &registered, &received, &revoked, &enabled, &sampled, &ledgerReceived, &quality, &uptime, &rx, &tx, &prevUptime, &prevRX, &prevTX, &previousAt, &interval); err != nil {
 			return nil, err
 		}
 		v := model.AgentView{Agent: model.AgentStatus{Status: "not_installed"}}
@@ -58,12 +59,17 @@ func (s *Store) AgentViews(ctx context.Context, now time.Time) (map[string]model
 			at := parseAgentTime(sampled)
 			prior := parseAgentTime(previousAt)
 			ledgerAt := parseAgentTime(ledgerReceived)
+			if received.Valid && interval.Valid && ledgerAt != nil && (v.Agent.RegisteredAt == nil || !ledgerAt.Before(*v.Agent.RegisteredAt)) {
+				cadence := int(interval.Int64)
+				v.Agent.ReportIntervalSeconds = &cadence
+			}
+			window := agentproto.RateWindow(int(interval.Int64))
 			// Registration clears heartbeat; only samples from this registration
 			// may supply rates. Time jumps and long gaps are not current rates.
 			if v.Agent.Status == "online" && quality.String == "ok" && at != nil && prior != nil && ledgerAt != nil &&
 				(v.Agent.RegisteredAt == nil || !ledgerAt.Before(*v.Agent.RegisteredAt)) &&
-				!at.Before(now.Add(-30*time.Second)) && !at.After(now.Add(30*time.Second)) && at.After(*prior) &&
-				prevUptime.Valid && uptime.Int64 > prevUptime.Int64 && uptime.Int64-prevUptime.Int64 <= 30000 && rx.Int64 >= prevRX.Int64 && tx.Int64 >= prevTX.Int64 {
+				!at.Before(now.Add(-window)) && !at.After(now.Add(30*time.Second)) && at.After(*prior) &&
+				prevUptime.Valid && uptime.Int64 > prevUptime.Int64 && uptime.Int64-prevUptime.Int64 <= window.Milliseconds() && rx.Int64 >= prevRX.Int64 && tx.Int64 >= prevTX.Int64 {
 				dt := uptime.Int64 - prevUptime.Int64
 				rxRate, rxOK := byteRate(rx.Int64-prevRX.Int64, dt)
 				txRate, txOK := byteRate(tx.Int64-prevTX.Int64, dt)

@@ -14,7 +14,7 @@
 
 ## 上报与 ACK
 
-`POST /agent/v1/reports`，`Authorization: Bearer <instance-token>`，JSON UTF-8，最大 16KiB；固定字段，未知字段拒绝。默认 10 秒一次。
+`POST /agent/v1/reports`，`Authorization: Bearer <instance-token>`，JSON UTF-8，最大 16KiB；固定字段，未知字段拒绝。默认 10 秒一次，可在 agent 本地设置 1–60 秒整数秒。可选 `report_interval_seconds` 声明该样本的采样周期，省略或 0 等价于旧版 10 秒；默认 agent 继续省略该字段。非默认周期需要升级后的服务端。注册响应中的 10 仍是默认值，不是强制覆盖本地配置。
 
 ```json
 {
@@ -42,7 +42,7 @@
 `POST /agent/v1/reports/batch` 接收 `{ "reports": [...] }`，1–100 条、最大 128KiB，同一 agent 按序提交，全批事务提交或回滚。ACK 指向批内最后一个 epoch+sequence；客户端必须同时核对两者才能删缓存。
 
 - 200 只在数据库事务提交后返回。完全相同的重试返回 duplicate=true，且不推进在线时间。
-- `(agent_id,counter_epoch,sequence)` 唯一。相同键不同计数/时间 409；同 epoch 的倒退序列、单调时间或累计计数 409。
+- `(agent_id,counter_epoch,sequence)` 唯一。相同键不同计数/时间/归一化采样周期 409；同 epoch 的倒退序列、单调时间或累计计数 409。
 - 新 epoch 表示计数器实际重置。仅 agent 进程重启但内核计数器仍在时应复用持久化 epoch，不能随意归零；M0 合成进程重启会重置计数，因此新 epoch 合理。
 - 独立 agent_counter_state 与 agent_retired_epoch 账本在清理原始样本后继续阻止重放。旧 epoch 不能在切换后再次插入；已落库完全相同的重试仍可 ACK。数据库原始记录不跨 epoch 做差。
 - 没有上一个有效样本的新 epoch 是基线，不自称恢复了上次重启前未上报的字节；该缺口要记录质量状态，由保护估算处理。
@@ -69,3 +69,5 @@ M3 的任务只能是有类型的 `icmp_ping`、`tcp_connect`、`trace_route`，
 SSE 每 5 秒合并变化，发送 agent.status 和 instance.realtime；后者允许 realtime=null 主动清除旧速率。前端需重新生成契约类型并处理 null。新增 data_quality 与 pending_first_report 为可选字段。CDT 对齐未确认期间 realtime_protection 始终为 unprotected 或 not_applicable，不产生 worst_case/protected。
 
 安装命令端点只在配置的发布目录完整且校验通过时签发注册码，否则返回 503，不返回假安装命令。真实机器计数、CPU、吞吐、容器/NAT 重复计数、进程重启与系统重启测试仍需真实主机操作授权。
+
+迁移 008 在当前计数账本和样本扩展表保存 report_interval_seconds，历史记录补 10。累计计数不因周期变化归零；速率质量窗口为 max(30 秒, 3 × 当前声明周期)，超过窗口的同 epoch 采样间隔标记 gap，不产生实时速率。恢复正常采样后可以恢复 ok。接收心跳的新鲜度仍为采样时刻前后 30 秒，不因周期增大而放宽，以免旧缓存补传伪装上线。详见 [采样周期设计](agent-cadence.md)。

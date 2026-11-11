@@ -18,7 +18,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/security"
 )
 
-func production(ctx context.Context, command, server, dir, interfaces string, codeStdin bool, log *slog.Logger) error {
+func production(ctx context.Context, command, server, dir, interfaces string, codeStdin bool, interval time.Duration, log *slog.Logger) error {
 	if runtime.GOOS != "linux" {
 		return agentmeter.ErrUnsupported
 	}
@@ -40,7 +40,7 @@ func production(ctx context.Context, command, server, dir, interfaces string, co
 	if command == "remove-counters" {
 		return agentmeter.Remove(strings.Split(interfaces, ","))
 	}
-	client := &agentclient.Client{HTTP: agentclient.NewHTTP(), Journal: journal, Version: buildinfo.Version}
+	client := &agentclient.Client{HTTP: agentclient.NewHTTP(), Journal: journal, Version: buildinfo.Version, ReportIntervalSeconds: int(interval / time.Second)}
 	defer client.HTTP.CloseIdleConnections()
 	if server != "" {
 		origin, err := agentclient.Origin(server)
@@ -109,9 +109,9 @@ func production(ctx context.Context, command, server, dir, interfaces string, co
 	go func() { result <- delivery(workerCtx, client, log) }()
 	// Join the delivery worker before closing the encrypted journal.
 	defer func() { cancel(); <-result }()
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-	log.Info("agent_started", "report_interval_seconds", 10, "rules_version", agentmeter.RulesVersion)
+	log.Info("agent_started", "report_interval_seconds", int(interval/time.Second), "rules_version", agentmeter.RulesVersion)
 	for {
 		select {
 		case <-ctx.Done():

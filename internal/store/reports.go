@@ -95,16 +95,17 @@ func acceptSample(ctx context.Context, tx *sql.Tx, r agentproto.Report, now time
 		}
 		var rules, version string
 		var dropped int64
+		var interval int
 		var existing sql.NullString
-		err = tx.QueryRowContext(ctx, "SELECT rules_version,dropped_samples,family_json,agent_version FROM traffic_sample_detail WHERE agent_id=? AND counter_epoch=? AND sequence=?", r.AgentID, r.CounterEpoch, r.Sequence).Scan(&rules, &dropped, &existing, &version)
+		err = tx.QueryRowContext(ctx, "SELECT rules_version,dropped_samples,family_json,agent_version,report_interval_seconds FROM traffic_sample_detail WHERE agent_id=? AND counter_epoch=? AND sequence=?", r.AgentID, r.CounterEpoch, r.Sequence).Scan(&rules, &dropped, &existing, &version, &interval)
 		if errors.Is(err, sql.ErrNoRows) {
-			if r.RulesVersion != "" || r.DroppedSamples != 0 || r.FamilyCounters != nil {
+			if r.RulesVersion != "" || r.DroppedSamples != 0 || r.FamilyCounters != nil || r.IntervalSeconds() != agentproto.DefaultReportIntervalSeconds {
 				return false, ErrConflict
 			}
 		} else if err != nil {
 			return false, err
 		} else {
-			if rules != r.RulesVersion || dropped != r.DroppedSamples || version != r.AgentVersion || (existing.Valid != (family != nil)) || (existing.Valid && existing.String != family) {
+			if interval != r.IntervalSeconds() || rules != r.RulesVersion || dropped != r.DroppedSamples || version != r.AgentVersion || (existing.Valid != (family != nil)) || (existing.Valid && existing.String != family) {
 				return false, ErrConflict
 			}
 		}
@@ -126,6 +127,9 @@ func acceptSample(ctx context.Context, tx *sql.Tx, r agentproto.Report, now time
 				return false, ErrConflict
 			}
 			quality = "ok"
+			if r.UptimeMS-uptime > agentproto.RateWindow(r.IntervalSeconds()).Milliseconds() {
+				quality = "gap"
+			}
 			prior, e := time.Parse(time.RFC3339Nano, at)
 			if e != nil {
 				return false, e
@@ -160,11 +164,11 @@ func acceptSample(ctx context.Context, tx *sql.Tx, r agentproto.Report, now time
 	if _, err = tx.ExecContext(ctx, "INSERT INTO traffic_sample VALUES(?,?,?,?,?,?,?,?)", r.AgentID, r.CounterEpoch, r.Sequence, timestamp(r.SampledAt), timestamp(now), r.UptimeMS, r.RXBytes, r.TXBytes); err != nil {
 		return false, err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO traffic_sample_detail VALUES(?,?,?,?,?,?,?,?)", r.AgentID, r.CounterEpoch, r.Sequence, r.RulesVersion, r.DroppedSamples, family, r.AgentVersion, quality); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO traffic_sample_detail(agent_id,counter_epoch,sequence,rules_version,dropped_samples,family_json,agent_version,quality,report_interval_seconds) VALUES(?,?,?,?,?,?,?,?,?)", r.AgentID, r.CounterEpoch, r.Sequence, r.RulesVersion, r.DroppedSamples, family, r.AgentVersion, quality, r.IntervalSeconds()); err != nil {
 		return false, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO agent_counter_state(agent_id,counter_epoch,sequence,uptime_ms,rx_bytes,tx_bytes,sampled_at,received_at,rules_version,quality) VALUES(?,?,?,?,?,?,?,?,?,?)
- ON CONFLICT(agent_id) DO UPDATE SET counter_epoch=excluded.counter_epoch,sequence=excluded.sequence,uptime_ms=excluded.uptime_ms,rx_bytes=excluded.rx_bytes,tx_bytes=excluded.tx_bytes,sampled_at=excluded.sampled_at,received_at=excluded.received_at,rules_version=excluded.rules_version,quality=excluded.quality`, r.AgentID, r.CounterEpoch, r.Sequence, r.UptimeMS, r.RXBytes, r.TXBytes, timestamp(r.SampledAt), timestamp(now), r.RulesVersion, quality); err != nil {
+	if _, err = tx.ExecContext(ctx, `INSERT INTO agent_counter_state(agent_id,counter_epoch,sequence,uptime_ms,rx_bytes,tx_bytes,sampled_at,received_at,rules_version,quality,report_interval_seconds) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+ ON CONFLICT(agent_id) DO UPDATE SET counter_epoch=excluded.counter_epoch,sequence=excluded.sequence,uptime_ms=excluded.uptime_ms,rx_bytes=excluded.rx_bytes,tx_bytes=excluded.tx_bytes,sampled_at=excluded.sampled_at,received_at=excluded.received_at,rules_version=excluded.rules_version,quality=excluded.quality,report_interval_seconds=excluded.report_interval_seconds`, r.AgentID, r.CounterEpoch, r.Sequence, r.UptimeMS, r.RXBytes, r.TXBytes, timestamp(r.SampledAt), timestamp(now), r.RulesVersion, quality, r.IntervalSeconds()); err != nil {
 		return false, err
 	}
 	if fresh && quality != "clock_skew" {

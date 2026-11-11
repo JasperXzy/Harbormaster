@@ -10,10 +10,11 @@ User=hm-agent
 Group=hm-agent
 StateDirectory=harbormaster-agent
 StateDirectoryMode=0700
+Environment=HM_AGENT_REPORT_INTERVAL=10s
 EnvironmentFile=/etc/harbormaster/agent.env
 LoadCredential=agent-key:/etc/harbormaster/agent.key
 Environment=HM_MASTER_KEY_FILE=%d/agent-key
-ExecStart=/usr/local/lib/harbormaster/hm-agent serve --interfaces ${HM_AGENT_INTERFACES}
+ExecStart=/usr/local/lib/harbormaster/hm-agent serve --interfaces ${HM_AGENT_INTERFACES} --report-interval ${HM_AGENT_REPORT_INTERVAL}
 Restart=on-failure
 RestartSec=30
 TimeoutStopSec=15

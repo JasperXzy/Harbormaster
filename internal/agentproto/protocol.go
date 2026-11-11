@@ -13,19 +13,31 @@ const Path = "/agent/v1/reports"
 const DemoToken = "hm-demo-only-not-a-real-credential"
 const DemoAgentID = "demo-agent-sin"
 
+const DefaultReportIntervalSeconds = 10
+const MaxReportIntervalSeconds = 60
+
+// RateWindow allows scheduling jitter without presenting long-gap averages as live rates.
+func RateWindow(seconds int) time.Duration {
+	if seconds == 0 {
+		seconds = DefaultReportIntervalSeconds
+	}
+	return time.Duration(max(30, 3*seconds)) * time.Second
+}
+
 type Report struct {
-	Version        int             `json:"version"`
-	AgentID        string          `json:"agent_id"`
-	CounterEpoch   string          `json:"counter_epoch"`
-	Sequence       int64           `json:"sequence"`
-	SampledAt      time.Time       `json:"sampled_at"`
-	UptimeMS       int64           `json:"uptime_ms"`
-	RXBytes        int64           `json:"rx_bytes"`
-	TXBytes        int64           `json:"tx_bytes"`
-	AgentVersion   string          `json:"agent_version"`
-	RulesVersion   string          `json:"rules_version,omitempty"`
-	DroppedSamples int64           `json:"dropped_samples,omitempty"`
-	FamilyCounters *FamilyCounters `json:"family_counters,omitempty"`
+	ReportIntervalSeconds int             `json:"report_interval_seconds,omitempty"`
+	Version               int             `json:"version"`
+	AgentID               string          `json:"agent_id"`
+	CounterEpoch          string          `json:"counter_epoch"`
+	Sequence              int64           `json:"sequence"`
+	SampledAt             time.Time       `json:"sampled_at"`
+	UptimeMS              int64           `json:"uptime_ms"`
+	RXBytes               int64           `json:"rx_bytes"`
+	TXBytes               int64           `json:"tx_bytes"`
+	AgentVersion          string          `json:"agent_version"`
+	RulesVersion          string          `json:"rules_version,omitempty"`
+	DroppedSamples        int64           `json:"dropped_samples,omitempty"`
+	FamilyCounters        *FamilyCounters `json:"family_counters,omitempty"`
 }
 
 type FamilyCounters struct {
@@ -42,7 +54,18 @@ type Ack struct {
 	Duplicate        bool      `json:"duplicate"`
 }
 
+// IntervalSeconds normalizes legacy reports that omit the optional cadence.
+func (r Report) IntervalSeconds() int {
+	if r.ReportIntervalSeconds == 0 {
+		return DefaultReportIntervalSeconds
+	}
+	return r.ReportIntervalSeconds
+}
+
 func (r Report) Validate(now time.Time) error {
+	if r.IntervalSeconds() < 1 || r.IntervalSeconds() > MaxReportIntervalSeconds {
+		return errors.New("invalid_report_interval")
+	}
 	if r.Version != 1 || r.AgentID == "" || len(r.AgentID) > 128 || r.CounterEpoch == "" || len(r.CounterEpoch) > 128 || len(r.AgentVersion) > 64 {
 		return errors.New("invalid_report")
 	}

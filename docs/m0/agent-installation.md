@@ -21,13 +21,19 @@
 - 用户/组 hm-agent（系统用户、无登录 shell）。
 - `/usr/local/lib/harbormaster/hm-agent`。
 - `/etc/systemd/system/hm-agent.service`。
-- `/etc/harbormaster/agent.env`（只有接口列表）、`agent-managed` 安装标识。
+- `/etc/harbormaster/agent.env`（接口列表及上报周期）、`agent-managed` 安装标识。
 - `/etc/harbormaster/agent.key`（新安装随机生成，0600，已有密钥不覆盖）。
 - `/var/lib/harbormaster-agent`（0700，加密状态与队列）。
 
 注册阶段在安装进程中短暂以 root 读取主密钥并完成绑定，不添加计数规则。常驻服务用 hm-agent 用户，只有 CAP_NET_ADMIN，无 CAP_NET_RAW、无完整 root；通过 systemd LoadCredential 获取密钥的只读副本，密钥不进入状态目录或 unit 文本。此配置依据 [systemd 执行环境文档](https://freedesktop.org/software/systemd/man/latest/systemd.exec.html) 的 credential、状态目录与能力配置。
 
 启动服务后会创建专用 `inet harbormaster` 计数表，只操作该表。未知同名安装文件/用户不自动接管；升级保留现有身份与状态。若尚有未送达缓存，主动重新注册会失败并回滚，避免把旧实例缓存迁给新绑定；先恢复旧服务送达缓存后再升级。
+
+## 本地上报周期
+
+默认 10 秒；`hm-agent serve --report-interval 10s` 可改为 1–60 秒的整数秒。systemd 安装使用 `/etc/harbormaster/agent.env` 的 `HM_AGENT_REPORT_INTERVAL=10s`；修改后需重启服务。安装脚本仅接受 `1s`–`60s` 形式，升级保留该值，旧 env 缺失时补默认值。unit 自带 10s 缺省值，因此更新 unit 不要求先改旧 env。
+
+长周期需要先通过面板告警规则调整 `agent_offline` 的 `offline_after_seconds`，使其大于采样周期并留出网络余量。例如 60s 采样可配 180s 掉线阈值。后端不会自动覆盖用户阈值；30 秒掉线验收仍只针对默认 10s 周期。修改周期前先升级服务端，旧服务端拒绝未识别的非默认周期字段。详情见 [采样周期设计](agent-cadence.md)。
 
 ## 失败恢复与卸载
 

@@ -119,6 +119,13 @@ esac
 	if output, err := run(false); err != nil {
 		t.Fatal(err, string(output))
 	}
+	envPath := filepath.Join(root, "etc/harbormaster/agent.env")
+	env, err := os.ReadFile(envPath)
+	if err != nil || !bytes.Contains(env, []byte("HM_AGENT_REPORT_INTERVAL=10s\n")) {
+		t.Fatal("missing default cadence", err)
+	}
+	savedEnv := strings.Replace(string(env), "HM_AGENT_REPORT_INTERVAL=10s", "HM_AGENT_REPORT_INTERVAL=60s", 1)
+	write(envPath, savedEnv)
 	installed := filepath.Join(root, "usr/local/lib/harbormaster/hm-agent")
 	first, err := os.ReadFile(installed)
 	if err != nil {
@@ -140,6 +147,17 @@ esac
 	}
 	if _, err = os.Stat(filepath.Join(root, "service-active")); err != nil {
 		t.Fatal("previous active service not restarted")
+	}
+	restoredEnv, err := os.ReadFile(envPath)
+	if err != nil || string(restoredEnv) != savedEnv {
+		t.Fatal("rollback did not preserve cadence", err)
+	}
+	if output, err := run(false); err != nil {
+		t.Fatal(err, string(output))
+	}
+	upgradedEnv, err := os.ReadFile(envPath)
+	if err != nil || string(upgradedEnv) != savedEnv {
+		t.Fatal("upgrade did not preserve cadence", err)
 	}
 	if _, err = os.Stat(filepath.Join(root, "etc/harbormaster/agent.key")); err != nil {
 		t.Fatal("rollback erased key")

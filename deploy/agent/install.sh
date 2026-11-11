@@ -37,7 +37,10 @@ if [ ! -f "$managed" ]; then
 fi
 # Only an unambiguous public boundary is selected automatically. Operators can
 # retain an explicitly reviewed interface list in the local non-secret env file.
+report_interval=10s
 if [ -f "$cfg/agent.env" ]; then
+  saved_interval=$(awk -F= '$1=="HM_AGENT_REPORT_INTERVAL" {print $2}' "$cfg/agent.env")
+  if [ -n "$saved_interval" ]; then report_interval=$saved_interval; fi
   interfaces=$(awk -F= '$1=="HM_AGENT_INTERFACES" {print $2}' "$cfg/agent.env")
 else
   interfaces=$({ ip -o -4 route show default; ip -o -6 route show default; } | awk '{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1)}' | sort -u)
@@ -45,6 +48,9 @@ fi
 case "$interfaces" in ''|*[!a-zA-Z0-9_.:,-]*) fail 'public_interfaces_require_local_configuration';; esac
 [ "${#interfaces}" -le 127 ] || fail 'invalid_public_interfaces'
 printf '%s\n' "$interfaces" | awk -F, 'NF<1 || NF>8 {exit 1} {for(i=1;i<=NF;i++) if(length($i)<1 || length($i)>15 || $i=="lo") exit 1}' || fail 'invalid_public_interfaces'
+
+# Canonical whole-second values only; preserve the reviewed local cadence on upgrade.
+case "$report_interval" in [1-9]s|[1-5][0-9]s|60s) ;; *) fail 'invalid_report_interval';; esac
 
 stage=$(mktemp -d /var/tmp/hm-agent-install.XXXXXX)
 mutated=0
@@ -113,7 +119,7 @@ registration_code=
 chown -R hm-agent:hm-agent "$state"
 install -m 0755 "$stage/hm-agent-linux-$arch" "$binary"
 install -m 0644 "$stage/hm-agent.service" "$unit"
-printf 'HM_AGENT_INTERFACES=%s\n' "$interfaces" > "$cfg/agent.env"
+printf 'HM_AGENT_INTERFACES=%s\nHM_AGENT_REPORT_INTERVAL=%s\n' "$interfaces" "$report_interval" > "$cfg/agent.env"
 chmod 0644 "$cfg/agent.env"
 systemctl daemon-reload
 systemctl enable --now hm-agent.service

@@ -26,7 +26,7 @@ func Agent(ctx context.Context, args []string, out, errOut io.Writer) int {
 	}
 	cmd := args[0]
 	if cmd == "help" || cmd == "--help" || cmd == "-h" {
-		_, _ = io.WriteString(out, "hm-agent <register|serve|run-once|remove-counters|version> [--server https://panel.example] [--data-dir /var/lib/harbormaster-agent] [--interfaces eth0]\nregister --registration-code-stdin reads a one-time code from stdin; without the flag it retries the encrypted pending registration. Production requires Linux and HM_MASTER_KEY or HM_MASTER_KEY_FILE outside data-dir.\n--dev emits synthetic counters every 10 seconds; optional --server must be loopback HTTP.\n")
+		_, _ = io.WriteString(out, "hm-agent <register|serve|run-once|remove-counters|version> [--server https://panel.example] [--data-dir /var/lib/harbormaster-agent] [--interfaces eth0] [--report-interval 10s]\nregister --registration-code-stdin reads a one-time code from stdin; without the flag it retries the encrypted pending registration. Production requires Linux and HM_MASTER_KEY or HM_MASTER_KEY_FILE outside data-dir.\n--report-interval accepts whole seconds from 1s to 60s (default 10s).\n--dev emits synthetic counters at the configured interval; optional --server must be loopback HTTP.\n")
 		return 0
 	}
 	f := flag.NewFlagSet(cmd, flag.ContinueOnError)
@@ -35,6 +35,7 @@ func Agent(ctx context.Context, args []string, out, errOut io.Writer) int {
 	server := f.String("server", "", "server origin")
 	dataDir := f.String("data-dir", "/var/lib/harbormaster-agent", "encrypted agent state directory")
 	interfaces := f.String("interfaces", "", "explicit public interfaces separated by commas")
+	interval := f.Duration("report-interval", 10*time.Second, "sampling interval, whole seconds from 1s to 60s")
 	codeStdin := f.Bool("registration-code-stdin", false, "read one-time code from stdin")
 	if f.Parse(args[1:]) != nil || f.NArg() != 0 {
 		log.Error("invalid_arguments")
@@ -44,8 +45,12 @@ func Agent(ctx context.Context, args []string, out, errOut io.Writer) int {
 		_ = json.NewEncoder(out).Encode(map[string]string{"program": "hm-agent", "version": buildinfo.Version})
 		return 0
 	}
+	if *interval < time.Second || *interval > agentproto.MaxReportIntervalSeconds*time.Second || *interval%time.Second != 0 {
+		log.Error("invalid_report_interval")
+		return 1
+	}
 	if !*dev {
-		if err := production(ctx, cmd, *server, *dataDir, *interfaces, *codeStdin, log); err != nil {
+		if err := production(ctx, cmd, *server, *dataDir, *interfaces, *codeStdin, *interval, log); err != nil {
 			log.Error("agent_stopped", "reason", err.Error())
 			return 1
 		}
@@ -72,11 +77,14 @@ func Agent(ctx context.Context, args []string, out, errOut io.Writer) int {
 	var seq int64
 	client := &http.Client{Timeout: 5 * time.Second, Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	defer client.CloseIdleConnections()
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(*interval)
 	defer ticker.Stop()
 	for {
 		seq++
 		r := agentproto.Report{Version: 1, AgentID: agentproto.DemoAgentID, CounterEpoch: epoch, Sequence: seq, SampledAt: time.Now().UTC(), UptimeMS: time.Since(start).Milliseconds(), RXBytes: (seq - 1) * 1000000, TXBytes: (seq - 1) * 800000, AgentVersion: buildinfo.Version}
+		if *interval != 10*time.Second {
+			r.ReportIntervalSeconds = int(*interval / time.Second)
+		}
 		if *server == "" {
 			if json.NewEncoder(out).Encode(r) != nil {
 				return 1

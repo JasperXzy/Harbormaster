@@ -34,6 +34,35 @@ func testClient(t *testing.T) *Client {
 	t.Cleanup(func() { j.Close() })
 	return &Client{Journal: j, Version: "test"}
 }
+
+func TestCadenceChangePreservesCounterEpochAndQueuedMetadata(t *testing.T) {
+	c := testClient(t)
+	if err := c.Journal.SetIdentity(agentstate.Identity{Server: "https://panel.example", AgentID: "agent-test", Token: "test-token-not-real"}); err != nil {
+		t.Fatal(err)
+	}
+	s := agentmeter.Sample{Generation: "kernel-one", UptimeMS: 1000, IPv4RX: 10}
+	if err := c.Sample(s, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	c.ReportIntervalSeconds = 60
+	s.UptimeMS += 60000
+	s.IPv4RX += 6000
+	if err := c.Sample(s, time.Now().Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	batch := c.Journal.Batch(100)
+	if len(batch) != 2 || batch[0].ReportIntervalSeconds != 0 || batch[1].ReportIntervalSeconds != 60 || batch[0].CounterEpoch != batch[1].CounterEpoch || batch[1].Sequence != 2 {
+		t.Fatal("cadence change lost cumulative continuity or rewrote queued data", batch)
+	}
+	c.ReportIntervalSeconds = 61
+	s.UptimeMS += 60000
+	if err := c.Sample(s, time.Now()); err != ErrProtocol {
+		t.Fatal(err)
+	}
+	if len(c.Journal.Batch(100)) != 2 {
+		t.Fatal("invalid cadence persisted")
+	}
+}
 func TestRegistrationLostResponseKeepsNonceAndEncryptedToken(t *testing.T) {
 	c := testClient(t)
 	code := strings.Repeat("a", 64)
