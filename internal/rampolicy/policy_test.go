@@ -38,7 +38,7 @@ func TestDraftLevelsAndDeploymentCopies(t *testing.T) {
 				actions[action] = true
 			}
 		}
-		if len(actions) != []int{14, 20, 28}[index] {
+		if len(actions) != []int{15, 21, 29}[index] {
 			t.Fatal("unexpected tier action count", draft.ID, len(actions))
 		}
 		for action := range prior {

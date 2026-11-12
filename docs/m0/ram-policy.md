@@ -82,3 +82,5 @@ F1.4 尚缺具体资源范围收紧、独立最小权限身份验收、M4 创建
 手动电源代码已经实现但默认关闭，接口限制标识改为 runtime_writes_require_explicit_enable；这只是准确描述运行时条件，不把 RAM 策略当作执行授权。详见 [CPU 来源](cpu-metrics.md)与[电源接口](instance-power.md)。
 
 系统事件来源阶段再补入只读 ecs:DescribeInstanceHistoryEvents 与 cms:DescribeSystemEventAttribute，当前累计动作数为 14 / 20 / 28；三地域读取已实测通过，未修改真实授权。来源与语义边界见 [系统事件来源](system-events.md)。
+
+2026-11-12 实例账单接入：三档草稿新增只读 `bssapi:DescribeInstanceBill`（官方 action，Resource=`*`），累计 action 数为 15/21/29。依据与真实读取结果见[实例账单验证](instance-billing.md)。未向真实 RAM 身份授予权限，既有 bss 权限不能替代此 action。

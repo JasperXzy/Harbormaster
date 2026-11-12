@@ -71,17 +71,20 @@ func TestFinanceSourcesFailIndependentlyAndFenceCalls(t *testing.T) {
 	calls := 0
 	c := Inventory{Caller: callFunc(func(_ context.Context, _ Credentials, action, _ string, _ map[string]string) (map[string]any, error) {
 		calls++
+		if action == "DescribeInstanceBill" {
+			return map[string]any{"Success": true, "Data": map[string]any{"BillingCycle": "2026-11", "Items": []any{}}}, nil
+		}
 		if action == "QueryAccountBalance" {
 			return nil, failure("permission_denied")
 		}
 		return map[string]any{"Success": true, "Data": map[string]any{"BillingCycle": "2026-11", "Items": map[string]any{"Item": []any{}}}}, nil
 	})}
 	items := c.Finance(context.Background(), testAccount(), fakeCredentials().Credential, "2026-11", func() error { return nil })
-	if calls != 2 || items[0].Error == nil || items[0].Balance != nil || items[1].Error != nil || items[1].Bill == nil {
+	if calls != 3 || items[0].Error == nil || items[0].Balance != nil || items[1].Error != nil || items[1].Bill == nil || items[2].Error != nil || items[2].InstanceBill == nil {
 		t.Fatal(items)
 	}
 	c.Finance(context.Background(), testAccount(), fakeCredentials().Credential, "2026-11", func() error { return failure("account_changed") })
-	if calls != 2 {
+	if calls != 3 {
 		t.Fatal("stale account reached cloud")
 	}
 }

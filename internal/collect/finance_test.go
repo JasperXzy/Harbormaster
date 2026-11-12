@@ -43,6 +43,12 @@ func TestFinanceCacheFailureRotationAndDisable(t *testing.T) {
 			t.Fatal("billing ignored persisted business timezone", month)
 		}
 		items := []model.FinanceObservation{{Kind: "balance", FetchedAt: at, Balance: &model.BalanceData{Currency: "USD", Available: "123.456789", Cash: "12.3"}}, {Kind: "bill", Cycle: month, FetchedAt: at, Bill: &model.BillData{Cycle: month, Items: []model.BillItem{}}}}
+		items = append(items, model.FinanceObservation{Kind: "instance_bill", Cycle: month, FetchedAt: at, InstanceBill: &model.InstanceBillData{Cycle: month, Items: []model.InstanceBillItem{
+			{CloudID: "i-test", PipCode: "ecs", ProductCode: "ecs", Currency: "USD", Pretax: "1.000000000001", Type: "PayAsYouGoBill"},
+			{CloudID: "i-test", PipCode: "ecs", ProductCode: "ecs", Currency: "CNY", Pretax: "2", Type: "Refund"},
+			{CloudID: "i-test", PipCode: "eip", ProductCode: "eip", Currency: "CNY", Pretax: "99"},
+			{CloudID: "other", PipCode: "ecs", ProductCode: "ecs", Currency: "CNY", Pretax: "88"},
+		}}})
 		if failed {
 			for i := range items {
 				items[i].Error = model.Error("permission_denied")
@@ -66,6 +72,14 @@ func TestFinanceCacheFailureRotationAndDisable(t *testing.T) {
 	if err != nil || view.Balance.Data == nil || view.Balance.Data.Available != "123.456789" || view.Bill.Data == nil || view.Bill.Data.Items == nil {
 		t.Fatal(view, err)
 	}
+	instance, err := e.Store.InstanceFinance(ctx, a.ID+"_instance", cycle)
+	if err != nil || instance.Bill.Data == nil || len(instance.Bill.Data.Items) != 2 || instance.Bill.Data.Items[0].Pretax != "1.000000000001" || instance.Bill.Data.Items[1].Type != "Refund" {
+		t.Fatal(instance, err)
+	}
+	empty, err := e.Store.InstanceFinance(ctx, a.ID+"_instance", "2000-01")
+	if err != nil || empty.Bill.Status != "never_synced" || empty.Bill.Data != nil {
+		t.Fatal(empty, err)
+	}
 	prior, err := e.Store.AccountFinance(ctx, a.ID, "2000-01")
 	if err != nil || prior.Bill.Data != nil || prior.Bill.Status != "never_synced" {
 		t.Fatal("month substituted", prior, err)
@@ -81,6 +95,10 @@ func TestFinanceCacheFailureRotationAndDisable(t *testing.T) {
 	if err != nil || view.Balance.Status != "failing" || view.Balance.Data.Available != "123.456789" || !view.Balance.FetchedAt.Equal(at) || !view.Balance.LastAttemptAt.Equal(at.Add(time.Minute)) {
 		t.Fatal(view, err)
 	}
+	instance, err = e.Store.InstanceFinance(ctx, a.ID+"_instance", cycle)
+	if err != nil || instance.Bill.Status != "failing" || len(instance.Bill.Data.Items) != 2 || !instance.Bill.FetchedAt.Equal(at) || !instance.Bill.LastAttemptAt.Equal(at.Add(time.Minute)) {
+		t.Fatal(instance, err)
+	}
 	account, err := e.Store.Account(ctx, a.ID)
 	if err != nil || account.PermissionCheck.Items[0].Result != "missing" {
 		t.Fatal(account.PermissionCheck, err)
@@ -92,6 +110,10 @@ func TestFinanceCacheFailureRotationAndDisable(t *testing.T) {
 	view, err = e.Store.AccountFinance(ctx, a.ID, cycle)
 	if err != nil || view.Enabled || view.Balance.Data == nil {
 		t.Fatal("disabled history discarded", view, err)
+	}
+	instance, err = e.Store.InstanceFinance(ctx, a.ID+"_instance", cycle)
+	if err != nil || instance.Enabled || instance.Bill.Data == nil {
+		t.Fatal(instance, err)
 	}
 	if err := e.Schedule(ctx); err != nil {
 		t.Fatal(err)
@@ -109,6 +131,10 @@ func TestFinanceCacheFailureRotationAndDisable(t *testing.T) {
 	if err != nil || view.Balance.Data != nil || view.Bill.Data != nil || view.UpdatedAt != nil {
 		t.Fatal("old credential data exposed", view, err)
 	}
+	instance, err = e.Store.InstanceFinance(ctx, a.ID+"_instance", cycle)
+	if err != nil || instance.Bill.Data != nil || instance.Bill.Status != "never_synced" || instance.UpdatedAt != nil {
+		t.Fatal("old instance bill exposed", instance, err)
+	}
 }
 
 func TestStaleFinanceCollectionCannotPublish(t *testing.T) {
@@ -125,7 +151,7 @@ func TestStaleFinanceCollectionCannotPublish(t *testing.T) {
 		if _, err := e.UpdateAccount(ctx, a.ID, model.AccountUpdate{Enabled: &off}); err != nil {
 			t.Fatal(err)
 		}
-		return []model.FinanceObservation{{Kind: "balance", FetchedAt: time.Now().UTC(), Balance: &model.BalanceData{Currency: "CNY", Available: "999", Cash: "999"}}}
+		return []model.FinanceObservation{{Kind: "balance", FetchedAt: time.Now().UTC(), Balance: &model.BalanceData{Currency: "CNY", Available: "999", Cash: "999"}}, {Kind: "instance_bill", Cycle: "2026-11", FetchedAt: time.Now().UTC(), InstanceBill: &model.InstanceBillData{Cycle: "2026-11", Items: []model.InstanceBillItem{}}}}
 	}}
 	if ran, err := e.RunOne(ctx); !ran || !errors.Is(err, store.ErrLeaseLost) {
 		t.Fatal("stale job did not lose its lease", ran, err)
@@ -133,6 +159,10 @@ func TestStaleFinanceCollectionCannotPublish(t *testing.T) {
 	view, err := e.Store.AccountFinance(ctx, a.ID, time.Now().Format("2006-01"))
 	if err != nil || view.Balance.Data != nil {
 		t.Fatal("disabled account accepted in-flight finance", view, err)
+	}
+	var count int
+	if err := e.Store.DB.QueryRow("SELECT count(*) FROM account_finance WHERE source='instance_bill'").Scan(&count); err != nil || count != 0 {
+		t.Fatal("stale instance finance persisted", count, err)
 	}
 }
 

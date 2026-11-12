@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Instance finance: add cached current-month DescribeInstanceBill rows matched by exact instance ID and product family. Preserve bill type/currency and payable/after-discount decimal strings; empty matches do not mean zero cost. No shared-resource allocation, refund netting or amortization. RAM drafts add bssapi:DescribeInstanceBill.
 # 2026-11-12  Quiet hours/maintenance: user confirmed record-only, no catch-up for non-urgent alerts. Add business-timezone daily settings and UTC maintenance window, persistent notification urgency/suppression metadata, enqueue/claim/pre-send gates. Urgent quota/agent events and explicit tests bypass; already authorized requests cannot be recalled.
 # 2026-11-12  External heartbeat: add encrypted write-only URL settings and async heartbeat_test jobs. User-approved success gate requires local HTTP readiness/SQLite and recent collection scheduler progress. No old pings are replayed; settings reads omit URL because its path/query may contain credentials.
 # 2026-11-12  Password login policy: PATCH /session/password changes future password authentication only, with session+CSRF. Disabling requires a registered Passkey for the current RP; deleting its last eligible key is refused while disabled. User-approved CLI reset enables password login, clears sessions/challenges and retains Passkeys.
@@ -1634,6 +1635,30 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/BandwidthPackageHourly"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /instances/{instance_id}/finance:
+    parameters:
+      - name: instance_id
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags: [instances]
+      operationId: getInstanceFinance
+      summary: Cached current-month bill rows attributable to this instance
+      description: Background account-wide DescribeInstanceBill collection, MONTHLY and IsBillingItem=false. Exact cloud instance ID plus ECS/SWAS product family matching; no shared bandwidth, EIP or CDT costs allocated to instances. Current business month only; no previous-month substitution. Data can lag consumption by 24 hours and omits unbilled usage. No cloud calls on GET. Credential rotation hides predecessor data; disabled accounts retain current-credential cache.
+      responses:
+        "200":
+          description: Last successful matching rows or null if never obtained. Empty items mean no matching bill rows, not zero cost. No total or refund netting is inferred.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceFinance"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -3297,6 +3322,69 @@ components:
           type: object
           nullable: true
           description: Last successful payload; remains present with its original fetched_at on later failure.
+
+    InstanceFinance:
+      type: object
+      required: [instance_id, account_id, enabled, billing_cycle, updated_at, bill]
+      properties:
+        instance_id:
+          type: string
+        account_id:
+          type: string
+        enabled:
+          type: boolean
+          description: Whether the owning account is enabled for collection.
+        billing_cycle:
+          type: string
+          pattern: '^\d{4}-\d{2}$'
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Latest attempt; not a provider billing cutoff.
+        bill:
+          allOf:
+            - $ref: "#/components/schemas/FinanceSource"
+            - type: object
+              properties:
+                data:
+                  type: object
+                  nullable: true
+                  required: [billing_cycle, items]
+                  properties:
+                    billing_cycle:
+                      type: string
+                    items:
+                      type: array
+                      description: Original provider rows matched to this instance, with at most 15000 account rows scanned. Subscription orders reflect this month's bills, not amortized monthly cost. Payment and outstanding amounts are unavailable from this source.
+                      items:
+                        $ref: "#/components/schemas/InstanceBillItem"
+
+    InstanceBillItem:
+      type: object
+      required: [cloud_instance_id, bill_type, product_code, pip_code, product_name, currency, pretax_amount, after_discount_amount]
+      properties:
+        cloud_instance_id:
+          type: string
+        bill_type:
+          type: string
+          description: Unmodified provider Item, e.g. SubscriptionOrder, PayAsYouGoBill, Refund, Adjustment. Do not infer refund/adjustment signs or sum unlike currencies.
+        product_code:
+          type: string
+        pip_code:
+          type: string
+          description: Provider normalized product code; SWAS can have ProductCode=ace_eweb and PipCode=swas.
+        product_name:
+          type: string
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        pretax_amount:
+          type: string
+          description: Exact provider payable amount, not paid cash.
+        after_discount_amount:
+          type: string
+          description: Exact amount after discount, before coupon deductions; not an additional charge to add to pretax_amount.
 
     AccountFinance:
       type: object

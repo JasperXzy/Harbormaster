@@ -17,7 +17,8 @@
         "cms:DescribeSystemEventAttribute",
         "bss:DescribeAcccount",
         "bss:DescribeBillList",
-        "bss:DescribeInstances"
+        "bss:DescribeInstances",
+        "bssapi:DescribeInstanceBill"
       ],
       "Resource": "*"
     },

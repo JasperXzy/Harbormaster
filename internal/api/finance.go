@@ -6,8 +6,12 @@ import (
 )
 
 func (p *productionPanel) finance(w http.ResponseWriter, r *http.Request, path string) bool {
-	parts := strings.Split(strings.TrimPrefix(path, "/accounts/"), "/")
-	if !strings.HasPrefix(path, "/accounts/") || len(parts) != 2 || parts[1] != "finance" {
+	prefix := "/accounts/"
+	if strings.HasPrefix(path, "/instances/") {
+		prefix = "/instances/"
+	}
+	parts := strings.Split(strings.TrimPrefix(path, prefix), "/")
+	if !strings.HasPrefix(path, prefix) || len(parts) != 2 || parts[1] != "finance" {
 		return false
 	}
 	if r.Method != http.MethodGet {
@@ -19,7 +23,13 @@ func (p *productionPanel) finance(w http.ResponseWriter, r *http.Request, path s
 		businessError(w, err)
 		return true
 	}
-	data, err := p.s.AccountFinance(r.Context(), parts[0], p.now().In(loc).Format("2006-01"))
+	cycle := p.now().In(loc).Format("2006-01")
+	var data any
+	if prefix == "/instances/" {
+		data, err = p.s.InstanceFinance(r.Context(), parts[0], cycle)
+	} else {
+		data, err = p.s.AccountFinance(r.Context(), parts[0], cycle)
+	}
 	if err != nil {
 		businessError(w, err)
 	} else {

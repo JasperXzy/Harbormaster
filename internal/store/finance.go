@@ -40,6 +40,13 @@ func saveFinance(ctx context.Context, tx *sql.Tx, a model.Account, o model.Finan
 		if o.Bill != nil && o.Bill.Cycle == o.Cycle {
 			data = o.Bill
 		}
+	case "instance_bill":
+		if _, err := time.Parse("2006-01", o.Cycle); err != nil {
+			return errors.New("invalid_finance_source")
+		}
+		if o.InstanceBill != nil && o.InstanceBill.Cycle == o.Cycle {
+			data = o.InstanceBill
+		}
 	default:
 		return errors.New("invalid_finance_source")
 	}

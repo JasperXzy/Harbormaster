@@ -80,7 +80,14 @@ func (c Inventory) Finance(ctx context.Context, a model.Account, credential mode
 		}
 		result = append(result, o)
 	}
-	return result
+	o := model.FinanceObservation{Kind: "instance_bill", Cycle: cycle}
+	var err error
+	o.InstanceBill, err = c.instanceBills(ctx, cred, cycle, before)
+	o.FetchedAt = time.Now().UTC()
+	if err != nil {
+		o.Error = model.Error(Code(err))
+	}
+	return append(result, o)
 }
 func parseBalance(body map[string]any) (*model.BalanceData, error) {
 	d := child(body, "Data")

@@ -22,11 +22,12 @@ type BillData struct {
 	Items []BillItem `json:"items"`
 }
 type FinanceObservation struct {
-	Kind, Cycle string
-	FetchedAt   time.Time
-	Balance     *BalanceData
-	Bill        *BillData
-	Error       *APIError
+	Kind, Cycle  string
+	FetchedAt    time.Time
+	Balance      *BalanceData
+	InstanceBill *InstanceBillData
+	Bill         *BillData
+	Error        *APIError
 }
 type FinanceSource[T any] struct {
 	Status        string     `json:"status"`
@@ -42,4 +43,28 @@ type AccountFinance struct {
 	UpdatedAt *time.Time                 `json:"updated_at"`
 	Balance   FinanceSource[BalanceData] `json:"balance"`
 	Bill      FinanceSource[BillData]    `json:"bill"`
+}
+
+// InstanceBillItem preserves one provider row; it is not a netted monthly cost.
+type InstanceBillItem struct {
+	CloudID       string `json:"cloud_instance_id"`
+	Type          string `json:"bill_type"`
+	ProductCode   string `json:"product_code"`
+	PipCode       string `json:"pip_code"`
+	ProductName   string `json:"product_name"`
+	Currency      string `json:"currency"`
+	Pretax        string `json:"pretax_amount"`
+	AfterDiscount string `json:"after_discount_amount"`
+}
+type InstanceBillData struct {
+	Cycle string             `json:"billing_cycle"`
+	Items []InstanceBillItem `json:"items"`
+}
+type InstanceFinance struct {
+	InstanceID string                          `json:"instance_id"`
+	AccountID  string                          `json:"account_id"`
+	Enabled    bool                            `json:"enabled"`
+	Cycle      string                          `json:"billing_cycle"`
+	UpdatedAt  *time.Time                      `json:"updated_at"`
+	Bill       FinanceSource[InstanceBillData] `json:"bill"`
 }

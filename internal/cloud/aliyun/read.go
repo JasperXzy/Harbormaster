@@ -63,6 +63,7 @@ var reads = map[string]definition{
 	"DescribeMetricMetaList":             {"cms", "2019-01-01", "Namespace MetricName PageNumber PageSize"},
 	"DescribeMetricList":                 {"cms", "2019-01-01", "Namespace MetricName Dimensions StartTime EndTime Period Length NextToken"},
 	"QueryAccountBalance":                {"bss", "2017-12-14", ""},
+	"DescribeInstanceBill":               {"bss", "2017-12-14", "BillingCycle Granularity IsBillingItem MaxResults NextToken"},
 	"QueryBillOverview":                  {"bss", "2017-12-14", "BillingCycle"},
 }
 
