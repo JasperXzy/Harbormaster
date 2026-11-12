@@ -18,8 +18,11 @@ var ErrProbeExpired = errors.New("agent_probe_task_expired")
 // precedes claim; a durable task precedes execution; a durable result precedes
 // every upload. Recovered started tasks are never executed a second time.
 func (c *Client) ProbeOnce(ctx context.Context) (bool, error) {
-	c.probeMu.Lock()
-	defer c.probeMu.Unlock()
+	c.networkMu.Lock()
+	defer c.networkMu.Unlock()
+	return c.probeOnce(ctx)
+}
+func (c *Client) probeOnce(ctx context.Context) (bool, error) {
 	if ctx.Err() != nil {
 		return false, nil
 	}

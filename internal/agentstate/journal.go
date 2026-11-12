@@ -29,6 +29,7 @@ type Identity struct {
 	Registration *agentproto.Registration `json:"registration,omitempty"`
 }
 type State struct {
+	Trace          *TraceWork          `json:"trace,omitempty"`
 	Probe          *ProbeWork          `json:"probe,omitempty"`
 	Identity       Identity            `json:"identity"`
 	Generation     string              `json:"generation"`
@@ -38,6 +39,8 @@ type State struct {
 	PendingDropped int64               `json:"pending_dropped"`
 }
 type operation struct {
+	Trace       *TraceWork         `json:"trace,omitempty"`
+	ClearTrace  string             `json:"clear_trace,omitempty"`
 	Probe       *ProbeWork         `json:"probe,omitempty"`
 	ClearProbe  string             `json:"clear_probe,omitempty"`
 	Snapshot    *State             `json:"snapshot,omitempty"`
@@ -249,6 +252,12 @@ func (j *Journal) Ack(ack agentproto.Ack) error {
 }
 func (j *Journal) apply(op operation) error {
 	count := 0
+	if op.Trace != nil {
+		count++
+	}
+	if op.ClearTrace != "" {
+		count++
+	}
 	if op.Probe != nil {
 		count++
 	}
@@ -274,6 +283,13 @@ func (j *Journal) apply(op operation) error {
 		return ErrState
 	}
 	switch {
+	case op.Trace != nil:
+		j.state.Trace = op.Trace
+	case op.ClearTrace != "":
+		if j.state.Trace == nil || j.state.Trace.Owner != op.ClearTrace {
+			return ErrState
+		}
+		j.state.Trace = nil
 	case op.Probe != nil:
 		j.state.Probe = op.Probe
 	case op.ClearProbe != "":
@@ -289,6 +305,7 @@ func (j *Journal) apply(op operation) error {
 	case op.Identity != nil:
 		if op.Identity.AgentID != j.state.Identity.AgentID || op.Identity.Token != j.state.Identity.Token || op.Identity.Registration != nil {
 			j.state.Probe = nil
+			j.state.Trace = nil
 		}
 		j.state.Identity = *op.Identity
 	case op.Sample != nil:

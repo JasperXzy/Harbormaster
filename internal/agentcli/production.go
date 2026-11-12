@@ -171,7 +171,7 @@ func delivery(ctx context.Context, client *agentclient.Client, log *slog.Logger)
 func probeDelivery(ctx context.Context, client *agentclient.Client, log *slog.Logger) error {
 	failures := 0
 	for {
-		worked, err := client.ProbeOnce(ctx)
+		worked, err := client.NetworkOnce(ctx)
 		if ctx.Err() != nil {
 			return nil
 		}

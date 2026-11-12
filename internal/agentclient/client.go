@@ -27,8 +27,10 @@ var ErrCredentials = errors.New("agent_registration_or_token_rejected")
 var ErrMetadata = aliyunmeta.ErrUnavailable
 
 type Client struct {
-	probeMu               sync.Mutex
+	networkMu             sync.Mutex
+	nextTrace             bool
 	probeRun              func(context.Context, netprobe.Request) (netprobe.Result, error)
+	traceRun              func(context.Context, netprobe.TraceRequest) (netprobe.TraceResult, error)
 	ReportIntervalSeconds int
 	HTTP                  *http.Client
 	Journal               *agentstate.Journal
@@ -74,10 +76,10 @@ func (c *Client) post(ctx context.Context, path, token string, body, out any) er
 	if res.StatusCode == 429 || res.StatusCode >= 500 {
 		return ErrTransport
 	}
-	if path == agentproto.ProbeClaimPath && res.StatusCode == 404 {
+	if (path == agentproto.ProbeClaimPath || path == agentproto.TraceClaimPath) && res.StatusCode == 404 {
 		return ErrProbeUnsupported
 	}
-	if path == agentproto.ProbeResultPath && (res.StatusCode == 404 || res.StatusCode == 409) {
+	if (path == agentproto.ProbeResultPath || path == agentproto.TraceResultPath) && (res.StatusCode == 404 || res.StatusCode == 409) {
 		var response struct {
 			Error struct {
 				Code string `json:"code"`
