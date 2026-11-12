@@ -21,6 +21,15 @@ var ErrProbeBusy = errors.New("probe_queue_full")
 // Only this typed entry point can create network_probe jobs. Collection workers
 // cannot claim, renew, finish or retry them.
 func (s *Store) EnqueueAgentProbe(ctx context.Context, instanceID, key string, request netprobe.Request, now time.Time) (model.Job, error) {
+	return s.enqueueAgentNetwork(ctx, instanceID, key, "probe", request, now)
+}
+func (s *Store) EnqueueAgentTrace(ctx context.Context, instanceID, key string, request netprobe.TraceRequest, now time.Time) (model.Job, error) {
+	return s.enqueueAgentNetwork(ctx, instanceID, key, "trace", request, now)
+}
+
+type networkRequest interface{ Validate() error }
+
+func (s *Store) enqueueAgentNetwork(ctx context.Context, instanceID, key, action string, request networkRequest, now time.Time) (model.Job, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return model.Job{}, err
@@ -29,13 +38,16 @@ func (s *Store) EnqueueAgentProbe(ctx context.Context, instanceID, key string, r
 	if err = expireNetworkProbes(ctx, tx, now); err != nil {
 		return model.Job{}, err
 	}
-	j, err := enqueueAgentProbe(ctx, tx, instanceID, key, request, now)
+	j, err := enqueueAgentNetwork(ctx, tx, instanceID, key, action, request, now)
 	if err != nil {
 		return j, err
 	}
 	return j, tx.Commit()
 }
 func enqueueAgentProbe(ctx context.Context, tx *sql.Tx, instanceID, key string, request netprobe.Request, now time.Time) (model.Job, error) {
+	return enqueueAgentNetwork(ctx, tx, instanceID, key, "probe", request, now)
+}
+func enqueueAgentNetwork(ctx context.Context, tx *sql.Tx, instanceID, key, action string, request networkRequest, now time.Time) (model.Job, error) {
 	if !probeKey.MatchString(key) || request.Validate() != nil {
 		return model.Job{}, netprobe.ErrInvalid
 	}
@@ -53,10 +65,10 @@ func enqueueAgentProbe(ctx context.Context, tx *sql.Tx, instanceID, key string, 
 	if err != nil {
 		return model.Job{}, err
 	}
-	var oldID, oldInstance, oldRaw string
-	err = tx.QueryRowContext(ctx, "SELECT job_id,coalesce(instance_id,''),request_json FROM network_probe_job WHERE request_key=?", key).Scan(&oldID, &oldInstance, &oldRaw)
+	var oldID, oldInstance, oldRaw, oldAction string
+	err = tx.QueryRowContext(ctx, "SELECT job_id,coalesce(instance_id,''),request_json,action FROM network_probe_job WHERE request_key=?", key).Scan(&oldID, &oldInstance, &oldRaw, &oldAction)
 	if err == nil {
-		if oldInstance != instanceID || oldRaw != string(raw) {
+		if oldInstance != instanceID || oldRaw != string(raw) || oldAction != action {
 			return model.Job{}, ErrConflict
 		}
 		j, err := readJob(tx.QueryRowContext(ctx, "SELECT "+jobColumns+" FROM job WHERE id=?", oldID))
@@ -80,7 +92,7 @@ func enqueueAgentProbe(ctx context.Context, tx *sql.Tx, instanceID, key string, 
 	if _, err = tx.ExecContext(ctx, "INSERT INTO job(id,type,scope,account_ids_json,status,created_at,available_at,trigger_source,instance_id) VALUES(?,'network_probe',?,?,'queued',?,?,?,?)", id, "probe:"+key, string(ids), timestamp(now), now.Unix(), model.JobTrigger(ctx), instanceID); err != nil {
 		return model.Job{}, err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO network_probe_job(job_id,request_key,instance_id,agent_id,token_hash,credential_version,request_json,queued_until) VALUES(?,?,?,?,?,?,?,?)", id, key, instanceID, agentID, token, version, string(raw), now.Add(5*time.Minute).Unix()); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO network_probe_job(job_id,request_key,instance_id,agent_id,token_hash,credential_version,request_json,queued_until,action) VALUES(?,?,?,?,?,?,?,?,?)", id, key, instanceID, agentID, token, version, string(raw), now.Add(5*time.Minute).Unix(), action); err != nil {
 		return model.Job{}, err
 	}
 	j, err := readJob(tx.QueryRowContext(ctx, "SELECT "+jobColumns+" FROM job WHERE id=?", id))
@@ -131,7 +143,41 @@ func (s *Store) ExpireNetworkProbes(ctx context.Context, now time.Time) error {
 	return tx.Commit()
 }
 func (s *Store) ClaimAgentProbe(ctx context.Context, token string, in agentproto.ProbeClaim, now time.Time) (agentproto.ProbeClaimed, error) {
-	out := agentproto.ProbeClaimed{ServerTime: now.UTC()}
+	claimed, err := s.claimAgentNetwork(ctx, token, in, "probe", now)
+	out := agentproto.ProbeClaimed{ServerTime: claimed.ServerTime}
+	if err == nil && claimed.Task != nil {
+		t := claimed.Task
+		out.Task = &agentproto.ProbeTask{ID: t.ID, Owner: t.Owner, ExpiresAt: t.ExpiresAt}
+		if json.Unmarshal([]byte(t.Raw), &out.Task.Request) != nil {
+			return out, netprobe.ErrInvalid
+		}
+	}
+	return out, err
+}
+func (s *Store) ClaimAgentTrace(ctx context.Context, token string, in agentproto.ProbeClaim, now time.Time) (agentproto.TraceClaimed, error) {
+	claimed, err := s.claimAgentNetwork(ctx, token, in, "trace", now)
+	out := agentproto.TraceClaimed{ServerTime: claimed.ServerTime}
+	if err == nil && claimed.Task != nil {
+		t := claimed.Task
+		out.Task = &agentproto.TraceTask{ID: t.ID, Owner: t.Owner, ExpiresAt: t.ExpiresAt}
+		if json.Unmarshal([]byte(t.Raw), &out.Task.Request) != nil {
+			return out, netprobe.ErrInvalid
+		}
+	}
+	return out, err
+}
+
+type agentNetworkTask struct {
+	ID, Owner, Raw string
+	ExpiresAt      time.Time
+}
+type agentNetworkClaim struct {
+	Task       *agentNetworkTask
+	ServerTime time.Time
+}
+
+func (s *Store) claimAgentNetwork(ctx context.Context, token string, in agentproto.ProbeClaim, action string, now time.Time) (agentNetworkClaim, error) {
+	out := agentNetworkClaim{ServerTime: now.UTC()}
 	if !in.Valid() {
 		return out, netprobe.ErrInvalid
 	}
@@ -150,15 +196,15 @@ func (s *Store) ClaimAgentProbe(ctx context.Context, token string, in agentproto
 	if err = expireNetworkProbes(ctx, tx, now); err != nil {
 		return out, err
 	}
-	var id, owner, raw string
+	var id, owner, raw, activeAction string
 	var until int64
-	err = tx.QueryRowContext(ctx, `SELECT j.id,j.lease_owner,j.lease_until,p.request_json FROM job j JOIN network_probe_job p ON p.job_id=j.id WHERE p.agent_id=? AND j.status='running' LIMIT 1`, in.AgentID).Scan(&id, &owner, &until, &raw)
+	err = tx.QueryRowContext(ctx, `SELECT j.id,j.lease_owner,j.lease_until,p.request_json,p.action FROM job j JOIN network_probe_job p ON p.job_id=j.id WHERE p.agent_id=? AND j.status='running' LIMIT 1`, in.AgentID).Scan(&id, &owner, &until, &raw, &activeAction)
 	if err == nil {
-		if owner != in.Owner {
+		if owner != in.Owner || activeAction != action {
 			return out, tx.Commit()
 		}
 	} else if errors.Is(err, sql.ErrNoRows) {
-		err = tx.QueryRowContext(ctx, `SELECT j.id,p.request_json FROM job j JOIN network_probe_job p ON p.job_id=j.id JOIN job_order o ON o.job_id=j.id WHERE p.agent_id=? AND j.status='queued' ORDER BY o.seq LIMIT 1`, in.AgentID).Scan(&id, &raw)
+		err = tx.QueryRowContext(ctx, `SELECT j.id,p.request_json FROM job j JOIN network_probe_job p ON p.job_id=j.id JOIN job_order o ON o.job_id=j.id WHERE p.agent_id=? AND p.action=? AND j.status='queued' ORDER BY o.seq LIMIT 1`, in.AgentID, action).Scan(&id, &raw)
 		if errors.Is(err, sql.ErrNoRows) {
 			return out, tx.Commit()
 		}
@@ -175,14 +221,53 @@ func (s *Store) ClaimAgentProbe(ctx context.Context, token string, in agentproto
 	} else {
 		return out, err
 	}
-	task := &agentproto.ProbeTask{ID: id, Owner: owner, ExpiresAt: time.Unix(until, 0).UTC()}
-	if json.Unmarshal([]byte(raw), &task.Request) != nil || task.Request.Validate() != nil {
+	task := &agentNetworkTask{ID: id, Owner: owner, Raw: raw, ExpiresAt: time.Unix(until, 0).UTC()}
+	var request networkRequest
+	if action == "trace" {
+		request = &netprobe.TraceRequest{}
+	} else {
+		request = &netprobe.Request{}
+	}
+	if json.Unmarshal([]byte(raw), request) != nil || request.Validate() != nil {
 		return out, netprobe.ErrInvalid
 	}
 	out.Task = task
 	return out, tx.Commit()
 }
 func (s *Store) AcceptProbeResult(ctx context.Context, token string, in agentproto.ProbeReport, now time.Time) (agentproto.ProbeAck, error) {
+	return s.acceptAgentNetwork(ctx, token, agentNetworkReport{in.AgentID, in.TaskID, in.Owner, "probe", in.ErrorCode, func(requestRaw string) (string, time.Time, error) {
+		var request netprobe.Request
+		if json.Unmarshal([]byte(requestRaw), &request) != nil || netprobe.ValidateResult(request, &in.Result, in.ErrorCode, now) != nil {
+			return "", time.Time{}, netprobe.ErrInvalid
+		}
+		raw, err := json.Marshal(in)
+		if err != nil {
+			return "", time.Time{}, netprobe.ErrInvalid
+		}
+		return string(raw), in.Result.StartedAt, nil
+	}}, now)
+}
+func (s *Store) AcceptTraceResult(ctx context.Context, token string, in agentproto.TraceReport, now time.Time) (agentproto.ProbeAck, error) {
+	return s.acceptAgentNetwork(ctx, token, agentNetworkReport{in.AgentID, in.TaskID, in.Owner, "trace", in.ErrorCode, func(requestRaw string) (string, time.Time, error) {
+		var request netprobe.TraceRequest
+		if json.Unmarshal([]byte(requestRaw), &request) != nil || netprobe.ValidateTraceResult(request, &in.Result, in.ErrorCode, now) != nil {
+			return "", time.Time{}, netprobe.ErrInvalid
+		}
+		raw, err := json.Marshal(in)
+		if err != nil {
+			return "", time.Time{}, netprobe.ErrInvalid
+		}
+		return string(raw), in.Result.StartedAt, nil
+	}}, now)
+}
+
+type agentNetworkReport struct {
+	AgentID, TaskID, Owner, Action string
+	ErrorCode                      *string
+	canonicalize                   func(string) (string, time.Time, error)
+}
+
+func (s *Store) acceptAgentNetwork(ctx context.Context, token string, in agentNetworkReport, now time.Time) (agentproto.ProbeAck, error) {
 	ack := agentproto.ProbeAck{TaskID: in.TaskID}
 	if !(agentproto.ProbeClaim{AgentID: in.AgentID, Owner: in.Owner}).Valid() || len(in.TaskID) > 128 || in.TaskID == "" {
 		return ack, netprobe.ErrInvalid
@@ -200,7 +285,7 @@ func (s *Store) AcceptProbeResult(ctx context.Context, token string, in agentpro
 	var until int64
 	var binding []byte
 	var version, currentVersion int64
-	err = tx.QueryRowContext(ctx, `SELECT p.request_json,p.agent_id,coalesce(p.claimed_by,''),p.token_hash,p.credential_version,a.credential_version,j.status,j.started_at,j.lease_until,p.result_json FROM network_probe_job p JOIN job j ON j.id=p.job_id JOIN instance i ON i.id=p.instance_id JOIN account_settings a ON a.account_id=i.account_id WHERE p.job_id=?`, in.TaskID).Scan(&requestRaw, &agentID, &owner, &binding, &version, &currentVersion, &status, &started, &until, &existing)
+	err = tx.QueryRowContext(ctx, `SELECT p.request_json,p.agent_id,coalesce(p.claimed_by,''),p.token_hash,p.credential_version,a.credential_version,j.status,j.started_at,j.lease_until,p.result_json FROM network_probe_job p JOIN job j ON j.id=p.job_id JOIN instance i ON i.id=p.instance_id JOIN account_settings a ON a.account_id=i.account_id WHERE p.job_id=? AND p.action=?`, in.TaskID, in.Action).Scan(&requestRaw, &agentID, &owner, &binding, &version, &currentVersion, &status, &started, &until, &existing)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ack, ErrNotFound
 	}
@@ -211,19 +296,12 @@ func (s *Store) AcceptProbeResult(ctx context.Context, token string, in agentpro
 	if agentID != in.AgentID || owner != in.Owner || !bytes.Equal(binding, h[:]) || version != currentVersion {
 		return ack, ErrUnauthorized
 	}
-	var request netprobe.Request
-	if json.Unmarshal([]byte(requestRaw), &request) != nil {
-		return ack, netprobe.ErrInvalid
-	}
-	if err = netprobe.ValidateResult(request, &in.Result, in.ErrorCode, now); err != nil {
+	raw, sampleStart, err := in.canonicalize(requestRaw)
+	if err != nil {
 		return ack, err
 	}
 	start, err := time.Parse(time.RFC3339Nano, started.String)
-	if err != nil || in.Result.StartedAt.Before(start.Add(-2*time.Minute)) {
-		return ack, netprobe.ErrInvalid
-	}
-	raw, err := json.Marshal(in)
-	if err != nil {
+	if err != nil || sampleStart.Before(start.Add(-2*time.Minute)) {
 		return ack, netprobe.ErrInvalid
 	}
 	if existing.Valid {
@@ -248,8 +326,10 @@ func (s *Store) AcceptProbeResult(ctx context.Context, token string, in agentpro
 	if _, err = tx.ExecContext(ctx, "UPDATE job SET status=?,error_code=?,finished_at=?,lease_owner=NULL,lease_until=0 WHERE id=?", state, code, timestamp(now), in.TaskID); err != nil {
 		return ack, err
 	}
-	if err = checkProbeResultAlerts(ctx, tx, in.TaskID, now); err != nil {
-		return ack, err
+	if in.Action == "probe" {
+		if err = checkProbeResultAlerts(ctx, tx, in.TaskID, now); err != nil {
+			return ack, err
+		}
 	}
 	return ack, tx.Commit()
 }

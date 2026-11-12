@@ -63,6 +63,13 @@ func TestServerProbeMigrationPreservesAgentTasks(t *testing.T) {
 		t.Fatal("agent task changed", err)
 	}
 	var changes int
+	var action string
+	if err = s.DB.QueryRow("SELECT action FROM network_probe_job WHERE job_id='probe-existing'").Scan(&action); err != nil || action != "probe" {
+		t.Fatal("old task action changed", action, err)
+	}
+	if _, err = s.DB.Exec("UPDATE network_probe_job SET action='shell' WHERE job_id='probe-existing'"); err == nil {
+		t.Fatal("arbitrary action accepted")
+	}
 	if err = s.DB.QueryRow("SELECT count(*) FROM job_change WHERE job_id='probe-existing'").Scan(&changes); err != nil || changes != 1 {
 		t.Fatal(changes, err)
 	}

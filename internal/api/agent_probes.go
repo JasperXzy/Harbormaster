@@ -13,7 +13,7 @@ import (
 )
 
 func (a *agentAPI) probes(w http.ResponseWriter, r *http.Request) bool {
-	if r.URL.Path != agentproto.ProbeClaimPath && r.URL.Path != agentproto.ProbeResultPath {
+	if r.URL.Path != agentproto.ProbeClaimPath && r.URL.Path != agentproto.ProbeResultPath && r.URL.Path != agentproto.TraceClaimPath && r.URL.Path != agentproto.TraceResultPath {
 		return false
 	}
 	if a.development {
@@ -29,12 +29,22 @@ func (a *agentAPI) probes(w http.ResponseWriter, r *http.Request) bool {
 	defer cancel()
 	var out any
 	var err error
-	if r.URL.Path == agentproto.ProbeClaimPath {
+	if r.URL.Path == agentproto.ProbeClaimPath || r.URL.Path == agentproto.TraceClaimPath {
 		var in agentproto.ProbeClaim
 		if !agentBody(w, r, &in, 4096) {
 			return true
 		}
-		out, err = a.s.ClaimAgentProbe(ctx, token, in, time.Now().UTC())
+		if r.URL.Path == agentproto.TraceClaimPath {
+			out, err = a.s.ClaimAgentTrace(ctx, token, in, time.Now().UTC())
+		} else {
+			out, err = a.s.ClaimAgentProbe(ctx, token, in, time.Now().UTC())
+		}
+	} else if r.URL.Path == agentproto.TraceResultPath {
+		var in agentproto.TraceReport
+		if !agentBody(w, r, &in, 128<<10) {
+			return true
+		}
+		out, err = a.s.AcceptTraceResult(ctx, token, in, time.Now().UTC())
 	} else {
 		var in agentproto.ProbeReport
 		if !agentBody(w, r, &in, 64<<10) {

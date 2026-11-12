@@ -44,10 +44,10 @@ func enqueueServerProbe(ctx context.Context, tx *sql.Tx, key string, request net
 	if err != nil {
 		return model.Job{}, err
 	}
-	var oldID, kind, oldRaw string
-	err = tx.QueryRowContext(ctx, "SELECT job_id,point_kind,request_json FROM network_probe_job WHERE request_key=?", key).Scan(&oldID, &kind, &oldRaw)
+	var oldID, kind, oldRaw, action string
+	err = tx.QueryRowContext(ctx, "SELECT job_id,point_kind,request_json,action FROM network_probe_job WHERE request_key=?", key).Scan(&oldID, &kind, &oldRaw, &action)
 	if err == nil {
-		if kind != "server" || oldRaw != string(raw) {
+		if kind != "server" || oldRaw != string(raw) || action != "probe" {
 			return model.Job{}, ErrConflict
 		}
 		j, err := readJob(tx.QueryRowContext(ctx, "SELECT "+jobColumns+" FROM job WHERE id=?", oldID))
@@ -100,7 +100,7 @@ func (s *Store) ClaimServerProbe(ctx context.Context, now time.Time) (ServerProb
 		return claim, ErrNotFound
 	}
 	var id, raw string
-	err = tx.QueryRowContext(ctx, `SELECT j.id,p.request_json FROM network_probe_job p JOIN job j ON j.id=p.job_id JOIN job_order o ON o.job_id=j.id WHERE p.point_kind='server' AND j.status='queued' ORDER BY o.seq LIMIT 1`).Scan(&id, &raw)
+	err = tx.QueryRowContext(ctx, `SELECT j.id,p.request_json FROM network_probe_job p JOIN job j ON j.id=p.job_id JOIN job_order o ON o.job_id=j.id WHERE p.point_kind='server' AND p.action='probe' AND j.status='queued' ORDER BY o.seq LIMIT 1`).Scan(&id, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		if err = tx.Commit(); err != nil {
 			return claim, err
