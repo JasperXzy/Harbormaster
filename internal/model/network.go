@@ -5,14 +5,15 @@ import "time"
 const NetworkRateFreshness = 10 * time.Minute
 
 type CloudNetworkRate struct {
-	MetricName    string     `json:"metric_name"`
-	Unit          string     `json:"unit"`
-	PeriodSeconds int        `json:"period_seconds"`
-	Value         *float64   `json:"value"`
-	Status        string     `json:"status"`
-	ObservedAt    *time.Time `json:"observed_at"`
-	CheckedAt     time.Time  `json:"checked_at"`
-	LastError     *APIError  `json:"last_error"`
+	Samples       []CloudRatePoint `json:"-"`
+	MetricName    string           `json:"metric_name"`
+	Unit          string           `json:"unit"`
+	PeriodSeconds int              `json:"period_seconds"`
+	Value         *float64         `json:"value"`
+	Status        string           `json:"status"`
+	ObservedAt    *time.Time       `json:"observed_at"`
+	CheckedAt     time.Time        `json:"checked_at"`
+	LastError     *APIError        `json:"last_error"`
 }
 type CloudNetworkStream struct {
 	IP      *string          `json:"ip"`

@@ -70,6 +70,9 @@ func (s *Store) SaveScan(ctx context.Context, j model.Job, a model.Account, resu
  ON CONFLICT(id) DO UPDATE SET name=excluded.name,status=excluded.status,updated_at=excluded.updated_at`, v.ID, a.ID, v.Payload["cloud_instance_id"], v.Kind, v.Payload["name"], v.Region, v.Payload["status"], timestamp(now)); err != nil {
 				return err
 			}
+			if err = saveNetworkHistory(ctx, tx, v); err != nil {
+				return err
+			}
 		}
 	}
 	if err = checkExpirationSnapshots(ctx, tx, a.ID, result.Snapshots, now); err != nil {

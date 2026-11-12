@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Cloud network history: persist complete provider minute samples and expose GET /instances/{instance_id}/cloud-network-history with explicit <=7-day range and chronological keyset pagination. Gaps are missing observations, never zero; no byte integration or agent/cloud blending.
 # 2026-11-12  SWAS runtime validation: use the ISO StartTime/EndTime format already verified by M0 for CPU and network reads; live production-path samples now succeed. No CPU schema change or claim that all timestamp formats fail.
 # 2026-11-12  Cloud public network rates: Instance.cloud_network exposes cached 60s Average ingress/egress bit/s streams, distinguishing classic ECS, VPC per-IP and SWAS sources. Topology or query failures preserve stale observations; no instance total, byte integral, agent replacement or CDT protection is inferred.
 # 2026-11-12  Passkey registration/login: add session methods, discoverable login options/finish, authenticated registration options/finish and list/delete. JSON uses WebAuthn base64url options/results; five-minute single-use ceremonies are browser/session-bound. UV is required; private keys never leave authenticators. Password disabling and recovery policy remain a separate phase.
@@ -442,6 +443,56 @@ paths:
           content:
             application/json:
               schema: {$ref: "#/components/schemas/ErrorResponse"}
+
+  /instances/{instance_id}/cloud-network-history:
+    parameters:
+      - name: instance_id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [instances]
+      operationId: getCloudNetworkHistory
+      summary: 云监控公网速率原始历史
+      description: >-
+        仅查询本地已采集样本，支持 24h/7d 范围；不现场回查云接口。
+        from 包含、to 不包含，范围最多 7 天且 to 不得晚于当前时间。
+        结果按 sampled_at 降序、同一时间按内部序号降序；cursor 必须与相同范围和过滤条件一起使用。
+        页面间新到达的旧时间样本可能出现在后续页，提供方修订可更新已有样本；不是冻结快照。
+        每个 IP/方向独立，不补零、不插值、不跨 IP 求和，不将速率积分为计费字节。
+        启用前、停采、失败或超过查询窗口的离线时段可能缺失；空结果不代表零流量。
+      parameters:
+        - {name: from, in: query, required: true, schema: {type: string, format: date-time}}
+        - {name: to, in: query, required: true, schema: {type: string, format: date-time}}
+        - name: direction
+          in: query
+          schema: {type: string, enum: [ingress, egress]}
+        - name: ip
+          in: query
+          description: 可选公网 IPv4，仅筛选有 IP 维度的 VPC 序列。
+          schema: {type: string, format: ipv4}
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 1000, default: 500}
+        - {name: cursor, in: query, schema: {type: string}}
+      responses:
+        "200":
+          description: 原始样本；当前账号停用或实例消失不删除历史。
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor, from, to]
+                properties:
+                  from: {type: string, format: date-time}
+                  to: {type: string, format: date-time}
+                  next_cursor: {type: string, nullable: true}
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/CloudNetworkSample"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
 
   /system/info:
     get:
@@ -2571,6 +2622,21 @@ components:
               type: string
             message:
               type: string
+
+    CloudNetworkSample:
+      type: object
+      required: [source, network_type, ip, direction, metric_name, unit, period_seconds, value, sampled_at, checked_at]
+      properties:
+        source: {type: string, enum: [cms, swas_describe_monitor_data]}
+        network_type: {type: string, enum: [classic, vpc, swas]}
+        ip: {type: string, nullable: true, format: ipv4}
+        direction: {type: string, enum: [ingress, egress]}
+        metric_name: {type: string}
+        unit: {type: string, enum: [bit/s]}
+        period_seconds: {type: integer, enum: [60]}
+        value: {type: number, minimum: 0, description: 提供方该分钟的 Average；非计费字节。}
+        sampled_at: {type: string, format: date-time}
+        checked_at: {type: string, format: date-time, description: 最近一次完整查询观察到该样本的时间。}
 
     CloudNetwork:
       type: object

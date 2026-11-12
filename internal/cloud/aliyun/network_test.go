@@ -68,7 +68,7 @@ func TestNetworkMetricRejectsWrongOrPartialSeries(t *testing.T) {
 		return nil, failure("permission_denied")
 	})}
 	got, err := c.networkMetric(context.Background(), fakeCredentials(), "cn-shanghai", []networkTarget{target}, "vpc", "VPC_PublicIP_InternetInRate", func() error { return nil })
-	if err == nil || got[target].Value != nil || got[target].LastError.Code != "permission_denied" {
+	if err == nil || got[target].Value != nil || len(got[target].Samples) != 0 || got[target].LastError.Code != "permission_denied" {
 		t.Fatal("partial data published", got, err)
 	}
 }
@@ -119,5 +119,29 @@ func TestNetworkAttachmentSelectsVerifiedTopology(t *testing.T) {
 	}
 	if snapshots[0].Payload["cloud_network"].(*model.CloudNetwork).Streams[0].Ingress.MetricName != "VPC_PublicIP_InternetInRate" {
 		t.Fatal("classic fallback chosen for VPC")
+	}
+}
+
+func TestNetworkQueryRetainsAllUniqueMinutesInTimeOrder(t *testing.T) {
+	now := time.Now().UTC().Add(-time.Minute)
+	target := networkTarget{"i-test", "203.0.113.1"}
+	calls := 0
+	c := Inventory{Caller: callFunc(func(context.Context, Credentials, string, string, map[string]string) (map[string]any, error) {
+		calls++
+		if calls == 1 {
+			return cpuBody([]map[string]any{networkPoint(target.ID, target.IP, now, 5)}, "next"), nil
+		}
+		return cpuBody([]map[string]any{networkPoint(target.ID, target.IP, now.Add(-time.Minute), 0), networkPoint(target.ID, target.IP, now, 5)}, ""), nil
+	})}
+	got, err := c.networkMetric(context.Background(), fakeCredentials(), "cn-shanghai", []networkTarget{target}, "vpc", "VPC_PublicIP_InternetInRate", func() error { return nil })
+	r := got[target]
+	if err != nil || len(r.Samples) != 2 || r.Samples[0].Value != 0 || !r.Samples[0].SampledAt.Before(r.Samples[1].SampledAt) || r.Value == nil || *r.Value != 5 {
+		t.Fatal(r, err)
+	}
+	raw, _ := json.Marshal(r)
+	var public map[string]any
+	_ = json.Unmarshal(raw, &public)
+	if _, exists := public["Samples"]; exists {
+		t.Fatal("internal history leaked into latest response")
 	}
 }

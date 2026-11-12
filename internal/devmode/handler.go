@@ -132,6 +132,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := makeFixtures(now, h.loc)
+	if demoNetworkHistory(w, r, path, f.Instances, now) {
+		return
+	}
 	switch path {
 	case "/system/info":
 		respond(w, 200, object{"version": "dev-m0", "commit": "unknown", "built_at": nil, "latest_agent_version": "v0.2.0", "data_mode": "demo", "read_only": true, "instance_power_enabled": false})

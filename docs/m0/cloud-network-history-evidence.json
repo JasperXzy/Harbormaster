@@ -1,0 +1,104 @@
+{
+  "cloud_writes": 0,
+  "schema_migrations": 23,
+  "power_jobs": 0,
+  "foreign_key_errors": 0,
+  "series": [
+    {
+      "alias": "Ali_ShangHai",
+      "source": "cms",
+      "network_type": "vpc",
+      "direction": "egress",
+      "sample_count": 14,
+      "first_sample_at": "2026-11-12T11:44:00.000000000Z",
+      "last_sample_at": "2026-11-12T11:57:00.000000000Z",
+      "minimum_bps": 1664.0,
+      "maximum_bps": 15032.0,
+      "last_checked_at": "2026-11-12T11:58:15.979719000Z"
+    },
+    {
+      "alias": "Ali_ShangHai",
+      "source": "cms",
+      "network_type": "vpc",
+      "direction": "ingress",
+      "sample_count": 14,
+      "first_sample_at": "2026-11-12T11:44:00.000000000Z",
+      "last_sample_at": "2026-11-12T11:57:00.000000000Z",
+      "minimum_bps": 892.0,
+      "maximum_bps": 5252.0,
+      "last_checked_at": "2026-11-12T11:58:15.513123000Z"
+    },
+    {
+      "alias": "hk-server-nano",
+      "source": "cms",
+      "network_type": "vpc",
+      "direction": "egress",
+      "sample_count": 14,
+      "first_sample_at": "2026-11-12T11:44:00.000000000Z",
+      "last_sample_at": "2026-11-12T11:57:00.000000000Z",
+      "minimum_bps": 16444.0,
+      "maximum_bps": 36876.0,
+      "last_checked_at": "2026-11-12T11:58:21.241770000Z"
+    },
+    {
+      "alias": "hk-server-nano",
+      "source": "cms",
+      "network_type": "vpc",
+      "direction": "ingress",
+      "sample_count": 14,
+      "first_sample_at": "2026-11-12T11:44:00.000000000Z",
+      "last_sample_at": "2026-11-12T11:57:00.000000000Z",
+      "minimum_bps": 19556.0,
+      "maximum_bps": 47532.0,
+      "last_checked_at": "2026-11-12T11:58:20.981788000Z"
+    },
+    {
+      "alias": "sg-server-nano",
+      "source": "cms",
+      "network_type": "vpc",
+      "direction": "egress",
+      "sample_count": 14,
+      "first_sample_at": "2026-11-12T11:44:00.000000000Z",
+      "last_sample_at": "2026-11-12T11:57:00.000000000Z",
+      "minimum_bps": 81748.0,
+      "maximum_bps": 253784.0,
+      "last_checked_at": "2026-11-12T11:58:18.782211000Z"
+    },
+    {
+      "alias": "sg-server-nano",
+      "source": "cms",
+      "network_type": "vpc",
+      "direction": "ingress",
+      "sample_count": 14,
+      "first_sample_at": "2026-11-12T11:44:00.000000000Z",
+      "last_sample_at": "2026-11-12T11:57:00.000000000Z",
+      "minimum_bps": 96736.0,
+      "maximum_bps": 272068.0,
+      "last_checked_at": "2026-11-12T11:58:18.535942000Z"
+    },
+    {
+      "alias": "sha-pro",
+      "source": "swas_describe_monitor_data",
+      "network_type": "swas",
+      "direction": "egress",
+      "sample_count": 14,
+      "first_sample_at": "2026-11-12T11:44:00.000000000Z",
+      "last_sample_at": "2026-11-12T11:57:00.000000000Z",
+      "minimum_bps": 68840.0,
+      "maximum_bps": 243816.0,
+      "last_checked_at": "2026-11-12T11:58:12.545605000Z"
+    },
+    {
+      "alias": "sha-pro",
+      "source": "swas_describe_monitor_data",
+      "network_type": "swas",
+      "direction": "ingress",
+      "sample_count": 14,
+      "first_sample_at": "2026-11-12T11:44:00.000000000Z",
+      "last_sample_at": "2026-11-12T11:57:00.000000000Z",
+      "minimum_bps": 77688.0,
+      "maximum_bps": 268872.0,
+      "last_checked_at": "2026-11-12T11:58:12.305043000Z"
+    }
+  ]
+}

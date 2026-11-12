@@ -220,14 +220,17 @@ func (c Inventory) networkMetric(ctx context.Context, cred Credentials, region s
 			if previous, exists := seen[key]; exists && previous != value {
 				return fail(failure("invalid_response"))
 			}
+			if _, duplicate := seen[key]; !duplicate {
+				reading.Samples = append(reading.Samples, model.CloudRatePoint{SampledAt: sampled, Value: value})
+			}
 			seen[key] = value
 			if reading.ObservedAt == nil || sampled.After(*reading.ObservedAt) {
 				reading.Value = &value
 				reading.ObservedAt = &sampled
 				reading.Status = "ok"
 				reading.LastError = nil
-				result[target] = reading
 			}
+			result[target] = reading
 		}
 		token := ""
 		if v, exists := body["NextToken"]; exists && v != nil {
@@ -239,6 +242,7 @@ func (c Inventory) networkMetric(ctx context.Context, cred Credentials, region s
 		}
 		if token == "" {
 			for target, r := range result {
+				sort.Slice(r.Samples, func(i, j int) bool { return r.Samples[i].SampledAt.Before(r.Samples[j].SampledAt) })
 				r.CheckedAt = time.Now().UTC()
 				r.Age(r.CheckedAt)
 				result[target] = r
