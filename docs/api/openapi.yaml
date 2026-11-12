@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  System event records: GET /system-events adds cached provider events, stable first-seen pagination and source health. Independent read polling defaults to 60s. Complete empty scans only mark old records not seen; failures retain records and last success, never imply resolution. Provider lifecycle is preserved; no notification delivery or cloud action is added.
 # 2026-11-12  System event source preparation: RAM drafts add ecs:DescribeInstanceHistoryEvents and cms:DescribeSystemEventAttribute as read-only actions. Typed source readers preserve provider lifecycle semantics and distinguish ECS history from CMS interruption signals; no system-event panel route or notification dispatch is enabled by this change.
 # 2026-11-12  SWAS CPU: Instance.cpu also supports swas_describe_monitor_data / CPU_UTILIZATION with percent samples; namespace and credit_balance are null for SWAS. Preserve the same stale/unknown and timestamp behavior. RAM drafts add the read-only swas-open:DescribeMonitorData action, and runtime limitation text reflects explicit power enablement.
 # 2026-11-12  ECS CPU snapshots: optional Instance.cpu exposes CMS CPUUtilization (%) and TotalCredit (absolute count), sampled at 60 seconds. Background inventory queries only; failed/empty sources retain older values as stale, and reads age samples after ten minutes. Unknown remains null, never zero. SWAS CPU remains null pending source verification; no CPU-credit percentage alert or traffic protection is enabled.
@@ -694,6 +695,66 @@ paths:
                     description: 最近一次资源扫描完成的时间；从未扫描过为 null。
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /system-events:
+    get:
+      tags: [instances]
+      operationId: listSystemEvents
+      summary: 云端系统事件与来源状态
+      description: |
+        Read persisted ECS history and CMS spot signals, newest first-seen record first. Updates do not move the cursor order.
+        A provider's Executed status is not proof of instance reclamation. Missing from a successful query is not resolution.
+        Events from the two sources remain separate. Sources is empty before any scan is recorded, not proof that no events exist.
+        Disabled accounts retain history. No GET-triggered cloud queries, notifications or resource actions.
+      parameters:
+        - name: account_id
+          in: query
+          schema:
+            type: string
+        - name: instance_id
+          in: query
+          schema:
+            type: string
+        - name: region_id
+          in: query
+          schema:
+            type: string
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [ecs_history, cms_spot]
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [maintenance, spot_interruption, other]
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Cached events and health of sources matching account/region/source/instance filters.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, sources, next_cursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SystemEvent"
+                  sources:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SystemEventSource"
+                  next_cursor:
+                    type: string
+                    nullable: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
 
   /instance-events:
     get:
@@ -1697,6 +1758,9 @@ components:
           description: 采集周期，只读，用于在界面上解释数据有多新。
           required: [cdt_poll_interval_seconds, agent_report_interval_seconds, agent_offline_after_seconds, resource_scan_interval_seconds]
           properties:
+            system_event_poll_interval_seconds:
+              type: integer
+              description: Independent event polling interval; default 60 seconds. Queueing and provider latency can delay observation.
             cdt_poll_interval_seconds:
               type: integer
             agent_report_interval_seconds:
@@ -2093,6 +2157,96 @@ components:
           type: array
           items:
             type: string
+
+    SystemEventSource:
+      type: object
+      required: [account_id, region_id, source, status, checked_at, last_success_at, last_error]
+      properties:
+        account_id:
+          type: string
+        region_id:
+          type: string
+        source:
+          type: string
+          enum: [ecs_history, cms_spot]
+        status:
+          type: string
+          enum: [ok, stale, error, paused]
+          description: Paused for disabled accounts/removed regions; stale after configuration changes or two polling intervals without a check; error for a recent failed query.
+        checked_at:
+          type: string
+          format: date-time
+        last_success_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_error:
+          type: object
+          nullable: true
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+    SystemEvent:
+      type: object
+      required: [id, account_id, region_id, source, instance_id, cloud_event_id, cloud_instance_id, category, event_type, event_type_code, provider_status, provider_status_code, published_at, not_before, finished_at, first_seen_at, observed_at, seen_in_latest_scan]
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        region_id:
+          type: string
+        source:
+          type: string
+          enum: [ecs_history, cms_spot]
+        instance_id:
+          type: string
+          nullable: true
+          description: Matched local ECS instance ID; null if inventory has not discovered or retained that resource.
+        cloud_event_id:
+          type: string
+        cloud_instance_id:
+          type: string
+        category:
+          type: string
+          enum: [maintenance, spot_interruption, other]
+        event_type:
+          type: string
+          description: Original provider event name.
+        event_type_code:
+          type: integer
+          nullable: true
+        provider_status:
+          type: string
+          description: Original event lifecycle/status, not the observed instance state.
+        provider_status_code:
+          type: integer
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        not_before:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        first_seen_at:
+          type: string
+          format: date-time
+        observed_at:
+          type: string
+          format: date-time
+          description: Latest successful query that returned this event; failed queries never advance it.
+        seen_in_latest_scan:
+          type: boolean
+          description: Presence in the last successful scan of this source. Consult source health; false does not imply resolution.
 
     InstanceEvent:
       type: object

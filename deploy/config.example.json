@@ -13,5 +13,6 @@
   "worker_count": 2,
   "instance_power_enabled": false,
   "resource_scan_interval_seconds": 300,
+  "system_event_poll_interval_seconds": 60,
   "cdt_poll_interval_seconds": 300
 }

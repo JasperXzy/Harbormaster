@@ -46,7 +46,7 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 	}
 	var session map[string]string
 	_ = json.Unmarshal(w.Body.Bytes(), &session)
-	for _, path := range []string{"/system/info", "/settings", "/accounts", "/ram-policies", "/api-keys", "/accounts/demo-account-1/finance", "/accounts/demo-account-2/finance", "/instances?limit=1", "/traffic/quotas", "/traffic/daily?account_id=demo-account-1", "/traffic/billing-subjects", "/bandwidth-packages", "/bandwidth-packages/demo-package/hourly", "/notify/telegram", "/alert-rules", "/notifications"} {
+	for _, path := range []string{"/system/info", "/settings", "/system-events", "/accounts", "/ram-policies", "/api-keys", "/accounts/demo-account-1/finance", "/accounts/demo-account-2/finance", "/instances?limit=1", "/traffic/quotas", "/traffic/daily?account_id=demo-account-1", "/traffic/billing-subjects", "/bandwidth-packages", "/bandwidth-packages/demo-package/hourly", "/notify/telegram", "/alert-rules", "/notifications"} {
 		w = call("GET", path, "", cookie, "")
 		if w.Code != 200 || !json.Valid(w.Body.Bytes()) {
 			t.Errorf("%s: %d %s", path, w.Code, w.Body.String())
@@ -67,6 +67,10 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 	}
 	if jobs := call("GET", "/jobs/demo-job-refresh", "", cookie, ""); jobs.Code != 200 {
 		t.Fatal("demo job detail", jobs.Code)
+	}
+	systemEvents := call("GET", "/system-events?source=cms_spot&instance_id=demo-sin", "", cookie, "")
+	if systemEvents.Code != 200 || !strings.Contains(systemEvents.Body.String(), "demo-cloud-event-2") || strings.Contains(systemEvents.Body.String(), "demo-cloud-event-1") {
+		t.Fatal("demo system event filters", systemEvents.Code, systemEvents.Body)
 	}
 	events := call("GET", "/instance-events?instance_id=demo-sin&limit=1", "", cookie, "")
 	var eventPage struct {

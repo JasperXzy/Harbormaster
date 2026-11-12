@@ -27,15 +27,20 @@ type TrafficScanner interface {
 type FinanceScanner interface {
 	Finance(context.Context, model.Account, model.Credential, string, func() error) []model.FinanceObservation
 }
+type SystemEventScanner interface {
+	SystemEvents(context.Context, model.Account, model.Credential, func() error) []model.SystemEventObservation
+}
+
 type Engine struct {
-	Store       *store.Store
-	Box         *security.Box
-	Scanner     Scanner
-	Workers     int
-	Interval    time.Duration
-	CDTInterval time.Duration
-	Log         *slog.Logger
-	Timezone    string
+	SystemEventInterval time.Duration
+	Store               *store.Store
+	Box                 *security.Box
+	Scanner             Scanner
+	Workers             int
+	Interval            time.Duration
+	CDTInterval         time.Duration
+	Log                 *slog.Logger
+	Timezone            string
 }
 
 func (e *Engine) encrypt(id string, c model.Credential) ([]byte, error) {
@@ -116,12 +121,23 @@ func (e *Engine) TrafficInterval() time.Duration {
 	}
 	return e.CDTInterval
 }
+func (e *Engine) SystemEventPollInterval() time.Duration {
+	if e.SystemEventInterval < 15*time.Second {
+		return time.Minute
+	}
+	return e.SystemEventInterval
+}
 func (e *Engine) Schedule(ctx context.Context) error {
 	if err := e.Store.ScheduleScans(ctx, e.scanInterval(), time.Now().UTC()); err != nil {
 		return err
 	}
 	if _, ok := e.Scanner.(TrafficScanner); ok {
-		return e.Store.ScheduleCDT(ctx, e.TrafficInterval(), time.Now().UTC())
+		if err := e.Store.ScheduleCDT(ctx, e.TrafficInterval(), time.Now().UTC()); err != nil {
+			return err
+		}
+	}
+	if _, ok := e.Scanner.(SystemEventScanner); ok {
+		return e.Store.ScheduleSystemEvents(ctx, e.SystemEventPollInterval(), time.Now().UTC())
 	}
 	return nil
 }
@@ -321,6 +337,26 @@ func (e *Engine) scanAccount(ctx context.Context, j model.Job, a model.Account) 
 		}
 		return e.Store.CheckAccountScan(scanCtx, a.ID, j.Owner, a.Revision, time.Now().UTC())
 	}
+	if strings.HasPrefix(j.Scope, "system-events:") {
+		scanner, ok := e.Scanner.(SystemEventScanner)
+		if !ok {
+			return model.ScanResult{Failure: "not_implemented"}, nil
+		}
+		observations := scanner.SystemEvents(scanCtx, a, credential, before)
+		result := model.ScanResult{}
+		if len(observations) != len(a.RegionIDs)*2 {
+			result.Failure = "system_event_query_incomplete"
+		}
+		for _, o := range observations {
+			if o.Error != nil && result.Failure == "" {
+				result.Failure = o.Error.Code
+			}
+		}
+		if err := before(); err != nil {
+			return result, err
+		}
+		return result, e.Store.SaveSystemEvents(scanCtx, j, a, observations, time.Now().UTC())
+	}
 	if strings.HasPrefix(j.Scope, "cdt:") {
 		scanner, ok := e.Scanner.(TrafficScanner)
 		if !ok {
@@ -337,6 +373,38 @@ func (e *Engine) scanAccount(ctx context.Context, j model.Job, a model.Account) 
 		return result, e.Store.SaveCDT(scanCtx, j, a, o, time.Now().UTC())
 	}
 	result := e.Scanner.Scan(scanCtx, a, credential, j.Type == "permission_check", before)
+	if scanner, ok := e.Scanner.(SystemEventScanner); ok && j.Type == "permission_check" {
+		observations := scanner.SystemEvents(scanCtx, a, credential, before)
+		if err := before(); err != nil {
+			return result, err
+		}
+		if err := e.Store.SaveSystemEvents(scanCtx, j, a, observations, time.Now().UTC()); err != nil {
+			return result, err
+		}
+		for _, o := range observations {
+			key := "ecs_read"
+			if o.Source == "cms_spot" {
+				key = "cms_read"
+			}
+			if o.Error != nil {
+				if result.Failure == "" {
+					result.Failure = o.Error.Code
+				}
+				if result.Permissions != nil {
+					for i := range result.Permissions.Items {
+						item := &result.Permissions.Items[i]
+						if item.Key == key && item.Result != "missing" {
+							item.Result = "check_failed"
+							if o.Error.Code == "permission_denied" {
+								item.Result = "missing"
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	if scanner, ok := e.Scanner.(FinanceScanner); ok {
 		loc, err := e.Store.BusinessLocation(scanCtx, e.Timezone)
 		if err != nil {

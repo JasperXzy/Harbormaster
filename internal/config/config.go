@@ -16,26 +16,27 @@ import (
 )
 
 type Config struct {
-	InstancePowerEnabled        bool     `json:"instance_power_enabled"`
-	Listen                      string   `json:"listen"`
-	DataDir                     string   `json:"data_dir"`
-	Dev                         bool     `json:"dev"`
-	LogLevel                    string   `json:"log_level"`
-	Timezone                    string   `json:"timezone"`
-	Frontend                    string   `json:"frontend"`
-	PublicURL                   string   `json:"public_url"`
-	AgentReleaseDir             string   `json:"agent_release_dir"`
-	TrustedProxies              []string `json:"trusted_proxies"`
-	AdminAllowCIDRs             []string `json:"admin_allow_cidrs"`
-	SessionTTLSeconds           int      `json:"session_ttl_seconds"`
-	WorkerCount                 int      `json:"worker_count"`
-	ResourceScanIntervalSeconds int      `json:"resource_scan_interval_seconds"`
-	CDTPollIntervalSeconds      int      `json:"cdt_poll_interval_seconds"`
+	SystemEventPollIntervalSeconds int      `json:"system_event_poll_interval_seconds"`
+	InstancePowerEnabled           bool     `json:"instance_power_enabled"`
+	Listen                         string   `json:"listen"`
+	DataDir                        string   `json:"data_dir"`
+	Dev                            bool     `json:"dev"`
+	LogLevel                       string   `json:"log_level"`
+	Timezone                       string   `json:"timezone"`
+	Frontend                       string   `json:"frontend"`
+	PublicURL                      string   `json:"public_url"`
+	AgentReleaseDir                string   `json:"agent_release_dir"`
+	TrustedProxies                 []string `json:"trusted_proxies"`
+	AdminAllowCIDRs                []string `json:"admin_allow_cidrs"`
+	SessionTTLSeconds              int      `json:"session_ttl_seconds"`
+	WorkerCount                    int      `json:"worker_count"`
+	ResourceScanIntervalSeconds    int      `json:"resource_scan_interval_seconds"`
+	CDTPollIntervalSeconds         int      `json:"cdt_poll_interval_seconds"`
 }
 
 // Load applies defaults, an optional JSON file, then environment overrides.
 func Load(path string) (Config, error) {
-	c := Config{Listen: "127.0.0.1:8080", DataDir: "data", LogLevel: "info", Timezone: "Asia/Shanghai", Frontend: "api", SessionTTLSeconds: 43200, WorkerCount: 2, ResourceScanIntervalSeconds: 300, CDTPollIntervalSeconds: 300}
+	c := Config{Listen: "127.0.0.1:8080", DataDir: "data", LogLevel: "info", Timezone: "Asia/Shanghai", Frontend: "api", SessionTTLSeconds: 43200, WorkerCount: 2, ResourceScanIntervalSeconds: 300, CDTPollIntervalSeconds: 300, SystemEventPollIntervalSeconds: 60}
 	if path != "" {
 		f, err := os.Open(path)
 		if err != nil {
@@ -87,7 +88,7 @@ func Load(path string) (Config, error) {
 		}
 		c.InstancePowerEnabled = b
 	}
-	for k, p := range map[string]*int{"HM_WORKER_COUNT": &c.WorkerCount, "HM_RESOURCE_SCAN_INTERVAL_SECONDS": &c.ResourceScanIntervalSeconds, "HM_CDT_POLL_INTERVAL_SECONDS": &c.CDTPollIntervalSeconds} {
+	for k, p := range map[string]*int{"HM_SYSTEM_EVENT_POLL_INTERVAL_SECONDS": &c.SystemEventPollIntervalSeconds, "HM_WORKER_COUNT": &c.WorkerCount, "HM_RESOURCE_SCAN_INTERVAL_SECONDS": &c.ResourceScanIntervalSeconds, "HM_CDT_POLL_INTERVAL_SECONDS": &c.CDTPollIntervalSeconds} {
 		if v, ok := os.LookupEnv(k); ok {
 			n, err := strconv.Atoi(v)
 			if err != nil {
@@ -100,6 +101,9 @@ func Load(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if c.SystemEventPollIntervalSeconds < 15 || c.SystemEventPollIntervalSeconds > 3600 {
+		return errors.New("invalid system event poll interval")
+	}
 	if c.Dev && c.InstancePowerEnabled {
 		return errors.New("instance power cannot be enabled in development mode")
 	}

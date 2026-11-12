@@ -89,7 +89,7 @@ func (s *Store) PrepareRestoredCopy(ctx context.Context, now time.Time) (Restore
 		"DELETE FROM agent_registration",
 		"UPDATE job SET lease_owner=NULL,lease_until=0",
 		"UPDATE notification SET lease_owner=NULL,lease_until=0",
-		"UPDATE account_settings SET lease_owner=NULL,lease_until=0,next_scan_at=0,next_cdt_at=0",
+		"UPDATE account_settings SET lease_owner=NULL,lease_until=0,next_scan_at=0,next_cdt_at=0,next_system_event_at=0",
 	} {
 		if _, err := tx.ExecContext(ctx, query); err != nil {
 			return result, err

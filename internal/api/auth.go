@@ -103,7 +103,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if p.instancePower(w, r, path) || p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.jobHistory(w, r, path) || p.business(w, r, path) {
+	if p.instancePower(w, r, path) || p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.systemEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.jobHistory(w, r, path) || p.business(w, r, path) {
 		return
 	}
 	if r.Method != "GET" {
@@ -124,18 +124,20 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 503, "internal_error")
 			return
 		}
+		eventSeconds := 60
 		scanSeconds := 300
 		cdtSeconds := 300
 		if p.engine != nil {
 			scanSeconds = int(p.engine.Interval.Seconds())
 			cdtSeconds = int(p.engine.TrafficInterval().Seconds())
+			eventSeconds = int(p.engine.SystemEventPollInterval().Seconds())
 		}
 		offline, err := p.s.AgentOfflineAfter(r.Context())
 		if err != nil {
 			businessError(w, err)
 			return
 		}
-		writeJSON(w, 200, map[string]any{"business_timezone": zone, "collection": map[string]int{"cdt_poll_interval_seconds": cdtSeconds, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": int(offline.Seconds()), "resource_scan_interval_seconds": scanSeconds}})
+		writeJSON(w, 200, map[string]any{"business_timezone": zone, "collection": map[string]int{"cdt_poll_interval_seconds": cdtSeconds, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": int(offline.Seconds()), "resource_scan_interval_seconds": scanSeconds, "system_event_poll_interval_seconds": eventSeconds}})
 	case "/events":
 		p.events(w, r)
 	case "/accounts", "/instances", "/traffic/quotas", "/traffic/daily", "/traffic/billing-subjects", "/bandwidth-packages", "/regions", "/notify/telegram", "/alert-rules", "/notifications":

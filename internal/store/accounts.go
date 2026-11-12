@@ -151,7 +151,7 @@ func (s *Store) UpdateAccount(ctx context.Context, id string, change func(*model
 			return a, err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE job SET status='failed',error_code='account_changed',finished_at=?,lease_owner=NULL,lease_until=0 WHERE scope IN (?,?,?) AND status IN ('queued','running')", timestamp(now), id, "cdt:"+id, "inventory:"+id); err != nil {
+	if _, err = tx.ExecContext(ctx, "UPDATE job SET status='failed',error_code='account_changed',finished_at=?,lease_owner=NULL,lease_until=0 WHERE scope IN (?,?,?,?) AND status IN ('queued','running')", timestamp(now), id, "cdt:"+id, "inventory:"+id, "system-events:"+id); err != nil {
 		return a, err
 	}
 	// A newly enabled account is discovered even if its prior refresh was queued.
@@ -164,7 +164,7 @@ func (s *Store) UpdateAccount(ctx context.Context, id string, change func(*model
 		}
 	}
 	if a.Enabled {
-		if _, err = tx.ExecContext(ctx, "UPDATE account_settings SET next_cdt_at=0 WHERE account_id=?", id); err != nil {
+		if _, err = tx.ExecContext(ctx, "UPDATE account_settings SET next_cdt_at=0,next_system_event_at=0 WHERE account_id=?", id); err != nil {
 			return a, err
 		}
 		kind := "refresh"

@@ -81,3 +81,21 @@ func TestInstancePowerRequiresExplicitProductionEnable(t *testing.T) {
 		t.Fatal("invalid power flag accepted")
 	}
 }
+
+func TestSystemEventPollingConfiguration(t *testing.T) {
+	c, err := Load("")
+	if err != nil || c.SystemEventPollIntervalSeconds != 60 {
+		t.Fatal(c, err)
+	}
+	t.Setenv("HM_SYSTEM_EVENT_POLL_INTERVAL_SECONDS", "30")
+	c, err = Load("")
+	if err != nil || c.SystemEventPollIntervalSeconds != 30 {
+		t.Fatal(c, err)
+	}
+	for _, raw := range []string{"0", "14", "3601", "invalid"} {
+		t.Setenv("HM_SYSTEM_EVENT_POLL_INTERVAL_SECONDS", raw)
+		if _, err = Load(""); err == nil {
+			t.Fatal("invalid interval accepted", raw)
+		}
+	}
+}

@@ -68,7 +68,7 @@
 | F10.1–F10.11 | M3 的测速点/目标/任务、ICMP/TCP 测速、历史、延迟告警、路由追踪、线路识别、双向与离线 IP 库均未实现。 |
 | F11.1 | 已实现出方向配置能力比较及告警记录；不宣称入方向所有产品限额或实测吞吐已验证。[检查](spec-bandwidth-check.md)、[告警](bandwidth-alerts.md) |
 | F11.2 | CPU 积分百分比告警未实现，PRD 20% 的分母未明确。 |
-| F11.3 | ECS/CMS 两类事件的固定读取器与字段解析已实现，三地域只读验证通过；周期采集、持久化、面板接口、预警通知和时效验收仍未完成。[事件来源](system-events.md) |
+| F11.3 | ECS/CMS 来源、独立默认 60 秒轮询、持久记录/来源健康及只读分页接口已实现；三地域只读验证通过。预警通知与提前送达验收仍未完成。[事件采集](system-events.md) |
 | F11.4 | 账号连续失败的告警记录已实现；实际发信未接通。 |
 | F12.1 | Linux 双架构发布包、校验下载、一行命令、systemd 单元及模拟安装回滚已实现；真实机器安装未执行。[安装](agent-installation.md) |
 | F12.2 | ECS 元数据匹配及用户批准的轻量预绑定流程已实现；元数据文本不等于远程可信证明。 |
@@ -129,4 +129,4 @@
 - M3/M4：核心功能及验收均未完成。
 - 非功能：常驻内存/CPU、10 台实例长期数据库 ≤1GB、保留期、保护响应 ≤30 秒、真实发送可靠性与跨平台运行仍缺对应实测。已有编译、单元测试和接口查询不覆盖这些指标。
 
-最近构建、race、vet 与契约检查见 [系统事件来源验证](system-events.md)；此前见 [CPU 采集验证](cpu-metrics.md)；此前接口契约及完整功能检查见 [API Key 控制验证](api-key-management.md)；此前见 [电源调用验证](instance-power.md)；契约已有管理员电源提交、能力开关、期望状态和状态确认观测；默认关闭真实电源执行。之前契约检查见 [任务列表验证](job-history.md)。之前检查见 [余额告警验证](balance-alerts.md)、[备份恢复验证](backup-format.md)、[RAM 草稿验证](ram-policy.md)、[公网 IP 告警验证](public-ip-alerts.md)、[实例事件验证](instance-events.md)、[IPv6 验证](ipv6-discovery.md)、[规格带宽告警验证](bandwidth-alerts.md)，初始跨平台命令见 [M0 原始输出](validation.txt)。当前未实现项仍需推进，不能据此将持续目标标记完成。
+最近构建、race、vet 与契约检查见 [系统事件采集验证](system-events.md)；此前见 [CPU 采集验证](cpu-metrics.md)；此前接口契约及完整功能检查见 [API Key 控制验证](api-key-management.md)；此前见 [电源调用验证](instance-power.md)；契约已有管理员电源提交、能力开关、期望状态和状态确认观测；默认关闭真实电源执行。之前契约检查见 [任务列表验证](job-history.md)。之前检查见 [余额告警验证](balance-alerts.md)、[备份恢复验证](backup-format.md)、[RAM 草稿验证](ram-policy.md)、[公网 IP 告警验证](public-ip-alerts.md)、[实例事件验证](instance-events.md)、[IPv6 验证](ipv6-discovery.md)、[规格带宽告警验证](bandwidth-alerts.md)，初始跨平台命令见 [M0 原始输出](validation.txt)。当前未实现项仍需推进，不能据此将持续目标标记完成。
