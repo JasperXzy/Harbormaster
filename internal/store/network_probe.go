@@ -47,7 +47,7 @@ func (s *Store) EnqueueAgentProbe(ctx context.Context, instanceID, key string, r
 		return model.Job{}, err
 	}
 	var oldID, oldInstance, oldRaw string
-	err = tx.QueryRowContext(ctx, "SELECT job_id,instance_id,request_json FROM network_probe_job WHERE request_key=?", key).Scan(&oldID, &oldInstance, &oldRaw)
+	err = tx.QueryRowContext(ctx, "SELECT job_id,coalesce(instance_id,''),request_json FROM network_probe_job WHERE request_key=?", key).Scan(&oldID, &oldInstance, &oldRaw)
 	if err == nil {
 		if oldInstance != instanceID || oldRaw != string(raw) {
 			return model.Job{}, ErrConflict

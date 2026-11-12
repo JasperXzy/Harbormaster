@@ -24,7 +24,7 @@ main-server 为 Linux x86_64，Docker 已运行。80/443 由 `1panel/openresty:1
 |---|---|
 | deploy/Dockerfile | Go 多阶段构建，scratch 运行镜像，默认 UID/GID 65532，包含 CA 根证书 |
 | deploy/Dockerfile.dockerignore | 仅传入 Go 源码和依赖清单，不把 web、Git、部署数据/凭据带入构建上下文 |
-| deploy/compose.yml | Linux 主机网络、回环监听、非 root、只读根文件系统、禁用能力、独立数据/密钥/发布目录挂载、健康检查与日志轮转 |
+| deploy/compose.yml | Linux 主机网络、回环监听、非 root、只读根文件系统、默认丢弃能力并仅请求 ICMP 所需 NET_RAW、独立数据/密钥/发布目录挂载、健康检查与日志轮转 |
 | deploy/server/config.json | 主机和容器共用的后端配置，不含任何秘密 |
 | deploy/server/hm-server.service | 原生二进制的替代启动方式，独立 hm-server 用户与 systemd credentials；与 Compose 二选一 |
 | deploy/openresty/harbormaster.conf | 现有 OpenResty 的独立虚拟主机草稿，TLS 文件就绪后才能启用 |
@@ -92,3 +92,5 @@ exit 0
 仓库中的两个服务配置显式设 `instance_power_enabled: false`。只有运维设置 `instance_power_enabled=true` 或 `HM_INSTANCE_POWER_ENABLED=true` 后启动 serve，服务才接受并执行管理员电源任务；这不会附加 RAM 权限。开发模式拒绝开启，run-once 保持只读采集。启动日志 cloud_writes 与 /api/v1/system/info 的 instance_power_enabled 反映启用状态。
 
 本轮仅完成代码、配置模板与模拟测试，没有改变真实机器配置，也没有授权或执行真实云写操作。详见[电源接口与确认](instance-power.md)。
+
+2026-11-12 本机测速接入后，systemd/Compose 源模板增加 NET_RAW，未增加 NET_ADMIN；仅表示请求能力，非 root 容器的有效能力与真实原始 socket 仍待部署验收，见[本机测速](server-probe-tasks.md)。未修改正在运行的任何服务。

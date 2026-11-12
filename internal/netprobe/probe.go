@@ -213,3 +213,16 @@ func summarize(samples []Sample) Summary {
 	}
 	return s
 }
+
+// FailureCode is safe for persisted results and never returns wrapped error text.
+func FailureCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	for _, known := range []error{ErrInvalid, ErrTarget, ErrDNS, ErrUnavailable, ErrIO, ErrCancelled} {
+		if errors.Is(err, known) {
+			return known.Error()
+		}
+	}
+	return ErrIO.Error()
+}

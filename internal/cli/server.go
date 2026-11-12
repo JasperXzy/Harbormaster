@@ -26,6 +26,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/m0"
 	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/notify"
+	"github.com/JasperXzy/harbormaster/internal/probes"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
 	"github.com/JasperXzy/harbormaster/internal/ui"
@@ -291,8 +292,9 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 	if engine != nil {
 		workerCtx, cancel := context.WithCancel(ctx)
 		var workers sync.WaitGroup
-		workers.Add(2)
+		workers.Add(3)
 		go func() { defer workers.Done(); engine.Run(workerCtx) }()
+		go func() { defer workers.Done(); (probes.Runner{Store: s, Log: log}).Run(workerCtx) }()
 		go func() { defer workers.Done(); (notify.Evaluator{Store: s, Log: log}).Run(workerCtx) }()
 		if heartbeatRunner != nil {
 			workers.Add(1)

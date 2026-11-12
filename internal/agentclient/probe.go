@@ -89,7 +89,7 @@ func (c *Client) ProbeOnce(ctx context.Context) (bool, error) {
 	}
 	report := agentproto.ProbeReport{AgentID: identity.AgentID, TaskID: task.ID, Owner: work.Owner, Result: result}
 	if probeErr != nil {
-		code := probeErrorCode(probeErr)
+		code := netprobe.FailureCode(probeErr)
 		report.ErrorCode = &code
 	}
 	if netprobe.ValidateResult(task.Request, &report.Result, report.ErrorCode, time.Now()) != nil {
@@ -116,12 +116,4 @@ func (c *Client) sendProbeResult(ctx context.Context, token string, report agent
 		return false, ErrProtocol
 	}
 	return true, c.Journal.ClearProbe(report.Owner)
-}
-func probeErrorCode(err error) string {
-	for _, known := range []error{netprobe.ErrInvalid, netprobe.ErrTarget, netprobe.ErrDNS, netprobe.ErrUnavailable, netprobe.ErrIO, netprobe.ErrCancelled} {
-		if errors.Is(err, known) {
-			return known.Error()
-		}
-	}
-	return netprobe.ErrIO.Error()
 }
