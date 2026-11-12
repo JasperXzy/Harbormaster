@@ -16,12 +16,13 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/agentmeter"
 	"github.com/JasperXzy/harbormaster/internal/agentproto"
 	"github.com/JasperXzy/harbormaster/internal/agentstate"
+	"github.com/JasperXzy/harbormaster/internal/cloud/aliyunmeta"
 )
 
 var ErrTransport = errors.New("agent_server_unavailable")
 var ErrProtocol = errors.New("agent_server_protocol_error")
 var ErrCredentials = errors.New("agent_registration_or_token_rejected")
-var ErrMetadata = errors.New("aliyun_metadata_unavailable")
+var ErrMetadata = aliyunmeta.ErrUnavailable
 
 type Client struct {
 	ReportIntervalSeconds int
@@ -180,39 +181,6 @@ func (c *Client) Flush(ctx context.Context) (bool, error) {
 // Metadata reads only fixed instance identity endpoints, never RAM credentials,
 // user-data or arbitrary URLs. IMDSv2 is required; failure does not weaken it.
 func Metadata(ctx context.Context, client *http.Client) (agentproto.Metadata, error) {
-	const base = "http://100.100.100.200/latest/"
-	read := func(method, path, token string) (string, error) {
-		req, _ := http.NewRequestWithContext(ctx, method, base+path, nil)
-		if method == "PUT" {
-			req.Header.Set("X-aliyun-ecs-metadata-token-ttl-seconds", "60")
-		} else {
-			req.Header.Set("X-aliyun-ecs-metadata-token", token)
-		}
-		res, err := client.Do(req)
-		if err != nil {
-			return "", ErrMetadata
-		}
-		defer res.Body.Close()
-		if res.StatusCode != 200 {
-			return "", ErrMetadata
-		}
-		raw, err := io.ReadAll(io.LimitReader(res.Body, 4097))
-		if err != nil || len(raw) > 4096 {
-			return "", ErrMetadata
-		}
-		return strings.TrimSpace(string(raw)), nil
-	}
-	token, err := read("PUT", "api/token", "")
-	if err != nil || token == "" {
-		return agentproto.Metadata{}, ErrMetadata
-	}
-	id, err := read("GET", "meta-data/instance-id", token)
-	if err != nil {
-		return agentproto.Metadata{}, err
-	}
-	region, err := read("GET", "meta-data/region-id", token)
-	if err != nil {
-		return agentproto.Metadata{}, err
-	}
-	return agentproto.Metadata{InstanceID: id, RegionID: region}, nil
+	identity, err := aliyunmeta.Read(ctx, client)
+	return agentproto.Metadata{InstanceID: identity.InstanceID, RegionID: identity.RegionID}, err
 }
