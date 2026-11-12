@@ -119,8 +119,18 @@ func (s *Store) ScheduleProbePlans(ctx context.Context, now time.Time) error {
 		if reason != "" {
 			skip = reason
 		}
-		if _, err = tx.ExecContext(ctx, "INSERT INTO probe_plan_run(plan_id,plan_revision,target_id,target_revision,point_kind,instance_id,created_at,job_id,skip_reason) VALUES(?,?,?,?,?,?,?,?,?)", plan.ID, plan.Revision, target.ID, target.Revision, plan.PointKind, plan.InstanceID, timestamp(now), jobID, skip); err != nil {
-			return err
+		runInsert, insertErr := tx.ExecContext(ctx, "INSERT INTO probe_plan_run(plan_id,plan_revision,target_id,target_revision,point_kind,instance_id,created_at,job_id,skip_reason) VALUES(?,?,?,?,?,?,?,?,?)", plan.ID, plan.Revision, target.ID, target.Revision, plan.PointKind, plan.InstanceID, timestamp(now), jobID, skip)
+		if insertErr != nil {
+			return insertErr
+		}
+		if reason != "" {
+			seq, err := runInsert.LastInsertId()
+			if err != nil {
+				return err
+			}
+			if err = breakProbeAlertStreaks(ctx, tx, plan.ID, seq, now); err != nil {
+				return err
+			}
 		}
 		if _, err = tx.ExecContext(ctx, "UPDATE probe_plan SET next_at=? WHERE id=?", now.Add(time.Duration(plan.FrequencySeconds)*time.Second).Unix(), plan.ID); err != nil {
 			return err

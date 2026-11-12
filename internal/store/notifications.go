@@ -10,14 +10,14 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/model"
 )
 
-const notificationColumns = `seq,id,event_key,coalesce(job_id,''),created_at,kind,severity,rule_key,title,body,account_id,instance_id,delivery_status,channel_revision,attempts,coalesce(lease_owner,''),last_error_code,uncertain,delivered_at,message_id,urgent,suppression_reason,suppressed_at`
+const notificationColumns = `seq,id,event_key,coalesce(job_id,''),created_at,kind,severity,rule_key,title,body,account_id,instance_id,delivery_status,channel_revision,attempts,coalesce(lease_owner,''),last_error_code,uncertain,delivered_at,message_id,urgent,suppression_reason,suppressed_at,probe_plan_id`
 
 func readNotification(row rowScanner) (model.Notification, error) {
 	var n model.Notification
 	var created string
 	var rule, account, instance, code, delivered, suppression, suppressedAt sql.NullString
 	var message sql.NullInt64
-	err := row.Scan(&n.Sequence, &n.ID, &n.EventKey, &n.JobID, &created, &n.Kind, &n.Severity, &rule, &n.Title, &n.Body, &account, &instance, &n.DeliveryStatus, &n.ChannelRevision, &n.Attempts, &n.Owner, &code, &n.Uncertain, &delivered, &message, &n.Urgent, &suppression, &suppressedAt)
+	err := row.Scan(&n.Sequence, &n.ID, &n.EventKey, &n.JobID, &created, &n.Kind, &n.Severity, &rule, &n.Title, &n.Body, &account, &instance, &n.DeliveryStatus, &n.ChannelRevision, &n.Attempts, &n.Owner, &code, &n.Uncertain, &delivered, &message, &n.Urgent, &suppression, &suppressedAt, &n.ProbePlanID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return n, ErrNotFound
 	}
@@ -88,8 +88,8 @@ func enqueueNotification(ctx context.Context, tx *sql.Tx, in model.Notification,
 		}
 	}
 	id := model.NewID("notice_")
-	_, err = tx.ExecContext(ctx, `INSERT INTO notification(id,event_key,job_id,created_at,kind,severity,rule_key,title,body,account_id,instance_id,delivery_status,channel_revision,available_at,urgent,suppression_reason,suppressed_at,suppression_revision)
- VALUES(?,?,nullif(?,''),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.EventKey, in.JobID, timestamp(now), in.Kind, in.Severity, in.RuleKey, in.Title, in.Body, in.AccountID, in.InstanceID, status, revision, now.Unix(), urgent, reason, suppressed, quietRevision)
+	_, err = tx.ExecContext(ctx, `INSERT INTO notification(id,event_key,job_id,created_at,kind,severity,rule_key,title,body,account_id,instance_id,delivery_status,channel_revision,available_at,urgent,suppression_reason,suppressed_at,suppression_revision,probe_plan_id)
+ VALUES(?,?,nullif(?,''),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.EventKey, in.JobID, timestamp(now), in.Kind, in.Severity, in.RuleKey, in.Title, in.Body, in.AccountID, in.InstanceID, status, revision, now.Unix(), urgent, reason, suppressed, quietRevision, in.ProbePlanID)
 	if err != nil {
 		return in, err
 	}

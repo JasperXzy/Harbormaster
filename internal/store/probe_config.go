@@ -102,6 +102,9 @@ func (s *Store) SaveNetworkTarget(ctx context.Context, id string, in model.Netwo
 		}
 		in.ID = id
 		in.CreatedAt = previous.CreatedAt
+		if err = updateProbeTargetAlerts(ctx, tx, previous, in, now); err != nil {
+			return in, err
+		}
 		if err = cancelQueuedProbeRuns(ctx, tx, "target_id", id, now); err != nil {
 			return in, err
 		}
@@ -257,6 +260,9 @@ func (s *Store) SaveProbePlan(ctx context.Context, id string, in model.ProbePlan
 		}
 		in.ID = id
 		in.CreatedAt = previous.CreatedAt
+		if err = updateProbePlanAlerts(ctx, tx, previous, in, now); err != nil {
+			return in, err
+		}
 		if err = cancelQueuedProbeRuns(ctx, tx, "plan_id", id, now); err != nil {
 			return in, err
 		}
@@ -298,6 +304,9 @@ func (s *Store) DeleteProbePlan(ctx context.Context, id string, revision int64, 
 	}
 	if current.Revision != revision {
 		return ErrNetworkChanged
+	}
+	if err = closeProbePlanAlerts(ctx, tx, id, now); err != nil {
+		return err
 	}
 	if err = cancelQueuedProbeRuns(ctx, tx, "plan_id", id, now); err != nil {
 		return err

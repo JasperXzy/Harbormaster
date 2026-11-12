@@ -5,6 +5,7 @@ import "time"
 const TelegramCredentialOwner = "notify/telegram/credentials/v1"
 
 type Notification struct {
+	ProbePlanID       *string    `json:"probe_plan_id"`
 	Urgent            bool       `json:"urgent"`
 	SuppressionReason *string    `json:"suppression_reason"`
 	SuppressedAt      *time.Time `json:"suppressed_at"`

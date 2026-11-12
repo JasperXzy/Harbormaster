@@ -70,6 +70,9 @@ func (s *Store) UpdateAlertRule(ctx context.Context, key string, update model.Al
 	if err := updateBalanceTargets(ctx, tx, previous, rule, now); err != nil {
 		return rule, err
 	}
+	if err := updateProbeAlertTargets(ctx, tx, previous, rule, now); err != nil {
+		return rule, err
+	}
 	raw, err := json.Marshal(rule.Params)
 	if err != nil {
 		return rule, err

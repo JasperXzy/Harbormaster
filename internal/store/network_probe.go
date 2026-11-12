@@ -248,5 +248,8 @@ func (s *Store) AcceptProbeResult(ctx context.Context, token string, in agentpro
 	if _, err = tx.ExecContext(ctx, "UPDATE job SET status=?,error_code=?,finished_at=?,lease_owner=NULL,lease_until=0 WHERE id=?", state, code, timestamp(now), in.TaskID); err != nil {
 		return ack, err
 	}
+	if err = checkProbeResultAlerts(ctx, tx, in.TaskID, now); err != nil {
+		return ack, err
+	}
 	return ack, tx.Commit()
 }

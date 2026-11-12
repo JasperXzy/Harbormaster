@@ -184,5 +184,8 @@ func (s *Store) FinishServerProbe(ctx context.Context, claim ServerProbeClaim, r
 	if _, err = tx.ExecContext(ctx, "UPDATE job SET status=?,error_code=?,finished_at=?,lease_owner=NULL,lease_until=0 WHERE id=?", status, failure, timestamp(now), claim.Job.ID); err != nil {
 		return err
 	}
+	if err = checkProbeResultAlerts(ctx, tx, claim.Job.ID, now); err != nil {
+		return err
+	}
 	return tx.Commit()
 }

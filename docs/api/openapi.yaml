@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Network alerts: add network_latency, network_loss and network_unreachable. PRD defaults remain sampled latency > configured limit for 600s, failed probes >5%, and 3 consecutive completely failed runs. User confirmed recovery after 3 valid healthy runs; gaps/skips/local failures reset streaks without recovery. New results drive transitions once, with per-plan overrides and probe_plan_id on notifications. Delivery remains separate.
 # 2026-11-12  Network management: add cached points, editable public/custom or managed-instance targets, revisioned probe plans and run history. Follow the unique public IP of the selected family; incomplete/stale/ambiguous discovery skips a run. Missed periods are not replayed: schedule one current run and advance from now. Mutations perform no synchronous DNS/cloud/probes; demo remains read-only.
 # 2026-11-12  Agent probe queue: reserve network_probe job type for persisted fixed ICMP/TCP tasks. Agent claim/result protocol is private; job result remains null in this queue phase. No panel submission route yet. Expired executions are terminal and never replayed.
 # 2026-11-12  Instance finance: add cached current-month DescribeInstanceBill rows matched by exact instance ID and product family. Preserve bill type/currency and payable/after-discount decimal strings; empty matches do not mean zero cost. No shared-resource allocation, refund netting or amortization. RAM drafts add bssapi:DescribeInstanceBill.
@@ -2126,7 +2127,7 @@ paths:
       tags: [notify]
       operationId: listAlertRules
       summary: 内置告警规则
-      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed and balance_low. Usage/forecast rules are not returned until their metering source and policy are available.
+      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss and network_unreachable. Usage/forecast rules are not returned until their metering source and policy are available.
       responses:
         "200":
           description: 告警规则
@@ -4361,7 +4362,7 @@ components:
 
     AlertRuleKey:
       type: string
-      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low]
+      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable]
       description: 内置规则；仅返回当前已实现且有可用来源的规则。
 
     Severity:
@@ -4372,6 +4373,31 @@ components:
       type: object
       description: 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient 和 instance_public_ip_changed 使用空对象，无额外阈值。公网 IP 变化按每次有效事件记录，不产生恢复通知。
       properties:
+        probe_thresholds:
+          type: array
+          maxItems: 100
+          description: Network rules only. network_latency evaluates only listed plans with an explicit latency_ms; no latency limit is guessed. network_loss and network_unreachable apply to all enabled plans by default; entries override or disable individual plans. Empty list uses those defaults. Retired plan entries remain dormant. Threshold edits restart evidence windows without reinterpreting old runs. Disabling monitoring or replacing a point/target/protocol closes the old condition silently; it is not a recovery.
+          items:
+            type: object
+            required: [plan_id]
+            additionalProperties: false
+            properties:
+              plan_id: {type: string, minLength: 1, maxLength: 128}
+              enabled: {type: boolean, default: true}
+              latency_ms: {type: number, exclusiveMinimum: true, minimum: 0, maximum: 60000, description: network_latency only; required for enabled listed plans. Compare average RTT with strict greater-than.}
+              loss_percent: {type: number, minimum: 0, maximum: 100, default: 5, description: network_loss only; omitted value means 5 percent. TCP counts failed connection attempts.}
+        duration_seconds:
+          type: integer
+          minimum: 60
+          maximum: 86400
+          default: 600
+          description: network_latency only. Successive valid above-threshold measurements must span this duration, with at least two results; elapsed wall time alone cannot fire an alert.
+        recovery_samples:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 3
+          description: Network rules only. Consecutive valid healthy measurements required for recovery. Skipped/missing/local-failure samples interrupt counters and never imply recovery.
         balance_thresholds:
           type: array
           maxItems: 100
@@ -4407,7 +4433,7 @@ components:
           type: integer
           minimum: 1
           maximum: 1000
-          description: account_api_failure、cdt_official_unavailable：连续失败多少次后告警。
+          description: account_api_failure、cdt_official_unavailable 为连续失败次数；network_unreachable 为完整测速全部失败的连续次数，默认 3。
         offline_after_seconds:
           type: integer
           minimum: 10
@@ -4447,7 +4473,7 @@ components:
 
     Notification:
       type: object
-      required: [id, created_at, kind, severity, rule_key, title, body, account_id, instance_id, delivery_status]
+      required: [id, created_at, kind, severity, rule_key, title, body, account_id, instance_id, probe_plan_id, delivery_status]
       properties:
         id:
           type: string
@@ -4474,6 +4500,10 @@ components:
         instance_id:
           type: string
           nullable: true
+        probe_plan_id:
+          type: string
+          nullable: true
+          description: Network alert combination identity; null for other notifications.
         delivery_status:
           $ref: "#/components/schemas/DeliveryStatus"
         urgent: {type: boolean, description: 服务端判定并持久保存，前端不能编辑单条通知的紧急性。}
