@@ -25,7 +25,7 @@
 - ICMP 只接受目标 IP 的 EchoReply，匹配 code=0、ID、sequence 和完整随机载荷；忽略旧序号、其他来源、不同载荷和非 EchoReply。IPv4 校验报文 checksum，IPv6 使用系统原始套接字处理 checksum。每次读取有 deadline，任务取消会关闭 socket。
 - 所有错误只输出固定代码，不透传原始 DNS/socket 错误或系统详情。
 
-原始 ICMP socket 在 Linux 需要 CAP_NET_RAW；当前 systemd 模板只给计数所需 CAP_NET_ADMIN，因此**尚不能在当前已安装服务配置下声称可执行 ICMP**。在正式任务接入阶段应同步调整最小能力及安装包。当前未扩权、未部署、未发起公网测速或远程安装。
+原始 ICMP socket 在 Linux 需要 CAP_NET_RAW。客户端任务接入时，仓库中的 systemd 模板已由仅 CAP_NET_ADMIN 调整为 CAP_NET_ADMIN + CAP_NET_RAW；仍使用专用 hm-agent 用户和 NoNewPrivileges。没有向真实机器授予能力或部署服务，实际 ICMP 收发仍待 Linux 环境验收。
 
 ## 来源
 
@@ -41,7 +41,7 @@
 
 ## 接入顺序
 
-下一阶段将本执行器接入持久任务与私有 agent 协议：身份由既有 token 绑定，任务固定类型、有限输入、租约、结果幂等回报，采样和流量上报继续独立。后端先提供任务/目标/结果契约再接入面板；本阶段没有新增面板路由或修改前端。
+持久任务与私有 agent 协议现已接入，客户端执行/回报循环与流量采样独立，详见[任务协议与客户端](agent-probe-tasks.md)。目标/组合管理、server 本机执行与面板历史接口仍待后续契约接入；前端未修改。
 
 ## 实际检查命令
 

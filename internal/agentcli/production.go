@@ -107,8 +107,10 @@ func production(ctx context.Context, command, server, dir, interfaces string, co
 	defer cancel()
 	result := make(chan error, 1)
 	go func() { result <- delivery(workerCtx, client, log) }()
-	// Join the delivery worker before closing the encrypted journal.
-	defer func() { cancel(); <-result }()
+	probeResult := make(chan error, 1)
+	go func() { probeResult <- probeDelivery(workerCtx, client, log) }()
+	// Join both workers before closing their shared encrypted journal.
+	defer func() { cancel(); <-result; <-probeResult }()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	log.Info("agent_started", "report_interval_seconds", int(interval/time.Second), "rules_version", agentmeter.RulesVersion)
@@ -118,6 +120,9 @@ func production(ctx context.Context, command, server, dir, interfaces string, co
 			return nil
 		case err = <-result:
 			result <- err
+			return err
+		case err = <-probeResult:
+			probeResult <- err
 			return err
 		case <-ticker.C:
 			if err = sample(); err != nil {
@@ -149,6 +154,41 @@ func delivery(ctx context.Context, client *agentclient.Client, log *slog.Logger)
 			failures = 0
 			if sent {
 				delay = 100 * time.Millisecond
+			}
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil
+		case <-timer.C:
+		}
+	}
+}
+
+// Measurement endpoint failures never stop traffic sampling/delivery. A journal
+// failure is fatal because durable state can no longer be guaranteed.
+func probeDelivery(ctx context.Context, client *agentclient.Client, log *slog.Logger) error {
+	failures := 0
+	for {
+		worked, err := client.ProbeOnce(ctx)
+		if ctx.Err() != nil {
+			return nil
+		}
+		delay := 5 * time.Second
+		if err != nil {
+			if errors.Is(err, agentstate.ErrState) {
+				return err
+			}
+			failures++
+			delay = min(time.Duration(1<<min(failures, 6))*time.Second, 60*time.Second)
+			if failures == 1 || failures%10 == 0 {
+				log.Warn("agent_probe_unavailable", "attempts", failures)
+			}
+		} else {
+			failures = 0
+			if worked {
+				delay = time.Second
 			}
 		}
 		timer := time.NewTimer(delay)

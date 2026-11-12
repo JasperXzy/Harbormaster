@@ -33,7 +33,7 @@
 - `/etc/harbormaster/agent.key`（新安装随机生成，0600，已有密钥不覆盖）。
 - `/var/lib/harbormaster-agent`（0700，加密状态与队列）。
 
-注册阶段在安装进程中短暂以 root 读取主密钥并完成绑定，不添加计数规则。常驻服务用 hm-agent 用户，只有 CAP_NET_ADMIN，无 CAP_NET_RAW、无完整 root；通过 systemd LoadCredential 获取密钥的只读副本，密钥不进入状态目录或 unit 文本。此配置依据 [systemd 执行环境文档](https://freedesktop.org/software/systemd/man/latest/systemd.exec.html) 的 credential、状态目录与能力配置。
+注册阶段在安装进程中短暂以 root 读取主密钥并完成绑定，不添加计数规则。常驻服务用 hm-agent 用户；当前模板为公网计数提供 CAP_NET_ADMIN，为内置 ICMP 测速提供 CAP_NET_RAW，不使用完整 root；通过 systemd LoadCredential 获取密钥的只读副本，密钥不进入状态目录或 unit 文本。此配置依据 [systemd 执行环境文档](https://freedesktop.org/software/systemd/man/latest/systemd.exec.html) 的 credential、状态目录与能力配置。
 
 启动服务后会创建专用 `inet harbormaster` 计数表，只操作该表。未知同名安装文件/用户不自动接管；升级保留现有身份与状态。若尚有未送达缓存，主动重新注册会失败并回滚，避免把旧实例缓存迁给新绑定；先恢复旧服务送达缓存后再升级。
 

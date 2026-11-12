@@ -29,6 +29,7 @@ type Identity struct {
 	Registration *agentproto.Registration `json:"registration,omitempty"`
 }
 type State struct {
+	Probe          *ProbeWork          `json:"probe,omitempty"`
 	Identity       Identity            `json:"identity"`
 	Generation     string              `json:"generation"`
 	Last           *agentproto.Report  `json:"last"`
@@ -37,6 +38,8 @@ type State struct {
 	PendingDropped int64               `json:"pending_dropped"`
 }
 type operation struct {
+	Probe       *ProbeWork         `json:"probe,omitempty"`
+	ClearProbe  string             `json:"clear_probe,omitempty"`
 	Snapshot    *State             `json:"snapshot,omitempty"`
 	Identity    *Identity          `json:"identity,omitempty"`
 	Sample      *agentproto.Report `json:"sample,omitempty"`
@@ -246,6 +249,12 @@ func (j *Journal) Ack(ack agentproto.Ack) error {
 }
 func (j *Journal) apply(op operation) error {
 	count := 0
+	if op.Probe != nil {
+		count++
+	}
+	if op.ClearProbe != "" {
+		count++
+	}
 	if op.Snapshot != nil {
 		count++
 	}
@@ -265,12 +274,22 @@ func (j *Journal) apply(op operation) error {
 		return ErrState
 	}
 	switch {
+	case op.Probe != nil:
+		j.state.Probe = op.Probe
+	case op.ClearProbe != "":
+		if j.state.Probe == nil || j.state.Probe.Owner != op.ClearProbe {
+			return ErrState
+		}
+		j.state.Probe = nil
 	case op.Snapshot != nil:
 		if len(op.Snapshot.Queue) > MaxSamples || op.Snapshot.Dropped < 0 {
 			return ErrState
 		}
 		j.state = *op.Snapshot
 	case op.Identity != nil:
+		if op.Identity.AgentID != j.state.Identity.AgentID || op.Identity.Token != j.state.Identity.Token || op.Identity.Registration != nil {
+			j.state.Probe = nil
+		}
 		j.state.Identity = *op.Identity
 	case op.Sample != nil:
 		j.state.PendingDropped = 0

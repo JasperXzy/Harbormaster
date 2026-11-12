@@ -1,6 +1,6 @@
 # Agent 固定测速任务队列与私有接口
 
-2026-11-12；F10.1–F10.4、F12.6、F14。执行器见 [network-probes.md](network-probes.md)。本阶段实现服务端持久队列、领取/回报端点、结果校验；agent 客户端加密待办和执行循环是接下来的接入步骤。尚未向真实 agent 下发任务、未运行公网探测。
+2026-11-12；F10.1–F10.4、F12.6、F14。执行器见 [network-probes.md](network-probes.md)。已实现服务端持久队列、领取/回报端点、结果校验，以及下文记录的 agent 客户端加密待办和独立执行循环。尚未向真实 agent 下发任务、未运行公网探测。
 
 ## 队列与身份
 
@@ -24,7 +24,7 @@
 
 服务端从 token 哈希确认 agent 身份及当前绑定，不信任请求中的 agent_id。响应 `{task:null,server_time}` 表示暂无可领取任务；有任务时 task 包含 id、owner、request 和 expires_at。request 是内置 netprobe.Request：host、family、method、port、count、timeout_ms、interval_ms。
 
-owner 是持久化的领取请求标识，不是认证凭据。领取响应丢失后，同 owner 重试返回原任务和原到期时间，不延长租约；其他 owner 不能同时领取此任务。agent 客户端必须先持久化 owner，收到任务后在执行前持久化开始记录，重启后不能把“已经开始但没有结果”当作未执行。这部分将在客户端接入阶段验证。
+owner 是持久化的领取请求标识，不是认证凭据。领取响应丢失后，同 owner 重试返回原任务和原到期时间，不延长租约；其他 owner 不能同时领取此任务。agent 客户端必须先持久化 owner，收到任务后在执行前持久化开始记录，重启后不能把“已经开始但没有结果”当作未执行。客户端现已按下面的恢复测试实现并验证此流程。
 
 `POST /agent/v1/probes/result`：agent_id、task_id、owner、result、error_code。result 为逐次探测及时间/解析地址记录；error_code=null 代表完整测量，允许保留失败探测（例如全部超时），并不意味着目标可达。本地执行失败/取消/重启中断使用固定错误码，summary=null。
 
@@ -38,7 +38,7 @@ HTTP 结果：认证失败 401，账号不可用 403，不存在 404，过期/�
 
 已按“先改契约”增加公开 JobType 的 network_probe 枚举，任务列表/详情可识别新类型；本阶段 Job.result 保持 null，原始结果存专用表。尚无面板创建测速任务或历史查询路由，不要求前端现在显示一个不可用的测速操作。
 
-下一阶段完成 agent 加密待办（领取前标识、开始标记、待回报结果、ACK 清理）、独立执行/投递循环、版本能力与原始 socket 权限配置，再提供 server 本机执行、目标与组合管理、默认五分钟调度及历史接口。线路追踪、离线 ASN 库和网络告警另行接入。当前实现不能代表上述功能已经完成。
+客户端加密待办、独立执行/投递循环和原始 socket 权限模板已按下一节接入。随后继续提供 server 本机执行、目标与组合管理、版本能力展示、默认五分钟调度及历史接口。线路追踪、离线 ASN 库和网络告警另行接入。当前实现不能代表上述功能已经完成。
 
 ## 已有验证
 
@@ -72,3 +72,59 @@ ok github.com/JasperXzy/harbormaster/internal/store 75.272s
 Your API description is valid. You have 6 warnings.
 exit 0（六项为既有警告，未新增）
 ```
+
+
+## Agent 客户端接入
+
+`hm-agent serve` 启动独立测速循环，与原有流量采样和批量上报循环并行。空闲每 5 秒领取；完成一项后至少等待 1 秒；服务端临时失败或旧 server 不支持接口时退避至 60 秒，不能因此停止流量上报。日志只记录固定事件及重试次数。共享加密日志损坏/无法持久化时退出服务，不在没有开始记录的情况下继续执行。
+
+加密 journal 增加一个有界 ProbeWork，复用 AES-256-GCM、外置主密钥、进程锁、fsync 和现有崩溃恢复/压缩机制：
+
+1. 先保存随机 owner，再请求领取；空队列复用该 owner，不每次轮询写新状态。
+2. 收到任务后再次验证参数和 owner，先保存 task 作为开始标记，再调用内置执行器。
+3. 执行完成或取消后先保存逐次结果和固定错误码，再发回服务端；结果发送失败只重传同一结果。
+4. 收到匹配 task_id 的 ACK 才清除待办；服务端明确返回 probe_expired / not_found 时清除不能再提交的旧待办。冲突或不匹配 ACK 不清除证据。
+5. 重启时已有 task、尚无 result，回报 probe_interrupted，不重新运行；已有 result 则继续投递。显式重新注册或更换 token 清除旧身份的待办。
+
+执行 deadline 从“服务端剩余租约 − 整个领取请求耗时 − 5 秒余量”推导，再受 65 秒上限约束，不依赖 agent 墙钟延长租约。进程取消会取消执行器；结果保存后留给下次启动投递。正常退出先取消并等待两个后台 worker，再关闭 journal，避免后台继续写已关闭文件。
+
+TCP 及 ICMP 均通过同一个固定执行器，服务器不能传入命令。Linux unit 增加 CAP_NET_RAW，能力集合为 CAP_NET_ADMIN + CAP_NET_RAW；没有改成 root。升级包仍使用现有构建脚本复制这份源 unit。本次没有安装或更新任何真实服务，旧机器的实际 unit 不会因仓库文件变化而自动获得能力。
+
+### 客户端验证
+
+本机 TLS server 使用真实 agent 路由、SQLite 队列和 token 认证；测试仅替换目标测速函数，返回受控样本，不向公网探测。
+
+- 领取响应在服务端落库后丢失：重启后重用 owner，取得原任务；执行次数为 1。
+- 结果响应在服务端落库后丢失：重启后重传加密待办，服务端返回 duplicate，结果行数保持 1，不再执行。
+- 仅有持久开始标记就重启：服务端得到 probe_interrupted，执行器调用次数为 0。
+- 测速函数阻塞时，流量 Sample + Flush 仍成功写入服务端 traffic_sample；取消后测速结果持久化，下一轮只回报。
+- 未匹配 owner、私网目标、未知 command 字段、错误 ACK 和结果冲突均被拒绝；旧 server 的 404 不停止流量能力；明确过期会清理待办。
+- journal 经过真实关闭/重开和压缩，任务、结果、计数样本与 ACK 各自保留；原文件不出现 token、owner、目标或任务 ID 明文；调用方修改返回对象不能改写已提交状态。
+
+这证明本地协议与恢复路径，不代表 Linux 原始 ICMP 套接字、真实安装、长期负载或前端网络页已经验收。M3 尚未完成。
+
+### 客户端接入阶段命令与输出
+
+```text
+go test -race ./internal/agentstate ./internal/agentclient ./internal/agentcli
+ok github.com/JasperXzy/harbormaster/internal/agentstate 2.135s
+ok github.com/JasperXzy/harbormaster/internal/agentclient 3.178s
+ok github.com/JasperXzy/harbormaster/internal/agentcli 1.416s
+```
+
+补充后台循环退出测试后，agentcli 定向 race 为 1.964s，其余两包 cached。
+
+```text
+go build ./... && go vet ./... && git diff --check
+exit 0，无输出
+
+go test -race ./...
+全部测试包 cached 或 no test files，exit 0。
+
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o <私有临时目录>/hm-agent-linux-amd64 ./cmd/hm-agent
+linux/amd64 built 11842078 bytes
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -o <私有临时目录>/hm-agent-linux-arm64 ./cmd/hm-agent
+linux/arm64 built 10942140 bytes
+```
+
+两个二进制输出到 `/var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-agent-probe-build-rfk_8pit`，未提交仓库、未上传机器。交叉编译通过不代替目标架构运行验收。本客户端阶段没有面板契约变化。

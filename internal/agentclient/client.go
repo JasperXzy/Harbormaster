@@ -11,12 +11,14 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/agentmeter"
 	"github.com/JasperXzy/harbormaster/internal/agentproto"
 	"github.com/JasperXzy/harbormaster/internal/agentstate"
 	"github.com/JasperXzy/harbormaster/internal/cloud/aliyunmeta"
+	"github.com/JasperXzy/harbormaster/internal/netprobe"
 )
 
 var ErrTransport = errors.New("agent_server_unavailable")
@@ -25,6 +27,8 @@ var ErrCredentials = errors.New("agent_registration_or_token_rejected")
 var ErrMetadata = aliyunmeta.ErrUnavailable
 
 type Client struct {
+	probeMu               sync.Mutex
+	probeRun              func(context.Context, netprobe.Request) (netprobe.Result, error)
 	ReportIntervalSeconds int
 	HTTP                  *http.Client
 	Journal               *agentstate.Journal
@@ -69,6 +73,20 @@ func (c *Client) post(ctx context.Context, path, token string, body, out any) er
 	}
 	if res.StatusCode == 429 || res.StatusCode >= 500 {
 		return ErrTransport
+	}
+	if path == agentproto.ProbeClaimPath && res.StatusCode == 404 {
+		return ErrProbeUnsupported
+	}
+	if path == agentproto.ProbeResultPath && (res.StatusCode == 404 || res.StatusCode == 409) {
+		var response struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if json.NewDecoder(io.LimitReader(res.Body, 4096)).Decode(&response) == nil && (response.Error.Code == "probe_expired" || response.Error.Code == "not_found") {
+			return ErrProbeExpired
+		}
+		return ErrProtocol
 	}
 	if res.StatusCode != 200 && res.StatusCode != 201 {
 		return ErrProtocol
