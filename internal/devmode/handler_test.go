@@ -52,6 +52,14 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 			t.Errorf("%s: %d %s", path, w.Code, w.Body.String())
 		}
 	}
+	powerResponse := call("POST", "/instances/demo-sin/power", `{"action":"stop","stop_mode":"keep_charging"}`, cookie, session["csrf_token"])
+	if powerResponse.Code != 503 || !strings.Contains(powerResponse.Body.String(), "instance_power_disabled") {
+		t.Fatal("demo accepted cloud write", powerResponse.Code, powerResponse.Body)
+	}
+	infoResponse := call("GET", "/system/info", "", cookie, "")
+	if !strings.Contains(infoResponse.Body.String(), `"instance_power_enabled":false`) {
+		t.Fatal("demo advertises power enabled")
+	}
 	w = call("GET", "/instances?limit=1", "", cookie, "")
 	jobs := call("GET", "/jobs?type=refresh&trigger=panel&account_id=demo-account-1", "", cookie, "")
 	if jobs.Code != 200 || !strings.Contains(jobs.Body.String(), `"id":"demo-job-refresh"`) || strings.Contains(jobs.Body.String(), "demo-job-permissions") {

@@ -51,3 +51,33 @@ func TestProductionAccessConfiguration(t *testing.T) {
 		t.Fatal("unbounded session accepted")
 	}
 }
+
+func TestInstancePowerRequiresExplicitProductionEnable(t *testing.T) {
+	t.Setenv("HM_INSTANCE_POWER_ENABLED", "false")
+	c, err := Load("")
+	if err != nil || c.InstancePowerEnabled {
+		t.Fatal(c, err)
+	}
+	p := filepath.Join(t.TempDir(), "config.json")
+	if err = os.WriteFile(p, []byte(`{"instance_power_enabled":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, err = Load(p)
+	if err != nil || c.InstancePowerEnabled {
+		t.Fatal("environment override failed", err)
+	}
+	t.Setenv("HM_INSTANCE_POWER_ENABLED", "true")
+	c, err = Load("")
+	if err != nil || !c.InstancePowerEnabled {
+		t.Fatal(err)
+	}
+	t.Setenv("HM_DEV", "true")
+	if _, err = Load(""); err == nil {
+		t.Fatal("power enabled in development mode")
+	}
+	t.Setenv("HM_DEV", "false")
+	t.Setenv("HM_INSTANCE_POWER_ENABLED", "sometimes")
+	if _, err = Load(""); err == nil {
+		t.Fatal("invalid power flag accepted")
+	}
+}

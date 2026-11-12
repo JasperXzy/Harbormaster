@@ -16,6 +16,7 @@ import (
 )
 
 type Config struct {
+	InstancePowerEnabled        bool     `json:"instance_power_enabled"`
 	Listen                      string   `json:"listen"`
 	DataDir                     string   `json:"data_dir"`
 	Dev                         bool     `json:"dev"`
@@ -79,6 +80,13 @@ func Load(path string) (Config, error) {
 		}
 		c.Dev = b
 	}
+	if v, ok := os.LookupEnv("HM_INSTANCE_POWER_ENABLED"); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return c, errors.New("invalid HM_INSTANCE_POWER_ENABLED")
+		}
+		c.InstancePowerEnabled = b
+	}
 	for k, p := range map[string]*int{"HM_WORKER_COUNT": &c.WorkerCount, "HM_RESOURCE_SCAN_INTERVAL_SECONDS": &c.ResourceScanIntervalSeconds, "HM_CDT_POLL_INTERVAL_SECONDS": &c.CDTPollIntervalSeconds} {
 		if v, ok := os.LookupEnv(k); ok {
 			n, err := strconv.Atoi(v)
@@ -92,6 +100,9 @@ func Load(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if c.Dev && c.InstancePowerEnabled {
+		return errors.New("instance power cannot be enabled in development mode")
+	}
 	if c.CDTPollIntervalSeconds < 60 || c.CDTPollIntervalSeconds > 86400 {
 		return errors.New("invalid CDT poll interval")
 	}

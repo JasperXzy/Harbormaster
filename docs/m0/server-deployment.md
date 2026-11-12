@@ -85,3 +85,10 @@ exit 0
 ```
 
 本机没有 Docker 引擎、OpenResty 或 systemd-analyze，未执行镜像构建/容器启动检查，也未对含待配置证书路径的 vhost 做真实 OpenResty 语法检查。CI 已增加容器构建及启动检查作业（push=false），但本分支未 push，不能声称 CI 作业已运行。完整 Go race 测试在前一提交已通过；本批不修改 Go 行为。
+
+
+### 手动电源操作开关
+
+仓库中的两个服务配置显式设 `instance_power_enabled: false`。只有运维设置 `instance_power_enabled=true` 或 `HM_INSTANCE_POWER_ENABLED=true` 后启动 serve，服务才接受并执行管理员电源任务；这不会附加 RAM 权限。开发模式拒绝开启，run-once 保持只读采集。启动日志 cloud_writes 与 /api/v1/system/info 的 instance_power_enabled 反映启用状态。
+
+本轮仅完成代码、配置模板与模拟测试，没有改变真实机器配置，也没有授权或执行真实云写操作。详见[电源接口与确认](instance-power.md)。

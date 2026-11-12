@@ -1,6 +1,6 @@
 # 实例电源操作
 
-2026-11-12：固定云调用层、持久化任务、独立执行 worker 和状态确认已实现并模拟测试；生产服务启动和面板提交 API 尚未接入。没有使用真实凭据发起电源操作或 DryRun。
+2026-11-12：固定云调用层、持久化任务、独立执行 worker 和状态确认已实现并模拟测试；生产服务与管理员提交 API 已接通，默认关闭，开发模式不执行电源操作。没有使用真实凭据发起电源操作或 DryRun。
 
 ## 已确认的业务语义
 
@@ -168,4 +168,57 @@ git diff --check
 （无输出）
 ```
 
-覆盖签名单实例查询、错误目标/未知响应、所有电源动作、StopCharging 回退、缺失模式、同一分钟/未观测转换的重启、过期/倒序/未来观测、旧 owner、并行 worker 不重复发送、错误主密钥、账号变化与停用、响应未知、查询失败及服务中断。所有云调用均为 mock transport 或 mock Writer/Observer；真实资源操作数为 0。CLI/API 尚未引用 power.Engine，下一阶段才接入显式启用配置及提交路由。
+覆盖签名单实例查询、错误目标/未知响应、所有电源动作、StopCharging 回退、缺失模式、同一分钟/未观测转换的重启、过期/倒序/未来观测、旧 owner、并行 worker 不重复发送、错误主密钥、账号变化与停用、响应未知、查询失败及服务中断。所有云调用均为 mock transport 或 mock Writer/Observer；真实资源操作数为 0。该阶段尚未接入 CLI/API；后续接入见下一节。
+
+
+## 管理员接口与显式启用
+
+`POST /api/v1/instances/{instance_id}/power` 已接入现有 HTTPS/来源限制、管理员会话和 CSRF 校验。请求体仅包含 action（start/stop/reboot）和适用时的 stop_mode；ECS stop 必须明确 keep_charging / stop_charging，其他动作和 SWAS 不接受该参数。接口只做事务入队并返回 202 + job_id，不同步请求阿里云。
+
+必需的 `Idempotency-Key` 请求头使用 16–64 位字母、数字、下划线或连字符，推荐前端每次用户动作生成 UUID，网络重试复用原值。同键不同目标/动作返回 409 idempotency_key_conflict；同实例不同活动动作返回 409 instance_power_busy；已停用账号返回 409 account_disabled。任务仍通过现有 /jobs、详情和 job.updated SSE 查看。
+
+启用由服务端非敏感配置 `instance_power_enabled` 或环境变量 `HM_INSTANCE_POWER_ENABLED` 控制，默认 false。两个仓库部署配置都显式为 false。本轮没有改动真实机器配置或启动真实电源任务。准备实际使用时，运维显式启用并重启 serve，管理员随后通过面板提交动作；读权限检查/RAM 草稿不会自动启用。开发模式禁止开启该配置，并对提交返回 503 instance_power_disabled；生产未开启时同样返回该错误且不入队。
+
+`serve` 启用后启动独立 power worker 池，使用 worker_count（1–8）；与采集 worker 池分开。启动日志 cloud_writes 显示实际是否启用了这个池。`run-once` 始终只处理采集任务，即便共享配置中电源已开启，也不领取电源任务。关闭启用项不会删除已排队任务，重新启用后仍会执行发送前检查。
+
+`GET /system/info` 新增 instance_power_enabled；前端按此判断电源提交能力，不用 read_only 推测。`GET /instances` 新增 desired_state 与 desired_state_updated_at：只有存在持久意图记录时才非 null，和云状态/status、资源更新时间分开。迁移 019 只为已有真实电源任务回填意图来源，按任务入队序号取最后一条，不把初始 stopped 默认值当作决定。查询按当前页实例 ID 批量读取；旧事件重试不覆盖新意图或其时间。
+
+给前端的对接要求：
+
+- 控制请求新增 Idempotency-Key；ECS stop 明确选择模式，SWAS 不发送模式。
+- 调用前检查 instance_power_enabled；false 时说明尚未启用操作，不发起无效请求。
+- 202 后跟踪任务；result.dispatch_outcome=accepted 期间仍可能 running，最终状态与 observation/confirmation_basis 分开显示。
+- desired_state=null 表示尚无明确意图，不能显示为“期望停止”。云状态继续使用 status，含各自时间来源。
+
+没有补造 supports_stop_charging=true；经济模式可用性仍受 V9 验证边界影响。自动化、额度停机豁免、控制台停机询问及 Telegram/API Key 控制仍是后续工作。
+
+管理员接口阶段验证（最终命令均退出 0）：
+
+```text
+go test ./internal/api -run Power -count=1
+ok github.com/JasperXzy/harbormaster/internal/api 0.929s
+
+go test ./internal/cli -run 'Power|RunOnce' -count=1
+ok github.com/JasperXzy/harbormaster/internal/cli 0.690s
+
+go test -race ./internal/power -count=1
+ok github.com/JasperXzy/harbormaster/internal/power 7.050s
+
+go build ./... && go vet ./...
+（无输出）
+
+go test -race ./...
+ok github.com/JasperXzy/harbormaster/internal/power 6.641s
+其余有测试的包均 ok (cached)，命令包等为 [no test files]。
+
+npm --prefix web run lint:api
+../docs/api/openapi.yaml: validated in 32ms
+Woohoo! Your API description is valid.
+
+git diff --check
+（无输出）
+```
+
+全量检查中曾发现旧模拟测试忽略查询超时错误，导致误判任务已完成；现已让模拟观察器返回该查询错误，并允许超时任务没有成功观测。启动时间变化用例也改用观测时的分钟值，避免测试跨分钟误报。没有削弱“Running 单点不足以证明重启”的存储断言。
+
+新增覆盖：默认关闭、会话/CSRF、非法动作/模式/事件键、同键冲突、重复提交、旧事件不覆盖新意图、账号停用、POST 无同步云调用、真实 SQLite 队列与模拟 worker 的完整往返、实例意图独立展示、旧数据库意图回填、开发模式拒绝、配置优先级和 run-once 不领取电源任务。真实云写操作数仍为 0，部署配置仍关闭。

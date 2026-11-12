@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Manual power API: POST /instances/{instance_id}/power requires session+CSRF, a durable Idempotency-Key and explicit ECS stop mode. Returns 202 after local enqueue, never synchronously calls the cloud. Disabled by default via instance_power_enabled; SystemInfo exposes that capability. Instance desired_state/desired_state_updated_at are nullable until recorded intent exists, never inferred from cloud status or the legacy stopped default. Demo remains read-only.
 # 2026-11-12  Power confirmation: PowerJobResult adds nullable baseline/observation and confirmation_basis. Acceptance stays running until fresh targeted observations confirm the requested state/mode; reboot needs a newer start time or an observed transition. Timeouts and stop-mode fallback fail explicitly without replay. Execution remains separate from the production submission endpoint.
 # 2026-11-12  Power task storage: reserve job type instance_power and its persisted request/outcome result. Enqueue saves desired state atomically; durable action event keys retain deduplication after completion and restore; identical active requests reuse a job and conflicting active requests are rejected. A dispatch marker prevents replay after a crash; API acceptance is not observed completion. No power submission endpoint is exposed in this storage phase.
 # 2026-11-12  Job history: GET /jobs adds stable cursor pagination and account/instance/type/status/trigger filters. Job now exposes account_ids, nullable instance_id and recorded trigger (panel/cli/schedule/system/unknown; api/telegram reserved for their consumers). Historical source is unknown; current collection/test jobs have no instance target. Reads never enqueue work or call cloud APIs.
@@ -753,6 +754,73 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /instances/{instance_id}/power:
+    parameters:
+      - $ref: "#/components/parameters/InstanceId"
+    post:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: controlInstancePower
+      summary: 提交实例电源操作
+      description: |
+        Local enqueue only; the enabled power worker executes asynchronously. Save desired state at enqueue time and retain intent on failure.
+        Generate one Idempotency-Key per user action and reuse it on retries, including after a lost response or completed job.
+        Same-key different target/action/mode returns 409. Same active request can reuse an existing job; conflicting active requests return 409.
+        ECS stop requires explicit stop_mode; SWAS and start/reboot reject it. API acceptance does not imply actual state or economical mode.
+        Production requires instance_power_enabled=true; default and development mode return 503 instance_power_disabled without enqueueing.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_-]{16,64}$'
+          description: Unique action event key, for example a UUID. Retained across task completion and backup restore.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [start, stop, reboot]
+                stop_mode:
+                  type: string
+                  enum: [keep_charging, stop_charging]
+      responses:
+        "202":
+          $ref: "#/components/responses/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Instance is absent from managed discovery.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: instance_power_busy, idempotency_key_conflict, account_disabled or account_changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          description: instance_power_disabled or internal_error; no synchronous cloud call.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /instances/{instance_id}/agent/install-command:
     parameters:
       - $ref: "#/components/parameters/InstanceId"
@@ -1491,6 +1559,9 @@ components:
         read_only:
           type: boolean
           description: Resource/configuration mutations are unavailable; session login/logout remain available.
+        instance_power_enabled:
+          type: boolean
+          description: Whether this server accepts manual power jobs. Independent of configuration-write availability; false by default and in demo mode.
         version:
           type: string
         commit:
@@ -2034,6 +2105,16 @@ components:
           description: ECS 为实例规格（如 ecs.e-c4m1.large）；轻量为套餐描述。
         status:
           $ref: "#/components/schemas/InstanceStatus"
+        desired_state:
+          type: string
+          nullable: true
+          enum: [running, stopped, quota_stopped, null]
+          description: Recorded intent, not observed cloud state. Null before the first recorded intent; quota_stopped is reserved for future protection rules.
+        desired_state_updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Time the latest distinct intent was enqueued. Replaying an event key does not change this time or overwrite newer intent.
         public_ips:
           type: array
           description: 公网 IPv4。

@@ -134,9 +134,16 @@ func TestPowerWorkerConfirmsActualStateAndMode(t *testing.T) {
 				}
 				reads++
 				o := tc.observations[index]
+				if reads > 1 && tc.basis == "start_time_changed" {
+					started := time.Now().UTC().Truncate(time.Minute)
+					o.StartedAt = &started
+				}
 				o.ObservedAt = time.Now().UTC()
 				if reads > 1 {
-					job, _ := e.Store.Job(ctx, j.ID)
+					job, readErr := e.Store.Job(ctx, j.ID)
+					if readErr != nil {
+						return model.PowerObservation{}, readErr
+					}
 					if job.Status != "running" {
 						t.Fatal("accepted was marked complete before observation")
 					}
@@ -155,7 +162,7 @@ func TestPowerWorkerConfirmsActualStateAndMode(t *testing.T) {
 					t.Fatal(got)
 				}
 			}
-			if got.Status != wantStatus || result.DispatchOutcome != "accepted" || result.Observation == nil || result.Baseline == nil {
+			if got.Status != wantStatus || result.DispatchOutcome != "accepted" || (tc.code != "power_confirmation_timeout" && result.Observation == nil) || result.Baseline == nil {
 				t.Fatal(got, result)
 			}
 			if tc.basis != "" && (result.ConfirmationBasis == nil || *result.ConfirmationBasis != tc.basis) {

@@ -27,6 +27,7 @@ import (
 )
 
 type productionPanel struct {
+	powerEnabled    bool
 	s               *store.Store
 	access          panelAccess
 	timezone        string
@@ -41,7 +42,7 @@ type productionPanel struct {
 }
 
 func NewProductionPanel(s *store.Store, c config.Config, engine *collect.Engine) http.Handler {
-	return &productionPanel{s: s, access: newPanelAccess(c), timezone: c.Timezone, ttl: time.Duration(c.SessionTTLSeconds) * time.Second, now: time.Now, engine: engine, publicURL: c.PublicURL, agentReleaseDir: c.AgentReleaseDir}
+	return &productionPanel{powerEnabled: !c.Dev && c.InstancePowerEnabled && engine != nil && engine.Box != nil, s: s, access: newPanelAccess(c), timezone: c.Timezone, ttl: time.Duration(c.SessionTTLSeconds) * time.Second, now: time.Now, engine: engine, publicURL: c.PublicURL, agentReleaseDir: c.AgentReleaseDir}
 }
 
 func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +99,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.jobHistory(w, r, path) || p.business(w, r, path) {
+	if p.instancePower(w, r, path) || p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.jobHistory(w, r, path) || p.business(w, r, path) {
 		return
 	}
 	if r.Method != "GET" {
@@ -111,7 +112,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, buildinfo.BuildTime); err == nil {
 			builtAt = t.UTC().Format(time.RFC3339)
 		}
-		writeJSON(w, 200, map[string]any{"version": buildinfo.Version, "commit": buildinfo.Commit, "built_at": builtAt, "latest_agent_version": p.releaseVersions.Get(p.agentReleaseDir, p.now()), "data_mode": "live", "read_only": p.engine == nil})
+		writeJSON(w, 200, map[string]any{"version": buildinfo.Version, "commit": buildinfo.Commit, "built_at": builtAt, "latest_agent_version": p.releaseVersions.Get(p.agentReleaseDir, p.now()), "data_mode": "live", "read_only": p.engine == nil, "instance_power_enabled": p.powerEnabled})
 	case "/settings":
 		zone := p.timezone
 		err := p.s.DB.QueryRowContext(r.Context(), "SELECT value FROM app_meta WHERE key='business_timezone'").Scan(&zone)

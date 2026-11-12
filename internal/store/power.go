@@ -145,6 +145,9 @@ func (s *Store) EnqueuePowerJob(ctx context.Context, instanceID, action, stopMod
 	if _, err = tx.ExecContext(ctx, "UPDATE instance SET desired_state=? WHERE id=?", desired, instanceID); err != nil {
 		return model.Job{}, err
 	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO instance_intent(instance_id,job_id,updated_at) VALUES(?,?,?) ON CONFLICT(instance_id) DO UPDATE SET job_id=excluded.job_id,updated_at=excluded.updated_at", instanceID, id, timestamp(now)); err != nil {
+		return model.Job{}, err
+	}
 	j, err := readJob(tx.QueryRowContext(ctx, "SELECT "+jobColumns+" FROM job WHERE id=?", id))
 	if err != nil {
 		return j, err
