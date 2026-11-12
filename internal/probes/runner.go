@@ -13,9 +13,10 @@ import (
 )
 
 type Runner struct {
-	Store   *store.Store
-	Log     *slog.Logger
-	Execute func(context.Context, netprobe.Request) (netprobe.Result, error)
+	Store        *store.Store
+	Log          *slog.Logger
+	Execute      func(context.Context, netprobe.Request) (netprobe.Result, error)
+	ExecuteTrace func(context.Context, netprobe.TraceRequest) (netprobe.TraceResult, error)
 }
 
 func (r Runner) RunOne(ctx context.Context) (bool, error) {
@@ -55,8 +56,16 @@ func (r Runner) RunOne(ctx context.Context) (bool, error) {
 	return true, r.Store.FinishServerProbe(finishCtx, claim, result, netprobe.FailureCode(probeErr), time.Now().UTC())
 }
 func (r Runner) Run(ctx context.Context) {
+	trace := false
 	for ctx.Err() == nil {
-		worked, err := r.RunOne(ctx)
+		var worked bool
+		var err error
+		if trace {
+			worked, err = r.RunTraceOne(ctx)
+		} else {
+			worked, err = r.RunOne(ctx)
+		}
+		trace = !trace
 		if err != nil && ctx.Err() == nil && r.Log != nil {
 			r.Log.Warn("server_probe_step_failed")
 		}
