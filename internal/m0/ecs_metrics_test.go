@@ -35,3 +35,18 @@ func TestECSMetricSchemaPlanReadsFullCatalogWithoutGuessingMetricNames(t *testin
 		t.Fatal(calls, result)
 	}
 }
+
+func TestECSMetricDataUsesVerifiedNamesAndOnlyInstanceDimension(t *testing.T) {
+	p := exampleProfile()
+	p.Regions = p.Regions[:1]
+	ops, err := plan(p, queryOptions{Check: "metrics", MetricSource: "ecs", ResourceID: "i-example"})
+	if err != nil || len(ops) != 2 {
+		t.Fatal(ops, err)
+	}
+	for i, name := range []string{"CPUUtilization", "TotalCredit"} {
+		o := ops[i]
+		if o.Action != "DescribeMetricList" || o.Query["Namespace"] != "acs_ecs_dashboard" || o.Query["MetricName"] != name || o.Query["Dimensions"] != `[{"instanceId":"i-example"}]` || o.Query["Period"] != "60" {
+			t.Fatal(o)
+		}
+	}
+}

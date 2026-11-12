@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/rampolicy"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
@@ -146,6 +147,18 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for _, item := range f.Instances {
 			item["desired_state"] = nil
 			item["desired_state_updated_at"] = nil
+			item["cpu"] = nil
+			if item["kind"] == "ecs" {
+				usage := model.EmptyCPUMetric("CPUUtilization", now)
+				value := 12.5
+				sampled := now.Add(-time.Minute)
+				usage.Value = &value
+				usage.ObservedAt = &sampled
+				usage.Status = "ok"
+				usage.LastError = nil
+				item["cpu"] = &model.InstanceCPU{Source: "cms", Namespace: "acs_ecs_dashboard", Usage: usage, CreditBalance: model.EmptyCPUMetric("TotalCredit", now)}
+			}
+
 		}
 		items := filter(f.Instances, "account_id", r.URL.Query().Get("account_id"))
 		items = filter(items, "kind", r.URL.Query().Get("kind"))

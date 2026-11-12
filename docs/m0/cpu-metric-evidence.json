@@ -54,5 +54,36 @@
       "Periods": "60,300,3600",
       "Statistics": "Average,Maximum,Minimum"
     }
-  ]
+  ],
+  "sample_query": {
+    "account_alias": "jasperxzy",
+    "instance_alias": "Ali_ShangHai",
+    "region": "cn-shanghai",
+    "dimensions_supplied": [
+      "instanceId"
+    ],
+    "cloud_writes": 0,
+    "metrics": [
+      {
+        "metric_name": "CPUUtilization",
+        "status": "passed",
+        "complete": true,
+        "fetched_at": "2026-11-12T10:22:15Z",
+        "sample_count": 60,
+        "latest": {
+          "timestamp": 1794478920000,
+          "Average": 1.187,
+          "Minimum": 1.187,
+          "Maximum": 1.187
+        }
+      },
+      {
+        "metric_name": "TotalCredit",
+        "status": "passed",
+        "complete": true,
+        "fetched_at": "2026-11-12T10:22:15Z",
+        "sample_count": 0
+      }
+    ]
+  }
 }

@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  ECS CPU snapshots: optional Instance.cpu exposes CMS CPUUtilization (%) and TotalCredit (absolute count), sampled at 60 seconds. Background inventory queries only; failed/empty sources retain older values as stale, and reads age samples after ten minutes. Unknown remains null, never zero. SWAS CPU remains null pending source verification; no CPU-credit percentage alert or traffic protection is enabled.
 # 2026-11-12  API Key control: isolated /integrations/instances/{instance_id}/power and /integrations/jobs/{job_id} use Authorization Bearer plus instance:control, never cookie fallback. Keep HTTPS/host/admin-CIDR checks; Origin/CSRF are not required for explicit bearer credentials. Keys can query only their own power jobs. Idempotency is namespaced by key/panel, and active jobs do not merge across principals. Revocation cancels pre-dispatch jobs atomically while retaining intent; dispatched work keeps its evidence and is never replayed.
 # 2026-11-12  Manual power API: POST /instances/{instance_id}/power requires session+CSRF, a durable Idempotency-Key and explicit ECS stop mode. Returns 202 after local enqueue, never synchronously calls the cloud. Disabled by default via instance_power_enabled; SystemInfo exposes that capability. Instance desired_state/desired_state_updated_at are nullable until recorded intent exists, never inferred from cloud status or the legacy stopped default. Demo remains read-only.
 # 2026-11-12  Power confirmation: PowerJobResult adds nullable baseline/observation and confirmation_basis. Acceptance stays running until fresh targeted observations confirm the requested state/mode; reboot needs a newer start time or an observed transition. Timeouts and stop-mode fallback fail explicitly without replay. Execution remains separate from the production submission endpoint.
@@ -2163,6 +2164,60 @@ components:
             message:
               type: string
 
+    InstanceCPU:
+      type: object
+      required: [source, namespace, usage, credit_balance]
+      properties:
+        source:
+          type: string
+          enum: [cms]
+        namespace:
+          type: string
+          enum: [acs_ecs_dashboard]
+        usage:
+          $ref: "#/components/schemas/CPUMetric"
+        credit_balance:
+          $ref: "#/components/schemas/CPUMetric"
+
+    CPUMetric:
+      type: object
+      required: [metric_name, unit, period_seconds, value, status, observed_at, checked_at, last_error]
+      properties:
+        metric_name:
+          type: string
+          enum: [CPUUtilization, TotalCredit]
+        unit:
+          type: string
+          enum: [percent, count]
+        period_seconds:
+          type: integer
+          enum: [60]
+        value:
+          type: number
+          nullable: true
+          minimum: 0
+          description: Latest Average sample; CPU utilization is 0–100 percent, credit balance is an absolute count, not a percent.
+        status:
+          type: string
+          enum: [ok, stale, unknown]
+        observed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Provider sample timestamp, preserved across failures.
+        checked_at:
+          type: string
+          format: date-time
+          description: Last background query attempt, not the metric timestamp.
+        last_error:
+          type: object
+          nullable: true
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
     Instance:
       type: object
       required:
@@ -2221,6 +2276,12 @@ components:
           format: date-time
           nullable: true
           description: Time the latest distinct intent was enqueued. Replaying an event key does not change this time or overwrite newer intent.
+        cpu:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/InstanceCPU"
+          description: ECS cached CPU samples. Null for SWAS until its source is verified. GET performs no cloud calls.
         public_ips:
           type: array
           description: 公网 IPv4。

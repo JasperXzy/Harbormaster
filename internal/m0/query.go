@@ -148,6 +148,9 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 		var ns string
 		var names []string
 		switch options.MetricSource {
+		case "ecs":
+			ns = "acs_ecs_dashboard"
+			names = []string{"CPUUtilization", "TotalCredit"}
 		case "eip":
 			ns = "acs_vpc_eip"
 			names = []string{"net.rx", "net.tx"}
@@ -155,7 +158,7 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			ns = "acs_bandwidth_package"
 			names = []string{"net_rx.rate", "net_tx.rate"}
 		default:
-			return nil, errors.New("metric_source_must_be_eip_or_bandwidth")
+			return nil, errors.New("metric_source_must_be_ecs_eip_or_bandwidth")
 		}
 		// One resource belongs to one region; do not silently try it in all regions.
 		if len(p.Regions) != 1 {

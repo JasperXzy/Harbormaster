@@ -30,8 +30,8 @@ Options:
   --month YYYY-MM    required for billing
   --region ID        select one region already stored for this account
   --regions LIST     comma-separated list for set-regions
-  --metric-source    eip or bandwidth (metrics only)
-  --resource-id ID   cloud EIP/shared-bandwidth ID (metrics only)
+  --metric-source    ecs, eip or bandwidth (metrics only)
+  --resource-id ID   cloud ECS/EIP/shared-bandwidth ID (metrics only)
   --output PATH     write query report to a NEW private file outside repositories
 HM_MASTER_KEY / HM_MASTER_KEY_FILE override the default key source. Never pass
 AccessKey values as flags. Import/plan make no cloud requests. Query rejects DEBUG.

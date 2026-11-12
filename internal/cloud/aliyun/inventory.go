@@ -229,6 +229,7 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 		c.attachIPv6(ctx, cred, region, ecs, part.Snapshots, before, observe)
 		attachNetworkCapacity(part.Snapshots, types, checkedAt)
 		attachRenewals(part.Snapshots, ecsRenewal, swasRenewal, checkedAt)
+		c.attachCPU(ctx, cred, region, part.Snapshots, before, observe)
 		result.Snapshots = append(result.Snapshots, part.Snapshots...)
 		for k, v := range part.CompleteScopes {
 			result.CompleteScopes[k] = v

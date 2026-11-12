@@ -58,7 +58,7 @@ var reads = map[string]definition{
 	"ListInstancesTrafficPackages":       {"swas", "2020-06-01", "RegionId InstanceIds"},
 	"ListCdtInternetTraffic":             {"cdt", "2021-08-13", "RegionId"},
 	"DescribeMetricMetaList":             {"cms", "2019-01-01", "Namespace MetricName PageNumber PageSize"},
-	"DescribeMetricList":                 {"cms", "2019-01-01", "Namespace MetricName Dimensions StartTime EndTime Period"},
+	"DescribeMetricList":                 {"cms", "2019-01-01", "Namespace MetricName Dimensions StartTime EndTime Period Length NextToken"},
 	"QueryAccountBalance":                {"bss", "2017-12-14", ""},
 	"QueryBillOverview":                  {"bss", "2017-12-14", "BillingCycle"},
 }

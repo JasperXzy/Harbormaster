@@ -49,7 +49,7 @@
 | F4.2、F4.3 | 轻量电源调用、持久任务、执行与状态确认及管理员提交已模拟测试；默认关闭，真实操作未验收，带流量包套餐保护未实现。 |
 | F4.4 | 轻量预绑定注册与流量上报代码已实现，并排除 CDT 保护；真实安装和延迟测速未完成。 |
 | F5.1 | 部分：最新两点速率可用；24h/7d 曲线、小时聚合和未装 agent 的 CMS 回退未实现。 |
-| F5.2 | ECS CPU/积分指标目录已真实只读核对，CPUUtilization 为 %、TotalCredit 为 count；采集与展示接口未实现。[指标来源](cpu-metrics.md) |
+| F5.2 | ECS CPU/绝对积分的后台批量采集、缓存、过期状态与只读字段已实现；上海 CPU 序列真实通过。SWAS 来源与真实突发积分余额仍未验证。[指标来源](cpu-metrics.md) |
 | F6.1–F6.13 | 手动电源任务入队时原子保存期望状态、失败保留意图已实现。自动化规则、调度电源动作、保活、控制台状态确认、豁免、主备、提前量、试运行、模拟用量和排除自身的业务逻辑未实现。 |
 | F7.1、F7.5 | 刷新与权限查询已走持久队列；任务列表/详情、分页筛选和来源记录已实现。固定开机/关机/重启、持久任务、入队保存意图、独立 worker、状态确认和管理员提交接口已模拟测试；serve 显式配置开启后可执行，默认关闭，真实操作未验收。[任务记录](job-history.md)、[电源调用](instance-power.md) |
 | F7.2–F7.4 | 换 EIP、创建与释放 ECS 未实现，也未执行真实操作。 |
@@ -128,4 +128,4 @@
 - M3/M4：核心功能及验收均未完成。
 - 非功能：常驻内存/CPU、10 台实例长期数据库 ≤1GB、保留期、保护响应 ≤30 秒、真实发送可靠性与跨平台运行仍缺对应实测。已有编译、单元测试和接口查询不覆盖这些指标。
 
-最近构建、race、vet 检查见 [CPU 指标目录验证](cpu-metrics.md)；此前接口契约及完整功能检查见 [API Key 控制验证](api-key-management.md)；此前见 [电源调用验证](instance-power.md)；契约已有管理员电源提交、能力开关、期望状态和状态确认观测；默认关闭真实电源执行。之前契约检查见 [任务列表验证](job-history.md)。之前检查见 [余额告警验证](balance-alerts.md)、[备份恢复验证](backup-format.md)、[RAM 草稿验证](ram-policy.md)、[公网 IP 告警验证](public-ip-alerts.md)、[实例事件验证](instance-events.md)、[IPv6 验证](ipv6-discovery.md)、[规格带宽告警验证](bandwidth-alerts.md)，初始跨平台命令见 [M0 原始输出](validation.txt)。当前未实现项仍需推进，不能据此将持续目标标记完成。
+最近构建、race、vet 与契约检查见 [ECS CPU 采集验证](cpu-metrics.md)；此前接口契约及完整功能检查见 [API Key 控制验证](api-key-management.md)；此前见 [电源调用验证](instance-power.md)；契约已有管理员电源提交、能力开关、期望状态和状态确认观测；默认关闭真实电源执行。之前契约检查见 [任务列表验证](job-history.md)。之前检查见 [余额告警验证](balance-alerts.md)、[备份恢复验证](backup-format.md)、[RAM 草稿验证](ram-policy.md)、[公网 IP 告警验证](public-ip-alerts.md)、[实例事件验证](instance-events.md)、[IPv6 验证](ipv6-discovery.md)、[规格带宽告警验证](bandwidth-alerts.md)，初始跨平台命令见 [M0 原始输出](validation.txt)。当前未实现项仍需推进，不能据此将持续目标标记完成。
