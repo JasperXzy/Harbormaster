@@ -1,6 +1,6 @@
 # 实例电源操作
 
-2026-11-12：固定云调用层、持久化任务存储及模拟测试已完成；执行 worker、实际状态确认和面板提交 API 尚未接入。没有使用真实凭据发起电源操作或 DryRun。
+2026-11-12：固定云调用层、持久化任务、独立执行 worker 和状态确认已实现并模拟测试；生产服务启动和面板提交 API 尚未接入。没有使用真实凭据发起电源操作或 DryRun。
 
 ## 已确认的业务语义
 
@@ -84,7 +84,7 @@ git diff --check
 
 恢复时取消排队、执行中及等待确认的电源任务；dispatching 改为 unknown，已知 accepted 保留，完成的拒绝记录不改写。期望状态保留为备份时的用户意图，恢复不会运行 worker。
 
-本阶段的内部工程选择：同一实例只允许一个活动电源任务；冲突请求明确报错。发送前最多领取三次沿用现有任务上限，云请求本身仍最多一次。未实现自动化、豁免、控制台停机询问、实际状态确认和写 worker；没有把这些标为完成。生产启动与 run-once 仍只有只读采集。
+本阶段的内部工程选择：同一实例只允许一个活动电源任务；冲突请求明确报错。发送前最多领取三次沿用现有任务上限，云请求本身仍最多一次。该阶段尚未实现执行 worker 与实际状态确认，后续进展见下节。自动化、豁免、控制台停机询问仍未实现；生产启动与 run-once 仍只有只读采集。
 
 持久任务阶段最终检查（均退出 0）：
 
@@ -117,3 +117,55 @@ git diff --check
 ```
 
 覆盖原子失败回滚、并发重复请求、完成/恢复后的事件键重试、只读 worker 隔离、租约过期与旧 owner、发送后的不重放、账号修改/停用及实例消失、已接受结果不冒充已完成，以及迁移后的四类旧引用和两个序号高水位。没有对真实验证数据库运行本迁移，也没有执行真实云操作。
+
+
+## 执行与状态确认阶段
+
+`internal/power.Engine` 独立执行已入队的动作，默认 Enabled=false，尚未由生产 CLI 创建或启动。启用后的内部 worker 数为 1–8，每 15 秒续租；账号、加密凭据及任务修订在同一事务读取。凭据仅解密用于请求，不写任务。发送前进行针对单实例的只读查询：start 要求 stopped，stop/reboot 要求 running；状态变化或无法读取时明确失败，不猜测缓存状态。发送前仍重新检查账号修订及目标是否纳管。
+
+接受响应后，默认每 5 秒查询一次，最多等待 5 分钟；这是工程超时设置，不是对阿里云完成时间的承诺。每次确认查询前检查账号未停用/修改。失败查询只延后确认，不能以空响应推断停机。每次观测含状态、ECS 实际 StoppedMode、可用的 ECS StartTime 以及本机查询完成时间，使用针对单实例的 DescribeInstances / ListInstances，校验返回 ID 和地域。
+
+判定规则：
+
+- start：新观测 running。
+- stop：新观测 stopped；ECS 还必须核对实际模式。请求普通停机时 KeepCharging 或 Not-applicable 都满足普通模式；请求节省停机时只有 StopCharging 满足。已停止但模式不符返回 power_stop_mode_mismatch；模式缺失继续等候，最终超时也不会冒充成功。
+- reboot：新观测 running，且看到请求之后 starting/stopping/stopped 再回到 running，或 ECS StartTime 比发送前基线更新且不早于请求所在分钟。单独 Running 不能证明重启完成。SWAS 没有已验证的 StartTime 字段，依赖状态转换；未捕捉到转换就超时，不重复重启。
+
+迁移 018 保留发送前基线、最后观测和确认依据；拒绝发送前、倒序、未来或旧租约的观测。accepted 期间任务为 running；只有观测满足条件才 succeeded。超时返回 power_confirmation_timeout；关闭服务或账号变化后返回 power_confirmation_interrupted，保留 accepted 证据，不回滚期望状态、不重发云动作。
+
+一次可能的写调用结束后，会入队普通只读资源刷新，便于后续发现状态和 IP 变化。这次刷新不证明变化由当前动作造成。真实 V9 的 IP 变化、库存与耗时仍未验证。
+
+字段来源：[ECS DescribeInstances](https://help.aliyun.com/en/ecs/developer-reference/api-ecs-2014-05-26-describeinstances) 声明 InstanceIds、Status、StoppedMode 及最近启动时间 StartTime（文档格式到分钟）；[SWAS ListInstances](https://help.aliyun.com/en/simple-application-server/developer-reference/api-swas-open-2020-06-01-listinstances) 声明 InstanceIds 与状态，未声明最近启动时间。2026-11-12 同时核对了两个 API 的官方公开元数据。尚未证明所有 ECS 重启场景均更新 StartTime，因此没有把时间字段作为唯一确认路径。
+
+执行与状态确认阶段最终验证（均退出 0）：
+
+```text
+go test -race ./internal/power ./internal/cloud/aliyun ./internal/store
+ok github.com/JasperXzy/harbormaster/internal/power 6.202s
+ok github.com/JasperXzy/harbormaster/internal/cloud/aliyun 4.485s
+ok github.com/JasperXzy/harbormaster/internal/store 22.722s
+
+go build ./... && go vet ./...
+（无输出）
+
+go test -race ./...
+ok github.com/JasperXzy/harbormaster/internal/api 42.607s
+ok github.com/JasperXzy/harbormaster/internal/backup 36.964s
+ok github.com/JasperXzy/harbormaster/internal/cli 8.398s
+ok github.com/JasperXzy/harbormaster/internal/collect 4.538s
+ok github.com/JasperXzy/harbormaster/internal/devmode 6.519s
+ok github.com/JasperXzy/harbormaster/internal/m0 1.771s
+ok github.com/JasperXzy/harbormaster/internal/model 1.626s
+ok github.com/JasperXzy/harbormaster/internal/notify 1.929s
+ok github.com/JasperXzy/harbormaster/internal/power 7.994s
+其余有测试的包均 ok (cached)，命令包等为 [no test files]。
+
+npm --prefix web run lint:api
+../docs/api/openapi.yaml: validated in 24ms
+Woohoo! Your API description is valid.
+
+git diff --check
+（无输出）
+```
+
+覆盖签名单实例查询、错误目标/未知响应、所有电源动作、StopCharging 回退、缺失模式、同一分钟/未观测转换的重启、过期/倒序/未来观测、旧 owner、并行 worker 不重复发送、错误主密钥、账号变化与停用、响应未知、查询失败及服务中断。所有云调用均为 mock transport 或 mock Writer/Observer；真实资源操作数为 0。CLI/API 尚未引用 power.Engine，下一阶段才接入显式启用配置及提交路由。

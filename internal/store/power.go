@@ -26,7 +26,7 @@ type PowerOperation struct {
 	DispatchStartedAt                                    *time.Time
 }
 
-const powerResultSQL = `(SELECT json_object('action',p.action,'stop_mode',p.stop_mode,'dispatch_outcome',p.dispatch_outcome) FROM instance_power_job p WHERE p.job_id=job.id)`
+const powerResultSQL = `(SELECT json_object('action',p.action,'stop_mode',p.stop_mode,'dispatch_outcome',p.dispatch_outcome,'baseline',json(p.baseline_json),'observation',json(p.observation_json),'confirmation_basis',p.confirmation_basis) FROM instance_power_job p WHERE p.job_id=job.id)`
 
 func readPower(ctx context.Context, q queryRower, id string) (PowerOperation, error) {
 	var p PowerOperation
@@ -253,7 +253,7 @@ func (s *Store) BeginPowerDispatch(ctx context.Context, j model.Job, now time.Ti
 		if err = tx.Commit(); err != nil {
 			return p, err
 		}
-		return p, errors.New(code)
+		return p, map[string]error{"account_disabled": ErrAccountDisabled, "account_changed": ErrAccountChanged, "instance_not_found": ErrNotFound}[code]
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE instance_power_job SET dispatch_started_at=?,dispatch_outcome='dispatching' WHERE job_id=?", timestamp(now), j.ID); err != nil {
 		return p, err
