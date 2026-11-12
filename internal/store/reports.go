@@ -152,7 +152,7 @@ func acceptSample(ctx context.Context, tx *sql.Tx, r agentproto.Report, now time
 		}
 	}
 	fresh := !r.SampledAt.Before(now.Add(-30*time.Second)) && !r.SampledAt.After(now.Add(30*time.Second))
-	if !fresh {
+	if !fresh && quality != "clock_skew" {
 		quality = "stale"
 	}
 	if r.SampledAt.After(now.Add(30 * time.Second)) {

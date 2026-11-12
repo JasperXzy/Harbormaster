@@ -132,7 +132,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := makeFixtures(now, h.loc)
-	if demoNetworkHistory(w, r, path, f.Instances, now) {
+	if demoAgentHistory(w, r, path, f.Instances, now) || demoNetworkHistory(w, r, path, f.Instances, now) {
 		return
 	}
 	switch path {

@@ -5,6 +5,8 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Agent quality correction: delayed reports no longer overwrite a detected backward clock jump with stale. History independently checks current and previous sample order, including legacy records.
+# 2026-11-12  Agent network history: add raw cumulative samples with nullable same-epoch interval deltas and monotonic-duration average rates. Preserve receipt quality, gaps and unavailable reasons; never bridge epochs or prorate a boundary-crossing interval into hourly/range totals.
 # 2026-11-12  Cloud network history: persist complete provider minute samples and expose GET /instances/{instance_id}/cloud-network-history with explicit <=7-day range and chronological keyset pagination. Gaps are missing observations, never zero; no byte integration or agent/cloud blending.
 # 2026-11-12  SWAS runtime validation: use the ISO StartTime/EndTime format already verified by M0 for CPU and network reads; live production-path samples now succeed. No CPU schema change or claim that all timestamp formats fail.
 # 2026-11-12  Cloud public network rates: Instance.cloud_network exposes cached 60s Average ingress/egress bit/s streams, distinguishing classic ECS, VPC per-IP and SWAS sources. Topology or query failures preserve stale observations; no instance total, byte integral, agent replacement or CDT protection is inferred.
@@ -490,6 +492,45 @@ paths:
                   items:
                     type: array
                     items: {$ref: "#/components/schemas/CloudNetworkSample"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+
+  /instances/{instance_id}/agent-network-history:
+    parameters:
+      - {name: instance_id, in: path, required: true, schema: {type: string}}
+    get:
+      tags: [instances]
+      operationId: getAgentNetworkHistory
+      summary: Agent 原始采样与区间流量历史
+      description: >-
+        本地只读，按 sampled_at、counter_epoch、sequence 降序分页；from 包含，to 不包含。
+        范围最多七天，to 不晚于当前时间。历史保留撤销前和重注册前的数据，不代表 agent 当前在线。
+        每条保留累计计数与接收时质量；可比较的同代际相邻已存样本提供完整区间差值与平均 bytes/s。
+        缺序列或长间隔标 gap，不能用连线或插值伪造瞬时变化；补报 stale 不等于区间差值无效。
+        首个样本的前序可能早于 from，返回的是整个跨界区间，不能直接相加当作查询范围或小时总量。
+        重启、新基线、规则变化、时钟倒退、缺少元数据、非法计数或速率溢出时 interval=null，附原因。
+        不将 agent 与云监控相加，不产生 CDT 实时估算或保护判断。
+      parameters:
+        - {name: from, in: query, required: true, schema: {type: string, format: date-time}}
+        - {name: to, in: query, required: true, schema: {type: string, format: date-time}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 1000, default: 500}}
+        - {name: cursor, in: query, schema: {type: string}}
+      responses:
+        "200":
+          description: 原始样本；未安装 agent 或窗口无数据时为空数组。
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor, from, to]
+                properties:
+                  from: {type: string, format: date-time}
+                  to: {type: string, format: date-time}
+                  next_cursor: {type: string, nullable: true}
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/AgentNetworkSample"}
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
         "422": {$ref: "#/components/responses/ValidationFailed"}
@@ -2622,6 +2663,44 @@ components:
               type: string
             message:
               type: string
+
+    AgentNetworkSample:
+      type: object
+      required: [counter_epoch, sequence, sampled_at, received_at, uptime_ms, rx_bytes, tx_bytes, quality, rules_version, report_interval_seconds, dropped_samples, interval_status, interval_unavailable_reason, interval]
+      properties:
+        counter_epoch: {type: string}
+        sequence: {type: integer, format: int64}
+        sampled_at: {type: string, format: date-time}
+        received_at: {type: string, format: date-time}
+        uptime_ms: {type: integer, format: int64}
+        rx_bytes: {type: integer, format: int64, minimum: 0, description: 当前代际累计入字节。}
+        tx_bytes: {type: integer, format: int64, minimum: 0, description: 当前代际累计出字节。}
+        quality: {type: string, enum: [baseline, ok, clock_skew, counter_reset, stale, gap, unknown]}
+        rules_version: {type: string, nullable: true}
+        report_interval_seconds: {type: integer, nullable: true}
+        dropped_samples: {type: integer, format: int64, nullable: true}
+        interval_status: {type: string, enum: [continuous, gap, unavailable]}
+        interval_unavailable_reason:
+          type: string
+          nullable: true
+          enum: [no_previous_sample, metadata_unknown, rules_changed, clock_skew, invalid_counter, rate_overflow, null]
+        interval:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/AgentNetworkInterval"
+    AgentNetworkInterval:
+      type: object
+      required: [previous_sequence, start_at, end_at, duration_ms, rx_bytes, tx_bytes, rx_bytes_per_second, tx_bytes_per_second]
+      properties:
+        previous_sequence: {type: integer, format: int64}
+        start_at: {type: string, format: date-time}
+        end_at: {type: string, format: date-time}
+        duration_ms: {type: integer, format: int64, description: 单调 uptime 差；不等同于墙钟时间差，不能据此假定小时分配。}
+        rx_bytes: {type: integer, format: int64, minimum: 0}
+        tx_bytes: {type: integer, format: int64, minimum: 0}
+        rx_bytes_per_second: {type: integer, format: int64, minimum: 0, description: 完整区间的平均 bytes/s，整数向下取整。}
+        tx_bytes_per_second: {type: integer, format: int64, minimum: 0}
 
     CloudNetworkSample:
       type: object
