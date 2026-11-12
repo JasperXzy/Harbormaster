@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Low balance alerts: add balance_low with per-account balance_thresholds (account_id, currency, amount), initially empty. Compare freshly fetched available_amount using exact decimal arithmetic and strict '<'; no currency conversion or stale-cache evaluation. Failed/mismatched sources preserve unknown state. Removing a target or changing its currency cancels the previous condition without a fake recovery; dispatch remains separate.
 # 2026-11-12  Encrypted backup download: POST /backups accepts a write-only backup_password via session+CSRF and returns a complete password-encrypted binary attachment. Prepare before sending success headers, with bounded concurrency and session revalidation. No cloud I/O. Restore is an offline CLI into a new directory; user approved cancelling unfinished work and pending notifications, clearing leases and login sessions.
 # 2026-11-12  RAM policy drafts: GET /ram-policies returns readonly, instance_power and resource_management documents for copying, with cloud-write flags and explicit verification limitations. These are policy text only, never grants or permission-test results. CDT action, account/resource narrowing and creation dependencies remain unverified; write policies do not enable runtime cloud operations.
 # 2026-11-12  Public IP change alerts: add instance_public_ip_changed (empty params, non-urgent, enabled by default). Each new public_ipv4_changed instance event records one notification in the same transaction. First discovery, unknown/incomplete sources, IPv6 allocation-only changes and unchanged rescans do not notify. This is an event notification with no recovery incident; Telegram dispatch remains unwired.
@@ -1063,7 +1064,7 @@ paths:
       tags: [notify]
       operationId: listAlertRules
       summary: 内置告警规则
-      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient and instance_public_ip_changed. Usage/forecast rules are not returned until their metering source and policy are available.
+      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed and balance_low. Usage/forecast rules are not returned until their metering source and policy are available.
       responses:
         "200":
           description: 告警规则
@@ -2649,7 +2650,7 @@ components:
 
     AlertRuleKey:
       type: string
-      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed]
+      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low]
       description: 内置规则；仅返回当前已实现且有可用来源的规则。
 
     Severity:
@@ -2660,6 +2661,27 @@ components:
       type: object
       description: 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient 和 instance_public_ip_changed 使用空对象，无额外阈值。公网 IP 变化按每次有效事件记录，不产生恢复通知。
       properties:
+        balance_thresholds:
+          type: array
+          maxItems: 100
+          description: balance_low only, required for this rule. Empty means no accounts configured. One entry per existing account; disabled accounts retain configuration but are not evaluated. Uses available_amount, not cash-only balance. Changes are evaluated on the next successful fetch.
+          items:
+            type: object
+            required: [account_id, currency, amount]
+            additionalProperties: false
+            properties:
+              account_id:
+                type: string
+                minLength: 1
+                maxLength: 128
+              currency:
+                type: string
+                pattern: '^[A-Z]{3}$'
+              amount:
+                type: string
+                maxLength: 80
+                pattern: '^-?(0|[1-9][0-9]*)(\.[0-9]{1,12})?$'
+                description: Exact signed decimal threshold, at most 12 fractional digits and 256 bits after scaling by 10^12; no exponent or thousands separators. Zero is valid; no default amount is inferred.
         before_days:
           type: integer
           minimum: 0

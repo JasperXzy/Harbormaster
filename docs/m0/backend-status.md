@@ -55,15 +55,16 @@
 | F7.2–F7.4 | 换 EIP、创建与释放 ECS 未实现，也未执行真实操作。 |
 | F8.1 | 有 Telegram 发送层、加密配置存储和安全 GET；生产配置写入口、测试发送及 worker 尚未接通。[发送边界](telegram-delivery-design.md)、[队列](notification-storage.md) |
 | F8.2 | CDT/流量包用量阈值通知未启用；CDT 暂定单位期间的策略仍待答。 |
-| F8.3 | 当前可管理六个生产规则：账号失败、CDT 不可用、agent 掉线、到期、规格带宽、公网 IPv4 变化；其他规则随来源实现，不返回为可用规则。[IP 告警记录](public-ip-alerts.md) |
+| F8.3 | 当前可管理七个生产规则：账号失败、CDT 不可用、agent 掉线、到期、规格带宽、公网 IPv4 变化、可用余额低阈值；余额目标初始为空，由用户设置。[余额告警](balance-alerts.md)、[IP 告警](public-ip-alerts.md) |
 | F8.4–F8.6 | Telegram 远程控制、日报、邮件和 Webhook 未实现。 |
 | F8.7 | outbox 持久化、租约、重试状态及历史接口已实现；实际发送 worker 和重试政策未接通。 |
-| F8.8、F8.9 | 已实现五类状态来源的事件/恢复/去重记录，以及公网 IPv4 每次变化的单次告警记录（不产生恢复）；未验证 Telegram 实际送达。 |
+| F8.8、F8.9 | 已实现六类状态来源的事件/恢复/去重记录，以及公网 IPv4 每次变化的单次告警记录（不产生恢复）；未验证 Telegram 实际送达。 |
 | F8.10 | 静默时段、维护期过滤未实现。 |
 | F9.1 | 余额与月账单缓存已实现；CNY 两账号真实通过，USD/国际站仅模拟验证。保留提供方条目，不猜退款净额。[费用](account-finance.md) |
 | F9.2 | 按实例费用未实现。 |
 | F9.3 | 自动续费读取和默认 7 天到期事件已实现；上海 ECS、sha-pro 真实续费状态通过，提醒只记录不发送。[续费](instance-renewal.md)、[提醒](expiration-alerts.md) |
-| F9.4、F9.5 | 闲置资源费用估算、余额低阈值规则未实现。 |
+| F9.4 | 闲置资源费用估算未实现。 |
+| F9.5 | 按账号与币种配置可用余额阈值、精确比较、告警/恢复/去重记录已实现；实际送达未接通。[余额告警](balance-alerts.md) |
 | F10.1–F10.11 | M3 的测速点/目标/任务、ICMP/TCP 测速、历史、延迟告警、路由追踪、线路识别、双向与离线 IP 库均未实现。 |
 | F11.1 | 已实现出方向配置能力比较及告警记录；不宣称入方向所有产品限额或实测吞吐已验证。[检查](spec-bandwidth-check.md)、[告警](bandwidth-alerts.md) |
 | F11.2、F11.3 | CPU 积分告警、维护/抢占回收事件未实现。 |
@@ -121,9 +122,9 @@
 
 ## 尚缺的阶段验收证据
 
-- M1：真实 agent 安装、连续 24 小时计量/对账 ≤5%、可靠实时估算、阈值 Telegram 送达、掉线 30 秒送达，均未证明。不能因当前六类告警有本地记录就标为通过。
+- M1：真实 agent 安装、连续 24 小时计量/对账 ≤5%、可靠实时估算、阈值 Telegram 送达、掉线 30 秒送达，均未证明。不能因当前七类告警有本地记录就标为通过。
 - M2：自动化/电源动作模拟演练、最坏情况与状态确认、Telegram 远控、外部心跳未完成；CDT-Monitor 不应据此下线。
 - M3/M4：核心功能及验收均未完成。
 - 非功能：常驻内存/CPU、10 台实例长期数据库 ≤1GB、保留期、保护响应 ≤30 秒、真实发送可靠性与跨平台运行仍缺对应实测。已有编译、单元测试和接口查询不覆盖这些指标。
 
-最近运行代码的构建、race、vet 与契约检查见 [备份恢复验证](backup-format.md)；前一批契约检查见 [RAM 草稿验证](ram-policy.md)。之前检查见 [公网 IP 告警验证](public-ip-alerts.md)、[实例事件验证](instance-events.md)、[IPv6 验证](ipv6-discovery.md)、[规格带宽告警验证](bandwidth-alerts.md)，初始跨平台命令见 [M0 原始输出](validation.txt)。当前未实现项仍需推进，不能据此将持续目标标记完成。
+最近运行代码的构建、race、vet 与契约检查见 [余额告警验证](balance-alerts.md)。之前检查见 [备份恢复验证](backup-format.md)、[RAM 草稿验证](ram-policy.md)、[公网 IP 告警验证](public-ip-alerts.md)、[实例事件验证](instance-events.md)、[IPv6 验证](ipv6-discovery.md)、[规格带宽告警验证](bandwidth-alerts.md)，初始跨平台命令见 [M0 原始输出](validation.txt)。当前未实现项仍需推进，不能据此将持续目标标记完成。

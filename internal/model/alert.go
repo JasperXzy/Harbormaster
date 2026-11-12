@@ -1,9 +1,18 @@
 package model
 
+import "strconv"
+
+type BalanceThreshold struct {
+	AccountID string `json:"account_id"`
+	Currency  string `json:"currency"`
+	Amount    string `json:"amount"`
+}
+
 type AlertParams struct {
-	BeforeDays          *int `json:"before_days,omitempty"`
-	ConsecutiveFailures *int `json:"consecutive_failures,omitempty"`
-	OfflineAfterSeconds *int `json:"offline_after_seconds,omitempty"`
+	BalanceThresholds   *[]BalanceThreshold `json:"balance_thresholds,omitempty"`
+	BeforeDays          *int                `json:"before_days,omitempty"`
+	ConsecutiveFailures *int                `json:"consecutive_failures,omitempty"`
+	OfflineAfterSeconds *int                `json:"offline_after_seconds,omitempty"`
 }
 type AlertRule struct {
 	Key     string      `json:"key"`
@@ -21,7 +30,40 @@ func (r AlertRule) Validate() map[string]string {
 	if r.Key != "instance_expiring" && r.Params.BeforeDays != nil {
 		fields["params.before_days"] = "not_applicable"
 	}
+	if r.Key != "balance_low" && r.Params.BalanceThresholds != nil {
+		fields["params.balance_thresholds"] = "not_applicable"
+	}
 	switch r.Key {
+	case "balance_low":
+		if r.Params.BalanceThresholds == nil || *r.Params.BalanceThresholds == nil {
+			fields["params.balance_thresholds"] = "required"
+		} else if len(*r.Params.BalanceThresholds) > 100 {
+			fields["params.balance_thresholds"] = "out_of_range"
+		} else {
+			seen := map[string]bool{}
+			for index, threshold := range *r.Params.BalanceThresholds {
+				prefix := "params.balance_thresholds." + strconv.Itoa(index) + "."
+				if threshold.AccountID == "" || len(threshold.AccountID) > 128 {
+					fields[prefix+"account_id"] = "invalid_format"
+				}
+				if seen[threshold.AccountID] {
+					fields[prefix+"account_id"] = "duplicate"
+				}
+				seen[threshold.AccountID] = true
+				if !currencyCode.MatchString(threshold.Currency) {
+					fields[prefix+"currency"] = "invalid_format"
+				}
+				if _, ok := DecimalAmount(threshold.Amount); !ok {
+					fields[prefix+"amount"] = "invalid_format"
+				}
+			}
+		}
+		if r.Params.ConsecutiveFailures != nil {
+			fields["params.consecutive_failures"] = "not_applicable"
+		}
+		if r.Params.OfflineAfterSeconds != nil {
+			fields["params.offline_after_seconds"] = "not_applicable"
+		}
 	case "spec_bandwidth_insufficient", "instance_public_ip_changed":
 		if r.Params.ConsecutiveFailures != nil {
 			fields["params.consecutive_failures"] = "not_applicable"

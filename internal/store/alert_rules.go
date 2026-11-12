@@ -57,6 +57,7 @@ func (s *Store) UpdateAlertRule(ctx context.Context, key string, update model.Al
 	if err != nil {
 		return rule, err
 	}
+	previous := rule
 	if update.Enabled != nil {
 		rule.Enabled = *update.Enabled
 	}
@@ -65,6 +66,9 @@ func (s *Store) UpdateAlertRule(ctx context.Context, key string, update model.Al
 	}
 	if fields := rule.Validate(); len(fields) != 0 {
 		return rule, &AlertValidationError{Fields: fields}
+	}
+	if err := updateBalanceTargets(ctx, tx, previous, rule, now); err != nil {
+		return rule, err
 	}
 	raw, err := json.Marshal(rule.Params)
 	if err != nil {

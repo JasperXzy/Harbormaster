@@ -61,7 +61,10 @@ func saveFinance(ctx context.Context, tx *sql.Tx, a model.Account, o model.Finan
  last_attempt_at=excluded.last_attempt_at,error_code=excluded.error_code,
  fetched_at=coalesce(excluded.fetched_at,account_finance.fetched_at),
  payload_json=coalesce(excluded.payload_json,account_finance.payload_json)`, a.ID, a.CredentialVersion, o.Kind, o.Cycle, fetched, timestamp(o.FetchedAt), code, payload)
-	return err
+	if err != nil {
+		return err
+	}
+	return checkBalanceObservation(ctx, tx, a, o)
 }
 
 func readFinance[T any](ctx context.Context, q queryRower, a model.Account, source, cycle string) (model.FinanceSource[T], error) {

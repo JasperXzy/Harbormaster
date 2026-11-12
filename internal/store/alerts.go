@@ -74,6 +74,14 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 	}
 	observations := []alertObservation{}
 	for _, a := range accounts {
+		if r := rules["balance_low"]; r.Enabled {
+			for _, threshold := range *r.Params.BalanceThresholds {
+				if threshold.AccountID == a.ID {
+					observations = append(observations, alertObservation{rule: r.Key, target: a.ID, account: a.ID, outcome: "unknown"})
+					break
+				}
+			}
+		}
 		if r := rules["account_api_failure"]; r.Enabled {
 			o := alertObservation{rule: r.Key, target: a.ID, account: a.ID, outcome: "unknown"}
 			if a.SyncStatus == "ok" && a.ConsecutiveFailures == 0 {
