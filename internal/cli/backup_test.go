@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/JasperXzy/harbormaster/internal/backup"
+	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
 )
 
@@ -52,6 +53,33 @@ func TestBackupCLIInputLoggingAndNoOverwrite(t *testing.T) {
 	if err != nil || !bytes.HasPrefix(decoded.Bytes(), []byte("SQLite format 3")) {
 		t.Fatal("CLI produced unusable archive", err)
 	}
+	target := filepath.Join(t.TempDir(), "restored")
+	newKey := bytes.Repeat([]byte{13}, 32)
+	t.Setenv("HM_MASTER_KEY", base64.StdEncoding.EncodeToString(newKey))
+	logs.Reset()
+	if code := Server(ctx, []string{"restore", "--input", path, "--data-dir", target}, strings.NewReader(password), &out, &logs); code != 0 || !strings.Contains(logs.String(), "backup_restore_complete") || strings.Contains(logs.String(), password) {
+		t.Fatal("CLI restore failed or leaked input", code, logs.String())
+	}
+	restored, err := store.Open(ctx, target, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	box, _ := security.NewBox(newKey)
+	if err := restored.BindMasterKey(ctx, box); err != nil {
+		t.Fatal(err)
+	}
+	restored.Close()
+	if code := Server(ctx, []string{"restore", "--input", path, "--data-dir", target}, strings.NewReader(password), &out, &logs); code == 0 {
+		t.Fatal("restore overwrote existing directory")
+	}
+	badTarget := filepath.Join(t.TempDir(), "wrong-password")
+	if code := Server(ctx, []string{"restore", "--input", path, "--data-dir", badTarget}, strings.NewReader("another-wrong-password"), &out, &logs); code == 0 {
+		t.Fatal("wrong backup password accepted")
+	}
+	if _, err := os.Stat(badTarget); !os.IsNotExist(err) {
+		t.Fatal("failed CLI restore initialized target", err)
+	}
+	t.Setenv("HM_MASTER_KEY", key)
 	for _, args := range [][]string{
 		{"backup", "--data-dir", dir, "--output", path},
 		{"backup", "--dev", "--data-dir", dir, "--output", path + ".dev"},

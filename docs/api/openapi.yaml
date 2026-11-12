@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Encrypted backup download: POST /backups accepts a write-only backup_password via session+CSRF and returns a complete password-encrypted binary attachment. Prepare before sending success headers, with bounded concurrency and session revalidation. No cloud I/O. Restore is an offline CLI into a new directory; user approved cancelling unfinished work and pending notifications, clearing leases and login sessions.
 # 2026-11-12  RAM policy drafts: GET /ram-policies returns readonly, instance_power and resource_management documents for copying, with cloud-write flags and explicit verification limitations. These are policy text only, never grants or permission-test results. CDT action, account/resource narrowing and creation dependencies remain unverified; write policies do not enable runtime cloud operations.
 # 2026-11-12  Public IP change alerts: add instance_public_ip_changed (empty params, non-urgent, enabled by default). Each new public_ipv4_changed instance event records one notification in the same transaction. First discovery, unknown/incomplete sources, IPv6 allocation-only changes and unchanged rescans do not notify. This is an event notification with no recovery incident; Telegram dispatch remains unwired.
 # 2026-11-12  Instance change history: GET /instance-events lists persisted discovery, disappearance/reappearance, status and IP changes with cursor/account/instance filters. Events describe scan observations, not proven cloud creation/deletion or operator intent. Only complete product scans infer disappearance; unknown status, incomplete IPv4 topology and stale IPv6 do not overwrite comparison baselines. Existing installations start field baselines without inventing historical changes.
@@ -510,6 +511,68 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /backups:
+    post:
+      tags: [settings]
+      operationId: downloadEncryptedBackup
+      summary: 下载密码加密备份
+      description: Production only. Password is never saved or placed in a URL. Creates a consistent SQLite snapshot with reencrypted credentials; does not change live sessions or pending work. The response is a complete archive with Content-Length. Busy preparation returns 429. Offline restore uses the CLI and a separately supplied master key; no restore-over-live-data API is exposed.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [backup_password]
+              additionalProperties: false
+              properties:
+                backup_password:
+                  type: string
+                  format: password
+                  writeOnly: true
+                  description: 12–1024 UTF-8 bytes; not the administrator password or master key.
+      responses:
+        "200":
+          description: Password-encrypted Harbormaster archive. Save the binary response as a file; do not parse it as JSON.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+            Content-Length:
+              schema:
+                type: integer
+                format: int64
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "501":
+          description: Development mode has no production backup export (not_implemented).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: Snapshot or encryption failed before an attachment was started (backup_unavailable).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /ram-policies:
     get:

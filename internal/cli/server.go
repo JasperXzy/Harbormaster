@@ -44,11 +44,11 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		return m0.Run(ctx, args[1:], in, out, errOut)
 	}
 	if command == "help" || command == "--help" || command == "-h" {
-		_, _ = io.WriteString(out, "hm-server <serve|run-once|migrate|version|healthcheck|reset-password|import-accounts|backup> [--config path] [--dev] [--data-dir path] [--listen IP:port] [--frontend api|embedded]\nhm-server m0 <import|set-regions|plan|query> --account NAME (m0 --help for details)\nimport-accounts reads the encrypted M0 vault (--source-vault / --source-key-file); no cloud queries.\nreset-password reads the new password from stdin; run-once processes due read-only jobs in production; --dev performs local checks.\nbackup --output NEW_FILE reads the backup password from stdin (hidden on a terminal); requires an existing production database and its external master key.\n")
+		_, _ = io.WriteString(out, "hm-server <serve|run-once|migrate|version|healthcheck|reset-password|import-accounts|backup|restore> [--config path] [--dev] [--data-dir path] [--listen IP:port] [--frontend api|embedded]\nhm-server m0 <import|set-regions|plan|query> --account NAME (m0 --help for details)\nimport-accounts reads the encrypted M0 vault (--source-vault / --source-key-file); no cloud queries.\nreset-password reads the new password from stdin; run-once processes due read-only jobs in production; --dev performs local checks.\nbackup --output NEW_FILE reads the backup password from stdin (hidden on a terminal); requires an existing production database and its external master key.\nrestore --input BACKUP_FILE --data-dir NEW_DIRECTORY reads the backup password from stdin and uses the target external master key; cancels unfinished work.\n")
 		return 0
 	}
 	switch command {
-	case "serve", "run-once", "migrate", "version", "healthcheck", "reset-password", "import-accounts", "backup":
+	case "serve", "run-once", "migrate", "version", "healthcheck", "reset-password", "import-accounts", "backup", "restore":
 	default:
 		return fail("unknown_command")
 	}
@@ -61,6 +61,10 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 	frontend := f.String("frontend", "", "api or embedded")
 	var sourceVault, sourceKey string
 	var backupOutput string
+	var restoreInput string
+	if command == "restore" {
+		f.StringVar(&restoreInput, "input", "", "encrypted backup file")
+	}
 	if command == "backup" {
 		f.StringVar(&backupOutput, "output", "", "new encrypted backup file")
 	}
@@ -95,6 +99,9 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		return fail(err.Error())
 	}
 	log = logging.New(errOut, c.LogLevel)
+	if command == "restore" && (c.Dev || restoreInput == "") {
+		return fail("restore_requires_production_target_and_input")
+	}
 	if command == "backup" {
 		if c.Dev || backupOutput == "" {
 			return fail("backup_requires_production_database_and_output")
@@ -127,6 +134,17 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		if box, err = security.LoadBox(c.DataDir); err != nil {
 			return fail(err.Error())
 		}
+	}
+	if command == "restore" {
+		summary, err := restoreBackup(ctx, box, in, out, restoreInput, c.DataDir)
+		if err != nil {
+			if errors.Is(err, backup.ErrPassword) || errors.Is(err, backup.ErrRestoreTargetExists) {
+				return fail(err.Error())
+			}
+			return fail("backup_restore_failed")
+		}
+		log.Info("backup_restore_complete", "sessions_revoked", true, "cancelled_jobs", summary.CancelledJobs, "cancelled_notifications", summary.CancelledNotifications, "cloud_queries", 0, "cloud_writes", 0)
+		return 0
 	}
 	s, err := store.Open(ctx, c.DataDir, c.Dev)
 	if err != nil {

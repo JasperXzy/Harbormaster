@@ -31,6 +31,7 @@ type productionPanel struct {
 	timezone        string
 	ttl             time.Duration
 	hashing         sync.Mutex
+	backups         sync.Mutex
 	now             func() time.Time
 	engine          *collect.Engine
 	publicURL       string
@@ -95,7 +96,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.ramPolicies(w, r, path) || p.business(w, r, path) {
+	if p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.business(w, r, path) {
 		return
 	}
 	if r.Method != "GET" {

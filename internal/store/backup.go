@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/url"
 	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/security"
@@ -20,8 +23,137 @@ func (s *Store) SnapshotTo(ctx context.Context, path string) error {
 	if err = f.Close(); err != nil {
 		return err
 	}
-	_, err = s.DB.ExecContext(ctx, "VACUUM main INTO ?", path)
+	// Use a separate read-only connection so a large backup does not occupy
+	// the server's one pooled connection needed for reports and state queries.
+	var source string
+	if err := s.DB.QueryRowContext(ctx, "SELECT file FROM pragma_database_list WHERE name='main'").Scan(&source); err != nil {
+		return err
+	}
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(source)}
+	query := u.Query()
+	query.Set("mode", "ro")
+	query.Add("_pragma", "busy_timeout(5000)")
+	u.RawQuery = query.Encode()
+	reader, err := sql.Open("sqlite", u.String())
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	_, err = reader.ExecContext(ctx, "VACUUM main INTO ?", path)
 	return err
+}
+
+type RestoreSummary struct {
+	CancelledJobs          int64 `json:"cancelled_jobs"`
+	CancelledNotifications int64 `json:"cancelled_notifications"`
+}
+
+// PrepareRestoredCopy applies the user's restore policy only to a quarantined
+// copy. Past completion/delivery history is retained; unfinished work is not
+// replayed. Pending notifications may have been delivered since the backup.
+func (s *Store) PrepareRestoredCopy(ctx context.Context, now time.Time) (RestoreSummary, error) {
+	var result RestoreSummary
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return result, err
+	}
+	defer tx.Rollback()
+	jobs, err := tx.ExecContext(ctx, "UPDATE job SET status='failed',error_code='backup_restored',finished_at=?,lease_owner=NULL,lease_until=0 WHERE status IN ('queued','running')", timestamp(now))
+	if err != nil {
+		return result, err
+	}
+	result.CancelledJobs, err = jobs.RowsAffected()
+	if err != nil {
+		return result, err
+	}
+	notifications, err := tx.ExecContext(ctx, "UPDATE notification SET delivery_status='failed',last_error_code='backup_restored',uncertain=1,lease_owner=NULL,lease_until=0 WHERE delivery_status='pending'")
+	if err != nil {
+		return result, err
+	}
+	result.CancelledNotifications, err = notifications.RowsAffected()
+	if err != nil {
+		return result, err
+	}
+	for _, query := range []string{
+		"DELETE FROM session",
+		"DELETE FROM setup_credential",
+		"DELETE FROM agent_registration",
+		"UPDATE job SET lease_owner=NULL,lease_until=0",
+		"UPDATE notification SET lease_owner=NULL,lease_until=0",
+		"UPDATE account_settings SET lease_owner=NULL,lease_until=0,next_scan_at=0,next_cdt_at=0",
+	} {
+		if _, err := tx.ExecContext(ctx, query); err != nil {
+			return result, err
+		}
+	}
+	return result, tx.Commit()
+}
+
+func (s *Store) CheckBackupIntegrity(ctx context.Context) error {
+	if err := s.Ready(ctx); err != nil {
+		return err
+	}
+	var check string
+	if err := s.DB.QueryRowContext(ctx, "PRAGMA integrity_check").Scan(&check); err != nil {
+		return err
+	}
+	if check != "ok" {
+		return errors.New("backup_database_integrity_failed")
+	}
+	rows, err := s.DB.QueryContext(ctx, "PRAGMA foreign_key_check")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	if rows.Next() {
+		return errors.New("backup_database_integrity_failed")
+	}
+	return rows.Err()
+}
+
+// CheckBackupFile validates the source mode and migration lineage without
+// initializing an empty file or applying migrations to an unknown database.
+func CheckBackupFile(ctx context.Context, path string) error {
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(path)}
+	q := u.Query()
+	q.Set("mode", "ro")
+	u.RawQuery = q.Encode()
+	db, err := sql.Open("sqlite", u.String())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	var mode string
+	if err := db.QueryRowContext(ctx, "SELECT value FROM app_meta WHERE key='mode'").Scan(&mode); err != nil {
+		return err
+	}
+	if mode != "production" {
+		return errors.New("backup_requires_production_database")
+	}
+	rows, err := db.QueryContext(ctx, "SELECT name FROM schema_migration ORDER BY name")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	files, err := migrations.ReadDir("migrations")
+	if err != nil {
+		return err
+	}
+	count := 0
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return err
+		}
+		if count >= len(files) || name != files[count].Name() {
+			return errors.New("unsupported_backup_schema")
+		}
+		count++
+	}
+	if count == 0 {
+		return errors.New("unsupported_backup_schema")
+	}
+	return rows.Err()
 }
 
 // ReencryptCopy is only for isolated backup/restore copies, never a running
