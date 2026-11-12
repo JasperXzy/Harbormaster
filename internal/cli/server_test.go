@@ -13,6 +13,7 @@ import (
 )
 
 func TestProductionBootstrapAndResetDoNotLogCredentials(t *testing.T) {
+	t.Setenv("HM_IPDB_AUTO_UPDATE", "false")
 	t.Setenv("HM_MASTER_KEY", base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{3}, 32)))
 	t.Setenv("HM_MASTER_KEY_FILE", "")
 	t.Setenv("HM_SETUP_TOKEN", "cli-test-bootstrap-not-a-real-credential")

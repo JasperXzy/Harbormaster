@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JasperXzy/harbormaster/internal/ipinfo"
 	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/netprobe"
 )
@@ -76,6 +77,16 @@ func demoProbeRun(plan model.ProbePlan, at time.Time) model.ProbeRun {
 	return model.ProbeRun{ID: strconv.FormatInt(at.Unix(), 10), PlanID: plan.ID, PlanRevision: plan.Revision, TargetID: plan.TargetID, TargetRevision: 1, PointKind: plan.PointKind, InstanceID: plan.InstanceID, CreatedAt: at, UpdatedAt: at.Add(time.Second), Status: "succeeded", JobID: &job, Request: &q, Result: result}
 }
 func (h *handler) networkProbes(w http.ResponseWriter, r *http.Request, path string, instances []object, now time.Time) bool {
+	if path == "/network/ipdb" {
+		m, err := ipinfo.New(ipinfo.Options{})
+		if err != nil {
+			failure(w, 503, "ipdb_unavailable")
+		} else {
+			defer m.Close()
+			respond(w, 200, m.Status())
+		}
+		return true
+	}
 	if demoTraces(w, r, path, now) {
 		return true
 	}

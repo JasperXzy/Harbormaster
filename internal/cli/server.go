@@ -22,6 +22,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/collect"
 	"github.com/JasperXzy/harbormaster/internal/config"
 	"github.com/JasperXzy/harbormaster/internal/devmode"
+	"github.com/JasperXzy/harbormaster/internal/ipinfo"
 	"github.com/JasperXzy/harbormaster/internal/logging"
 	"github.com/JasperXzy/harbormaster/internal/m0"
 	"github.com/JasperXzy/harbormaster/internal/model"
@@ -284,10 +285,17 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 	heartbeatRunner := newHeartbeatRunner(c, s, engine, listener, log)
 	c.InstancePowerEnabled = powerEngine != nil
 	var panel http.Handler
+	var ipdb *ipinfo.Manager
 	if c.Dev {
 		panel = devmode.New(s, c.Timezone)
 	} else {
-		panel = api.NewProductionPanel(s, c, engine)
+		ipdb, err = ipinfo.New(ipinfo.Options{Directory: filepath.Join(c.DataDir, "ipdb"), CityEnabled: c.IPDBCityEnabled, AutoUpdate: c.IPDBAutoUpdate})
+		if err != nil {
+			log.Warn("ipdb_unavailable")
+		} else {
+			defer ipdb.Close()
+		}
+		panel = api.NewProductionPanel(s, c, engine, ipdb)
 	}
 	if engine != nil {
 		workerCtx, cancel := context.WithCancel(ctx)
@@ -296,6 +304,10 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 		go func() { defer workers.Done(); engine.Run(workerCtx) }()
 		go func() { defer workers.Done(); (probes.Runner{Store: s, Log: log}).Run(workerCtx) }()
 		go func() { defer workers.Done(); (notify.Evaluator{Store: s, Log: log}).Run(workerCtx) }()
+		if ipdb != nil {
+			workers.Add(1)
+			go func() { defer workers.Done(); ipdb.Run(workerCtx) }()
+		}
 		if heartbeatRunner != nil {
 			workers.Add(1)
 			go func() { defer workers.Done(); heartbeatRunner.Run(workerCtx) }()

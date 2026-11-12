@@ -8,6 +8,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.4
 	github.com/go-webauthn/webauthn v0.18.2
 	github.com/google/nftables v0.3.0
+	github.com/oschwald/maxminddb-golang/v2 v2.9.0
 	golang.org/x/crypto v0.58.0
 	golang.org/x/mod v0.42.0
 	golang.org/x/net v0.60.0

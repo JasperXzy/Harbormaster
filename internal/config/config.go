@@ -16,6 +16,8 @@ import (
 )
 
 type Config struct {
+	IPDBCityEnabled                bool     `json:"ipdb_city_enabled"`
+	IPDBAutoUpdate                 bool     `json:"ipdb_auto_update"`
 	SystemEventPollIntervalSeconds int      `json:"system_event_poll_interval_seconds"`
 	InstancePowerEnabled           bool     `json:"instance_power_enabled"`
 	Listen                         string   `json:"listen"`
@@ -36,7 +38,7 @@ type Config struct {
 
 // Load applies defaults, an optional JSON file, then environment overrides.
 func Load(path string) (Config, error) {
-	c := Config{Listen: "127.0.0.1:8080", DataDir: "data", LogLevel: "info", Timezone: "Asia/Shanghai", Frontend: "api", SessionTTLSeconds: 43200, WorkerCount: 2, ResourceScanIntervalSeconds: 300, CDTPollIntervalSeconds: 300, SystemEventPollIntervalSeconds: 60}
+	c := Config{IPDBAutoUpdate: true, Listen: "127.0.0.1:8080", DataDir: "data", LogLevel: "info", Timezone: "Asia/Shanghai", Frontend: "api", SessionTTLSeconds: 43200, WorkerCount: 2, ResourceScanIntervalSeconds: 300, CDTPollIntervalSeconds: 300, SystemEventPollIntervalSeconds: 60}
 	if path != "" {
 		f, err := os.Open(path)
 		if err != nil {
@@ -87,6 +89,15 @@ func Load(path string) (Config, error) {
 			return c, errors.New("invalid HM_INSTANCE_POWER_ENABLED")
 		}
 		c.InstancePowerEnabled = b
+	}
+	for key, value := range map[string]*bool{"HM_IPDB_CITY_ENABLED": &c.IPDBCityEnabled, "HM_IPDB_AUTO_UPDATE": &c.IPDBAutoUpdate} {
+		if raw, ok := os.LookupEnv(key); ok {
+			v, err := strconv.ParseBool(raw)
+			if err != nil {
+				return c, errors.New("invalid IP database configuration")
+			}
+			*value = v
+		}
 	}
 	for k, p := range map[string]*int{"HM_SYSTEM_EVENT_POLL_INTERVAL_SECONDS": &c.SystemEventPollIntervalSeconds, "HM_WORKER_COUNT": &c.WorkerCount, "HM_RESOURCE_SCAN_INTERVAL_SECONDS": &c.ResourceScanIntervalSeconds, "HM_CDT_POLL_INTERVAL_SECONDS": &c.CDTPollIntervalSeconds} {
 		if v, ok := os.LookupEnv(k); ok {

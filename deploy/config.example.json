@@ -12,6 +12,8 @@
   "session_ttl_seconds": 43200,
   "worker_count": 2,
   "instance_power_enabled": false,
+  "ipdb_city_enabled": false,
+  "ipdb_auto_update": true,
   "resource_scan_interval_seconds": 300,
   "system_event_poll_interval_seconds": 60,
   "cdt_poll_interval_seconds": 300

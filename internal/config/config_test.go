@@ -25,6 +25,23 @@ func TestConfiguration(t *testing.T) {
 	}
 }
 
+func TestOfflineIPDatabaseDefaultsAndOverrides(t *testing.T) {
+	c, err := Load("")
+	if err != nil || !c.IPDBAutoUpdate || c.IPDBCityEnabled {
+		t.Fatal(c, err)
+	}
+	t.Setenv("HM_IPDB_CITY_ENABLED", "true")
+	t.Setenv("HM_IPDB_AUTO_UPDATE", "false")
+	c, err = Load("")
+	if err != nil || c.IPDBAutoUpdate || !c.IPDBCityEnabled {
+		t.Fatal(c, err)
+	}
+	t.Setenv("HM_IPDB_CITY_ENABLED", "invalid")
+	if _, err = Load(""); err == nil {
+		t.Fatal("invalid city configuration accepted")
+	}
+}
+
 func TestProductionAccessConfiguration(t *testing.T) {
 	t.Setenv("HM_PUBLIC_URL", "https://panel.example")
 	t.Setenv("HM_TRUSTED_PROXIES", "127.0.0.1/32, ::1/128")

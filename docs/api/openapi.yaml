@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-13  Offline IP database: add cached /network/ipdb status with source attribution, dataset versions/sizes and process memory evidence. User chose bundled ASN+country, optional city. Updates fetch monthly public DB-IP files in the background; record lookups stay offline. User approved an evidence-only label policy for the next trace integration: CN2 GIA/GT and Alibaba cross-border status stay unconfirmed; estimated geolocation does not prove detour.
 # 2026-11-13  Trace panel: add async POST /network/traces, bounded summary history, detail and text export. Submission snapshots point/target/request, checks source trace polling separately from ordinary probes and rechecks queued managed targets. GET reads stored data only; no synchronous DNS/cloud/probing. Per-hop absence is unknown, TCP reset means reached but closed. Demo reads are synthetic.
 # 2026-11-13  Trace queue: network_probe also covers fixed traceroute tasks. Private agent claim/result endpoints keep trace payloads separate from ordinary probes; old agents cannot claim traces. Shared point leases and expiry prevent overlap/replay. Job.result stays null; no panel trace submission/history route is introduced in this phase.
 # 2026-11-12  Network alerts: add network_latency, network_loss and network_unreachable. PRD defaults remain sampled latency > configured limit for 600s, failed probes >5%, and 3 consecutive completely failed runs. User confirmed recovery after 3 valid healthy runs; gaps/skips/local failures reset streaks without recovery. New results drive transitions once, with per-plan overrides and probe_plan_id on notifications. Delivery remains separate.
@@ -145,6 +146,20 @@ security:
   - sessionCookie: []
 
 paths:
+  /network/ipdb:
+    get:
+      tags: [network]
+      operationId: getOfflineIPDatabaseStatus
+      summary: Read offline IP database versions and resources
+      description: Local status only; no download or online IP lookup. Default bundled ASN+country datasets, optional downloaded city. DB-IP Lite attribution must be displayed with data-derived results. Memory values describe the process; mapped file bytes are not resident RAM. City mode can exceed the default memory budget.
+      responses:
+        "200":
+          description: Loaded dataset metadata and most recent update attempt
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/IPDatabaseStatus"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "503": {description: ipdb_unavailable}
   /network/traces:
     post:
       tags: [network]
@@ -2462,6 +2477,51 @@ components:
         updated_at: {type: string, format: date-time, nullable: true}
         trace:
           $ref: "#/components/schemas/TraceCapability"
+    IPDatabaseDataset:
+      type: object
+      required: [name, edition, built_at, size_bytes, origin, storage, source_url]
+      properties:
+        name: {type: string}
+        edition: {type: string, description: Release month YYYY-MM}
+        built_at: {type: string, format: date-time}
+        size_bytes: {type: integer, format: int64}
+        origin: {type: string, enum: [bundled, downloaded]}
+        storage: {type: string, enum: [memory, mmap]}
+        source_url: {type: string, format: uri}
+    IPDatabaseStatus:
+      type: object
+      required: [mode, city_enabled, auto_update, asn, country, city, last_check_at, last_update_at, last_error, attribution, go_heap_alloc_bytes, process_peak_rss_bytes, mapped_file_bytes]
+      properties:
+        mode: {type: string, enum: [country, city]}
+        city_enabled: {type: boolean}
+        auto_update: {type: boolean}
+        asn: {$ref: "#/components/schemas/IPDatabaseDataset"}
+        country: {$ref: "#/components/schemas/IPDatabaseDataset"}
+        city:
+          type: object
+          nullable: true
+          allOf: [{$ref: "#/components/schemas/IPDatabaseDataset"}]
+        last_check_at: {type: string, format: date-time, nullable: true}
+        last_update_at: {type: string, format: date-time, nullable: true}
+        last_error:
+          type: object
+          nullable: true
+          properties:
+            code: {type: string}
+            message: {type: string}
+        attribution:
+          type: array
+          items:
+            type: object
+            required: [name, url, license, license_url]
+            properties:
+              name: {type: string}
+              url: {type: string, format: uri}
+              license: {type: string}
+              license_url: {type: string, format: uri}
+        go_heap_alloc_bytes: {type: integer, format: int64, description: Current total Go heap; excludes mmap.}
+        process_peak_rss_bytes: {type: integer, format: int64, nullable: true, description: OS peak process resident memory; not component-only or current RSS. Null if unavailable.}
+        mapped_file_bytes: {type: integer, format: int64, description: Total sizes of mapped dataset files; not a resident-memory measurement.}
     TraceCapability:
       type: object
       required: [available, unavailable_reason, methods, last_poll_at]

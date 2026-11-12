@@ -1,0 +1,19 @@
+{
+  "edition": "2026-11",
+  "files": {
+    "asn": {
+      "name": "dbip-asn-lite-2026-11.mmdb.gz",
+      "size_bytes": 9648279,
+      "compressed_bytes": 5237630,
+      "sha256": "81565a450281c949fc83745f5ec9cfea70b035163b1152b055645884765d153d",
+      "url": "https://download.db-ip.com/free/dbip-asn-lite-2026-11.mmdb.gz"
+    },
+    "country": {
+      "name": "dbip-country-lite-2026-11.mmdb.gz",
+      "size_bytes": 8515063,
+      "compressed_bytes": 4205904,
+      "sha256": "145ce5dfb812d8de28547e6289bb5c5f8b3df2f1dea21d324d5b575e0431311f",
+      "url": "https://download.db-ip.com/free/dbip-country-lite-2026-11.mmdb.gz"
+    }
+  }
+}

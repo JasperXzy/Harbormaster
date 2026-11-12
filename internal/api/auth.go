@@ -21,12 +21,14 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/buildinfo"
 	"github.com/JasperXzy/harbormaster/internal/collect"
 	"github.com/JasperXzy/harbormaster/internal/config"
+	"github.com/JasperXzy/harbormaster/internal/ipinfo"
 	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
 )
 
 type productionPanel struct {
+	ipdb            *ipinfo.Manager
 	powerEnabled    bool
 	s               *store.Store
 	access          panelAccess
@@ -41,8 +43,12 @@ type productionPanel struct {
 	releaseVersions agentrelease.VersionCache
 }
 
-func NewProductionPanel(s *store.Store, c config.Config, engine *collect.Engine) http.Handler {
-	return &productionPanel{powerEnabled: !c.Dev && c.InstancePowerEnabled && engine != nil && engine.Box != nil, s: s, access: newPanelAccess(c), timezone: c.Timezone, ttl: time.Duration(c.SessionTTLSeconds) * time.Second, now: time.Now, engine: engine, publicURL: c.PublicURL, agentReleaseDir: c.AgentReleaseDir}
+func NewProductionPanel(s *store.Store, c config.Config, engine *collect.Engine, databases ...*ipinfo.Manager) http.Handler {
+	p := &productionPanel{powerEnabled: !c.Dev && c.InstancePowerEnabled && engine != nil && engine.Box != nil, s: s, access: newPanelAccess(c), timezone: c.Timezone, ttl: time.Duration(c.SessionTTLSeconds) * time.Second, now: time.Now, engine: engine, publicURL: c.PublicURL, agentReleaseDir: c.AgentReleaseDir}
+	if len(databases) > 0 {
+		p.ipdb = databases[0]
+	}
+	return p
 }
 
 func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
