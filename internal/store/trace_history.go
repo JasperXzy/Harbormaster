@@ -153,8 +153,8 @@ func saveTraceOutcome(ctx context.Context, tx *sql.Tx, id, raw string, now time.
 	return err
 }
 
-const traceColumns = `r.seq,r.job_id,r.point_id,r.point_name,p.point_kind,p.instance_id,r.target_json,p.request_json,r.created_at,coalesce(j.finished_at,j.started_at),j.status,j.error_code,r.outcome_json,coalesce(e.state,CASE WHEN j.status IN ('queued','running') THEN 'waiting_result' ELSE 'not_available' END),e.updated_at,e.error_code`
-const traceJoins = ` FROM network_trace_run r JOIN network_probe_job p ON p.job_id=r.job_id JOIN job j ON j.id=r.job_id LEFT JOIN trace_enrichment e ON e.trace_seq=r.seq `
+const traceColumns = `r.seq,r.job_id,r.point_id,r.point_name,p.point_kind,p.instance_id,r.target_json,p.request_json,r.created_at,coalesce(j.finished_at,j.started_at),j.status,j.error_code,r.outcome_json,coalesce(e.state,CASE WHEN j.status IN ('queued','running') THEN 'waiting_result' ELSE 'not_available' END),e.updated_at,e.error_code,l.duplex_id,l.direction`
+const traceJoins = ` FROM network_trace_run r JOIN network_probe_job p ON p.job_id=r.job_id JOIN job j ON j.id=r.job_id LEFT JOIN trace_enrichment e ON e.trace_seq=r.seq LEFT JOIN duplex_trace_leg l ON l.trace_seq=r.seq `
 
 func readTrace(row rowScanner) (model.TraceDetail, error) {
 	var d model.TraceDetail
@@ -162,7 +162,7 @@ func readTrace(row rowScanner) (model.TraceDetail, error) {
 	var created, request string
 	var target, updated, code, outcome, result sql.NullString
 	var enrichmentUpdated, enrichmentCode, enrichment sql.NullString
-	err := row.Scan(&seq, &d.JobID, &d.PointID, &d.PointName, &d.PointKind, &d.InstanceID, &target, &request, &created, &updated, &d.Status, &code, &outcome, &d.EnrichmentStatus, &enrichmentUpdated, &enrichmentCode, &result, &enrichment)
+	err := row.Scan(&seq, &d.JobID, &d.PointID, &d.PointName, &d.PointKind, &d.InstanceID, &target, &request, &created, &updated, &d.Status, &code, &outcome, &d.EnrichmentStatus, &enrichmentUpdated, &enrichmentCode, &d.DuplexID, &d.DuplexDirection, &result, &enrichment)
 	if err != nil {
 		return d, err
 	}
@@ -293,5 +293,5 @@ func validateQueuedTraceTargets(ctx context.Context, tx *sql.Tx, now time.Time) 
 			}
 		}
 	}
-	return nil
+	return validateQueuedDuplexTraces(ctx, tx, now)
 }

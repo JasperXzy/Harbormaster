@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-13  Duplex traces: add atomic paired agent trace submissions, saved endpoint/address evidence, detail and text export. User confirmed both-or-neither enqueue with independent execution and actual timestamps thereafter. Both managed instances need fresh unique public addresses and authenticated trace capability at submission; queued legs recheck endpoint address evidence, running legs retain their original measurements. Trace history adds nullable duplex_id/direction backlinks. Reads never probe or refresh cloud data; no claim of synchronized packets or a symmetric path.
 # 2026-11-13  Trace snapshots: add per-probe-plan daily trace schedules and bounded snapshot history/comparisons. User chose business-timezone 03:00 default, no historical backfill, one current catch-up; compare only complete reached paths with unchanged target IP and unique complete per-TTL ASN evidence, coalescing adjacent ASNs. Different ASN database versions establish a new starting point without an alert. Add optional non-urgent network_route_change event records; Telegram delivery remains separate.
 # 2026-11-13  Trace enrichment: persist background offline ASN/geolocation, bounded public-only PTR, per-TTL response statistics and evidence-based network labels separately from immutable agent reports. Detail/export read frozen results and dataset attribution; history adds enrichment_status only. Missing responses/ASN remain unknown; CN2 tier, Alibaba cross-border status and detour stay unconfirmed. Restored unfinished enrichment is cancelled with old work.
 # 2026-11-13  Offline IP database: add cached /network/ipdb status with source attribution, dataset versions/sizes and process memory evidence. User chose bundled ASN+country, optional city. Updates fetch monthly public DB-IP files in the background; record lookups stay offline. User approved an evidence-only label policy for the next trace integration: CN2 GIA/GT and Alibaba cross-border status stay unconfirmed; estimated geolocation does not prove detour.
@@ -227,6 +228,59 @@ paths:
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
         "422": {$ref: "#/components/responses/ValidationFailed"}
+  /network/duplex-traces:
+    post:
+      tags: [network]
+      operationId: submitDuplexTrace
+      summary: Atomically enqueue traces from both managed endpoints
+      description: Session and CSRF required. Select two distinct managed ECS/SWAS instances with current trace-capable agents. Both must have one fresh public address in the selected family. Validate and enqueue both directions in one transaction; either unavailable or full queue leaves neither job. After acceptance each direction executes independently under its own lease. Start times can differ; a later failure never fabricates or replays the other result. The request_key namespace is specific to this endpoint; identical decoded retries return the original pair even after endpoint changes, changed input conflicts. TCP ports are explicit per destination direction. No foreground DNS/cloud/packets. Demo writes return 501.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/DuplexTraceSubmission"}
+      responses:
+        "202":
+          description: Both directions accepted atomically
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DuplexTraceAccepted"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {description: "request_conflict, probe_queue_full, duplex_same_address, or fixed point/target unavailable reason from the manual trace API"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /network/duplex-traces/{id}:
+    get:
+      tags: [network]
+      operationId: getDuplexTrace
+      summary: Read both saved trace directions
+      description: Frozen managed endpoint names and address observations plus each current trace detail. Queued legs are cancelled if either endpoint's selected address changes or discovery becomes incomplete/stale/unavailable. Already running legs preserve their pinned request and independent result. Agent availability for the other direction is not a reason to replay a completed leg. No cloud, DNS or probe work starts on GET.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Independent forward and reverse state/results
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/DuplexTrace"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /network/duplex-traces/{id}/export:
+    get:
+      tags: [network]
+      operationId: exportDuplexTrace
+      summary: Export both stored directions as text
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: UTF-8 text with frozen endpoints and both trace exports including available attribution
+          content:
+            text/plain:
+              schema: {type: string}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
   /network/traces:
     post:
       tags: [network]
@@ -2668,6 +2722,58 @@ components:
         unavailable_reason: {type: string, nullable: true}
         methods: {type: array, items: {type: string, enum: [icmp, tcp]}}
         last_poll_at: {type: string, format: date-time, nullable: true}
+    DuplexTraceSubmission:
+      type: object
+      additionalProperties: false
+      required: [request_key, from_instance_id, to_instance_id, family, method, forward_port, reverse_port]
+      properties:
+        request_key: {type: string, pattern: '^[A-Za-z0-9_-]{16,128}$'}
+        from_instance_id: {type: string, minLength: 1, maxLength: 128}
+        to_instance_id: {type: string, minLength: 1, maxLength: 128}
+        family: {type: string, enum: [ipv4, ipv6]}
+        method: {type: string, enum: [icmp, tcp]}
+        forward_port: {type: integer, minimum: 0, maximum: 65535, description: Destination port on to_instance_id; zero for ICMP.}
+        reverse_port: {type: integer, minimum: 0, maximum: 65535, description: Destination port on from_instance_id; zero for ICMP.}
+        max_hops: {type: integer, minimum: 1, maximum: 30, default: 30}
+        count: {type: integer, minimum: 1, maximum: 5, default: 3}
+        timeout_ms: {type: integer, minimum: 100, maximum: 2000, default: 1000}
+      description: Per-leg packet/DNS budget matches TraceSubmission. Public addresses must be different. TCP requires both ports 1–65535; endpoints can use different ports.
+    DuplexTraceAccepted:
+      type: object
+      required: [duplex_id, forward, reverse]
+      properties:
+        duplex_id: {type: string}
+        forward:
+          type: object
+          required: [job_id, trace_id]
+          properties:
+            job_id: {type: string}
+            trace_id: {type: string}
+        reverse:
+          type: object
+          required: [job_id, trace_id]
+          properties:
+            job_id: {type: string}
+            trace_id: {type: string}
+    DuplexTraceEndpoint:
+      type: object
+      required: [instance_id, name, kind, public_address, observed_at]
+      properties:
+        instance_id: {type: string}
+        name: {type: string}
+        kind: {type: string, enum: [ecs, swas]}
+        public_address: {type: string, description: Pinned unique address from cached discovery; never updated in this historical snapshot.}
+        observed_at: {type: string, format: date-time}
+    DuplexTrace:
+      type: object
+      required: [id, created_at, from, to, forward, reverse]
+      properties:
+        id: {type: string}
+        created_at: {type: string, format: date-time}
+        from: {$ref: "#/components/schemas/DuplexTraceEndpoint"}
+        to: {$ref: "#/components/schemas/DuplexTraceEndpoint"}
+        forward: {$ref: "#/components/schemas/TraceDetail"}
+        reverse: {$ref: "#/components/schemas/TraceDetail"}
     TraceSubmission:
       type: object
       additionalProperties: false
@@ -2710,7 +2816,7 @@ components:
         sample_count: {type: integer}
     TraceRun:
       type: object
-      required: [id, job_id, point_id, point_name, point_kind, instance_id, target, request, created_at, updated_at, status, outcome, error, enrichment_status]
+      required: [id, job_id, point_id, point_name, point_kind, instance_id, target, request, created_at, updated_at, status, outcome, error, enrichment_status, duplex_id, duplex_direction]
       properties:
         id: {type: string}
         job_id: {type: string}
@@ -2728,6 +2834,8 @@ components:
         updated_at: {type: string, format: date-time}
         status: {type: string, enum: [queued, running, succeeded, failed], description: "succeeded means complete execution; connectivity is described by outcome."}
         enrichment_status: {type: string, enum: [waiting_result, not_available, queued, running, complete, partial, failed], description: Independent background processing. Complete can include missing database coverage or absent PTR; partial means a lookup failed or timed out. No lookups are started by a GET.}
+        duplex_id: {type: string, nullable: true, description: Backlink to a paired query; null for ordinary manual/scheduled traces.}
+        duplex_direction: {type: string, nullable: true, enum: [forward, reverse, null]}
         outcome:
           type: object
           nullable: true

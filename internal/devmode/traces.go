@@ -87,8 +87,12 @@ func demoTraceInfo(r netprobe.TraceResult) *model.TraceEnrichment {
 			if len(info.Addresses) == 0 {
 				info.Addresses = append(info.Addresses, address)
 			}
-			if address == "1.1.1.1" {
-				info.ASNCandidates, info.CountryCodes = []uint32{13335}, []string{"AU"}
+			if address == "1.1.1.1" || address == "8.8.8.8" {
+				asn, country := uint32(13335), "AU"
+				if address == "8.8.8.8" {
+					asn, country = 15169, "US"
+				}
+				info.ASNCandidates, info.CountryCodes = []uint32{asn}, []string{country}
 				info.UnknownASN, info.UnknownLocation = false, false
 			}
 			if seen[address] {
@@ -102,6 +106,12 @@ func demoTraceInfo(r netprobe.TraceResult) *model.TraceEnrichment {
 				a.Location = &ipinfo.Location{CountryCode: new("AU"), CountryName: new("Australia (demo)"), Prefix: "1.1.1.0/24", Granularity: "country", Dataset: geo}
 				a.PTR = model.TracePTR{Status: "ok", Names: []string{"router.example"}}
 			}
+			if address == "8.8.8.8" {
+				a.ASNStatus, a.LocationStatus = "ok", "ok"
+				a.ASN = &ipinfo.ASN{Number: 15169, Organization: new("Google (demo)"), Prefix: "8.8.8.0/24", Dataset: dataset}
+				a.Location = &ipinfo.Location{CountryCode: new("US"), CountryName: new("United States (demo)"), Prefix: "8.8.8.0/24", Granularity: "country", Dataset: geo}
+				a.PTR = model.TracePTR{Status: "ok", Names: []string{"reverse.example"}}
+			}
 			e.Addresses = append(e.Addresses, a)
 		}
 		e.Hops = append(e.Hops, info)
@@ -112,7 +122,7 @@ func demoTraces(w http.ResponseWriter, r *http.Request, path string, now time.Ti
 	if path != "/network/traces" && !strings.HasPrefix(path, "/network/traces/") {
 		return false
 	}
-	fixtures := demoTraceFixtures(now)
+	fixtures := append(demoTraceFixtures(now), demoDuplexLegs(now)...)
 	if path == "/network/traces" {
 		q := r.URL.Query()
 		from, e1 := time.Parse(time.RFC3339Nano, q.Get("from"))

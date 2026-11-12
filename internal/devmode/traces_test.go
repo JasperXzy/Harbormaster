@@ -54,7 +54,7 @@ func TestDemoTracesExposeReadOnlySyntheticSummaryDetailAndExport(t *testing.T) {
 		Items []model.TraceRun `json:"items"`
 		Next  *string          `json:"next_cursor"`
 	}
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Next == nil || page.Items[0].ID != "2" || page.Items[0].Outcome.Reached {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Next == nil || page.Items[0].ID != "4" || page.Items[0].DuplexID == nil {
 		t.Fatal(w.Code, w.Body)
 	}
 	if strings.Contains(w.Body.String(), `"hops"`) {
@@ -63,11 +63,19 @@ func TestDemoTracesExposeReadOnlySyntheticSummaryDetailAndExport(t *testing.T) {
 	if w = call("GET", path+"&point_id=server&cursor="+url.QueryEscape(*page.Next), "", cookie, ""); w.Code != 422 {
 		t.Fatal("demo cross-filter cursor", w.Code)
 	}
-	w = call("GET", path+"&cursor="+url.QueryEscape(*page.Next), "", cookie, "")
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Items[0].ID != "1" || !page.Items[0].Outcome.Reached || page.Next != nil {
-		t.Fatal(w.Code, w.Body)
+	for _, id := range []string{"3", "2", "1"} {
+		if page.Next == nil {
+			t.Fatal("missing next fixture", id)
+		}
+		w = call("GET", path+"&cursor="+url.QueryEscape(*page.Next), "", cookie, "")
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &page) != nil || len(page.Items) != 1 || page.Items[0].ID != id || (page.Next == nil) != (id == "1") {
+			t.Fatal(w.Code, w.Body)
+		}
+		if id == "2" && page.Items[0].Outcome.Reached || id == "1" && !page.Items[0].Outcome.Reached {
+			t.Fatal("synthetic reachability changed", page.Items)
+		}
 	}
-	for _, id := range []string{"1", "2"} {
+	for _, id := range []string{"1", "2", "3", "4"} {
 		w = call("GET", "/network/traces/"+id, "", cookie, "")
 		var d model.TraceDetail
 		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &d) != nil || d.Result == nil || d.Enrichment == nil || d.EnrichmentStatus != "complete" || d.Enrichment.DetourStatus != "unconfirmed" {
@@ -76,6 +84,21 @@ func TestDemoTracesExposeReadOnlySyntheticSummaryDetailAndExport(t *testing.T) {
 		if netprobe.ValidateTraceResult(d.Request, d.Result, nil, time.Now()) != nil {
 			t.Fatal("invalid synthetic trace", d)
 		}
+	}
+	w = call("GET", "/network/duplex-traces/demo-duplex", "", cookie, "")
+	var paired model.DuplexTrace
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &paired) != nil || paired.Forward.DuplexID == nil || *paired.Forward.DuplexID != paired.ID || paired.Forward.Request.Host != paired.To.PublicAddress || paired.Reverse.Request.Host != paired.From.PublicAddress || paired.Forward.Result.StartedAt.Equal(paired.Reverse.Result.StartedAt) {
+		t.Fatal(w.Code, w.Body)
+	}
+	w = call("GET", "/network/duplex-traces/demo-duplex/export", "", cookie, "")
+	for _, value := range []string{"[forward]", "[reverse]", "IP Geolocation by DB-IP <https://db-ip.com>"} {
+		if w.Code != 200 || !strings.Contains(w.Body.String(), value) {
+			t.Fatal(w.Code, w.Body)
+		}
+	}
+	w = call("POST", "/network/duplex-traces", `{}`, cookie, session["csrf_token"])
+	if w.Code != 501 {
+		t.Fatal("demo submitted a live pair", w.Code, w.Body)
 	}
 	w = call("GET", "/network/traces/1/export", "", cookie, "")
 	if w.Code != 200 || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/plain") || !strings.Contains(w.Body.String(), "2 5 * * - - - probe_timeout") || !strings.Contains(w.Body.String(), "tcp_reset") {

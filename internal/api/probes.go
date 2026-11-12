@@ -110,6 +110,9 @@ func (p *productionPanel) networkProbes(w http.ResponseWriter, r *http.Request, 
 	if p.networkTraceSnapshots(w, r, path) {
 		return true
 	}
+	if p.networkDuplexTraces(w, r, path) {
+		return true
+	}
 	if path == "/network/ipdb" {
 		if r.Method != "GET" {
 			writeError(w, 405, "method_not_allowed")

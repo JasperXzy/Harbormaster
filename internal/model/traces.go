@@ -95,6 +95,8 @@ type TraceRun struct {
 	UpdatedAt        time.Time             `json:"updated_at"`
 	Status           string                `json:"status"`
 	EnrichmentStatus string                `json:"enrichment_status"`
+	DuplexID         *string               `json:"duplex_id"`
+	DuplexDirection  *string               `json:"duplex_direction"`
 	Outcome          *TraceOutcome         `json:"outcome"`
 	Error            *APIError             `json:"error"`
 }
@@ -125,6 +127,9 @@ func TraceText(d TraceDetail) string {
 	fmt.Fprintf(&b, "trace: %s\njob: %s\nsource: %q (%s)\nstatus: %s\ntarget: %q\nfamily: %s\nmethod: %s\nport: %d\ncreated_at: %s\n", d.ID, d.JobID, d.PointName, d.PointID, d.Status, d.Request.Host, d.Request.Family, d.Request.Method, d.Request.Port, d.CreatedAt.Format(time.RFC3339Nano))
 	if d.Error != nil {
 		fmt.Fprintf(&b, "error: %s\n", d.Error.Code)
+	}
+	if d.DuplexID != nil && d.DuplexDirection != nil {
+		fmt.Fprintf(&b, "duplex_trace: %s\nduplex_direction: %s\n", *d.DuplexID, *d.DuplexDirection)
 	}
 	fmt.Fprintf(&b, "enrichment_status: %s\n", d.EnrichmentStatus)
 	if d.EnrichmentError != nil {
