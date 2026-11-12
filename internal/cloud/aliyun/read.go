@@ -1,5 +1,5 @@
-// Package aliyun implements fixed read-only Alibaba Cloud queries. It exposes no
-// arbitrary endpoint, arbitrary action, cloud assistant or resource write API.
+// Package aliyun implements fixed Alibaba Cloud operations. Client remains
+// read-only; power operations use a separate PowerClient with typed inputs.
 package aliyun
 
 import (
@@ -134,19 +134,8 @@ func (c *Client) Call(ctx context.Context, cred Credentials, action, region stri
 			return nil, failure("parameter_not_allowed")
 		}
 	}
-	c.mu.Lock()
-	at := c.next
-	if at.Before(time.Now()) {
-		at = time.Now()
-	}
-	c.next = at.Add(c.interval)
-	c.mu.Unlock()
-	timer := time.NewTimer(time.Until(at))
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-timer.C:
+	if err := c.wait(ctx); err != nil {
+		return nil, err
 	}
 	method := "GET"
 	if d.product == "cdt" {
@@ -217,6 +206,27 @@ func (c *Client) Call(ctx context.Context, cred Credentials, action, region stri
 		}
 	}
 	return body, nil
+}
+
+func (c *Client) wait(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	at := c.next
+	if at.Before(time.Now()) {
+		at = time.Now()
+	}
+	c.next = at.Add(c.interval)
+	c.mu.Unlock()
+	timer := time.NewTimer(time.Until(at))
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return ctx.Err()
+	}
 }
 
 // Return stable categories, never arbitrary SDK errors or server messages.
