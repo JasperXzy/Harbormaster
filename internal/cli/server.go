@@ -11,10 +11,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/api"
+	"github.com/JasperXzy/harbormaster/internal/backup"
 	"github.com/JasperXzy/harbormaster/internal/buildinfo"
 	"github.com/JasperXzy/harbormaster/internal/cloud/aliyun"
 	"github.com/JasperXzy/harbormaster/internal/collect"
@@ -42,11 +44,11 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		return m0.Run(ctx, args[1:], in, out, errOut)
 	}
 	if command == "help" || command == "--help" || command == "-h" {
-		_, _ = io.WriteString(out, "hm-server <serve|run-once|migrate|version|healthcheck|reset-password|import-accounts> [--config path] [--dev] [--data-dir path] [--listen IP:port] [--frontend api|embedded]\nhm-server m0 <import|set-regions|plan|query> --account NAME (m0 --help for details)\nimport-accounts reads the encrypted M0 vault (--source-vault / --source-key-file); no cloud queries.\nreset-password reads the new password from stdin; run-once processes due read-only jobs in production; --dev performs local checks.\n")
+		_, _ = io.WriteString(out, "hm-server <serve|run-once|migrate|version|healthcheck|reset-password|import-accounts|backup> [--config path] [--dev] [--data-dir path] [--listen IP:port] [--frontend api|embedded]\nhm-server m0 <import|set-regions|plan|query> --account NAME (m0 --help for details)\nimport-accounts reads the encrypted M0 vault (--source-vault / --source-key-file); no cloud queries.\nreset-password reads the new password from stdin; run-once processes due read-only jobs in production; --dev performs local checks.\nbackup --output NEW_FILE reads the backup password from stdin (hidden on a terminal); requires an existing production database and its external master key.\n")
 		return 0
 	}
 	switch command {
-	case "serve", "run-once", "migrate", "version", "healthcheck", "reset-password", "import-accounts":
+	case "serve", "run-once", "migrate", "version", "healthcheck", "reset-password", "import-accounts", "backup":
 	default:
 		return fail("unknown_command")
 	}
@@ -58,6 +60,10 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 	listen := f.String("listen", "", "listener")
 	frontend := f.String("frontend", "", "api or embedded")
 	var sourceVault, sourceKey string
+	var backupOutput string
+	if command == "backup" {
+		f.StringVar(&backupOutput, "output", "", "new encrypted backup file")
+	}
 	if command == "import-accounts" {
 		f.StringVar(&sourceVault, "source-vault", "", "encrypted M0 vault")
 		f.StringVar(&sourceKey, "source-key-file", "", "M0 vault key file")
@@ -89,6 +95,15 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		return fail(err.Error())
 	}
 	log = logging.New(errOut, c.LogLevel)
+	if command == "backup" {
+		if c.Dev || backupOutput == "" {
+			return fail("backup_requires_production_database_and_output")
+		}
+		info, err := os.Stat(filepath.Join(c.DataDir, "harbormaster.db"))
+		if err != nil || !info.Mode().IsRegular() {
+			return fail("backup_source_not_found")
+		}
+	}
 	if command == "healthcheck" {
 		host, port, _ := net.SplitHostPort(c.Listen)
 		if net.ParseIP(host).IsUnspecified() {
@@ -133,6 +148,15 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		engine = &collect.Engine{Store: s, Box: box, Scanner: aliyun.Inventory{Caller: aliyun.NewClient(nil, 200*time.Millisecond)}, Workers: c.WorkerCount, Interval: time.Duration(c.ResourceScanIntervalSeconds) * time.Second, CDTInterval: time.Duration(c.CDTPollIntervalSeconds) * time.Second, Log: log, Timezone: c.Timezone}
 	}
 	switch command {
+	case "backup":
+		if err := exportBackup(ctx, s, box, in, out, backupOutput); err != nil {
+			if errors.Is(err, backup.ErrPassword) || errors.Is(err, backup.ErrOutputExists) {
+				return fail(err.Error())
+			}
+			return fail("backup_failed")
+		}
+		log.Info("backup_complete", "cloud_queries", 0, "cloud_writes", 0)
+		return 0
 	case "migrate":
 		log.Info("migrations_applied")
 		return 0
