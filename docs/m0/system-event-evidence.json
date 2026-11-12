@@ -1,0 +1,86 @@
+{
+  "account_alias": "jasperxzy",
+  "cloud_writes": 0,
+  "cms_interruption_metadata": [
+    {
+      "EventType": "StatusNotification",
+      "Level": "WARN",
+      "Name": "Instance:PreemptibleInstanceInterruption",
+      "NameDesc": "抢占式实例中断通知",
+      "NameDesc.En": "Instance:PreemptibleInstanceInterruption",
+      "Product": "ECS",
+      "Status": "Normal",
+      "StatusDesc": "Normal"
+    }
+  ],
+  "queries": [
+    {
+      "action": "DescribeInstanceHistoryEvents",
+      "region": "cn-shanghai",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-12T10:46:15Z",
+      "record_count": 0
+    },
+    {
+      "action": "DescribeSystemEventAttribute",
+      "region": "cn-shanghai",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-12T10:46:15Z",
+      "record_count": 0
+    },
+    {
+      "action": "DescribeInstanceHistoryEvents",
+      "region": "ap-southeast-1",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-12T10:46:16Z",
+      "record_count": 0
+    },
+    {
+      "action": "DescribeSystemEventAttribute",
+      "region": "ap-southeast-1",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-12T10:46:16Z",
+      "record_count": 0
+    },
+    {
+      "action": "DescribeInstanceHistoryEvents",
+      "region": "cn-hongkong",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-12T10:46:17Z",
+      "record_count": 1
+    },
+    {
+      "action": "DescribeSystemEventAttribute",
+      "region": "cn-hongkong",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-12T10:46:17Z",
+      "record_count": 0
+    }
+  ],
+  "sanitized_event_examples": [
+    {
+      "EventType": {
+        "Code": 257,
+        "Name": "Instance:PreemptibleInstanceInterruption"
+      },
+      "EventCycleStatus": {
+        "Code": 0,
+        "Name": "Executed"
+      },
+      "EventPublishTime": "2026-11-03T07:42:20Z",
+      "EventFinishTime": "2026-11-03T07:42:20Z",
+      "NotBefore": null
+    }
+  ],
+  "sources": [
+    "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/DescribeInstanceHistoryEvents/api.json",
+    "https://api.aliyun.com/meta/v1/products/Cms/versions/2019-01-01/apis/DescribeSystemEventAttribute/api.json",
+    "https://api.aliyun.com/meta/v1/products/Cms/versions/2019-01-01/apis/DescribeSystemEventMetaList/api.json"
+  ]
+}

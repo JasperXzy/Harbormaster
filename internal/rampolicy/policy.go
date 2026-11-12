@@ -25,10 +25,10 @@ type Draft struct {
 // go run ./internal/rampolicy/export ./deploy/ram
 func Catalog() []Draft {
 	read := Statement{Effect: "Allow", Resource: "*", Action: []string{
-		"ecs:DescribeInstances", "ecs:DescribeNetworkInterfaces", "ecs:DescribeInstanceAutoRenewAttribute",
+		"ecs:DescribeInstances", "ecs:DescribeNetworkInterfaces", "ecs:DescribeInstanceAutoRenewAttribute", "ecs:DescribeInstanceHistoryEvents",
 		"vpc:DescribeEipAddresses", "vpc:DescribeCommonBandwidthPackages",
 		"swas-open:ListInstances", "swas-open:ListInstancesTrafficPackages", "swas-open:DescribeMonitorData",
-		"cms:QueryMetricList", "bss:DescribeAcccount", "bss:DescribeBillList", "bss:DescribeInstances",
+		"cms:QueryMetricList", "cms:DescribeSystemEventAttribute", "bss:DescribeAcccount", "bss:DescribeBillList", "bss:DescribeInstances",
 	}}
 	base := []string{"cdt_action_unverified", "public_metadata_actions_unverified", "resource_scope_not_account_bound"}
 	readonly := Draft{ID: "readonly", ReviewedOn: "2026-11-12", Verification: "draft", Limitations: append([]string{}, base...), Document: Document{Version: "1", Statement: []Statement{read}}}

@@ -34,7 +34,10 @@ type definition struct{ product, version, params string }
 
 // Exact allowlist, deliberately no arbitrary RPC command or endpoint flags.
 var allowed = map[string]definition{
-	"DescribeMonitorData": {"swas", "2020-06-01", "RegionId InstanceId MetricName Period StartTime EndTime Length"},
+	"DescribeInstanceHistoryEvents": {"ecs", "2014-05-26", "RegionId ResourceType PageNumber PageSize InstanceEventCycleStatus.1 InstanceEventCycleStatus.2 InstanceEventCycleStatus.3 InstanceEventCycleStatus.4 InstanceEventCycleStatus.5 InstanceEventCycleStatus.6 InstanceEventCycleStatus.7"},
+	"DescribeSystemEventAttribute":  {"cms", "2019-01-01", "Product Name StartTime EndTime PageNumber PageSize"},
+	"DescribeSystemEventMetaList":   {"cms", "2019-01-01", ""},
+	"DescribeMonitorData":           {"swas", "2020-06-01", "RegionId InstanceId MetricName Period StartTime EndTime Length"},
 	// ActionTrail documents this read; the request shape comes from the PRD reference project.
 	"ListCdtInternetTraffic":          {"cdt", "2021-08-13", "RegionId"},
 	"DescribeRegions":                 {"ecs", "2014-05-26", ""},
@@ -115,6 +118,19 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 	}
 	ops := []operation{}
 	switch options.Check {
+	case "system-events":
+		end := time.Now().UTC()
+		for _, region := range p.Regions {
+			q := map[string]string{"RegionId": region, "ResourceType": "instance", "PageNumber": "1", "PageSize": "100"}
+			for n, state := range []string{"Scheduled", "Executing", "Inquiring", "Executed", "Canceled", "Avoided", "Failed"} {
+				q["InstanceEventCycleStatus."+strconv.Itoa(n+1)] = state
+			}
+			ops = append(ops, newOperation(p, "DescribeInstanceHistoryEvents", region, q, "PageNumber", "InstanceSystemEventSet.InstanceSystemEventType"))
+			ops = append(ops, newOperation(p, "DescribeSystemEventAttribute", region, map[string]string{"Product": "ECS", "Name": "Instance:PreemptibleInstanceInterruption", "StartTime": strconv.FormatInt(end.Add(-24*time.Hour).UnixMilli(), 10), "EndTime": strconv.FormatInt(end.UnixMilli(), 10), "PageNumber": "1", "PageSize": "100"}, "PageNumber", "SystemEvents.SystemEvent"))
+		}
+
+	case "event-schema":
+		ops = append(ops, newOperation(p, "DescribeSystemEventMetaList", p.Regions[0], map[string]string{}, "", ""))
 	case "ecs-metric-schema":
 		ops = append(ops, newOperation(p, "DescribeMetricMetaList", p.Regions[0], map[string]string{"Namespace": "acs_ecs_dashboard", "PageNumber": "1", "PageSize": "30"}, "PageNumber", "Resources.Resource"))
 	case "metric-schema":
@@ -180,7 +196,7 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			ops = append(ops, newOperation(p, "DescribeMetricList", p.Regions[0], map[string]string{"Namespace": ns, "MetricName": name, "Dimensions": string(dim), "StartTime": end.Add(-time.Hour).Format(time.RFC3339), "EndTime": end.Format(time.RFC3339), "Period": "60"}, "", ""))
 		}
 	default:
-		return nil, errors.New("check_must_be_inventory_billing_metrics_metric_schema_ecs_metric_schema_swas_cpu_or_cdt")
+		return nil, errors.New("check_must_be_inventory_billing_metrics_metric_schema_ecs_metric_schema_swas_cpu_event_schema_system_events_or_cdt")
 	}
 	return ops, nil
 }

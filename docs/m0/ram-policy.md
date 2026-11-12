@@ -80,3 +80,5 @@ F1.4 尚缺具体资源范围收紧、独立最小权限身份验收、M4 创建
 官方 DescribeMonitorData 元数据确认只读 RAM Action 为 swas-open:DescribeMonitorData，资源格式为 `acs:swas-open:{#regionId}:{#accountId}:instance/{#InstanceId}`；sha-pro 真实只读调用已通过。三档策略均加入此动作，当前累计动作数为 12、18、26，部署 JSON 已从 Catalog 重新生成。没有更改真实 RAM 授权；资源范围未按账号收窄、CDT Action 与创建依赖等既有草稿限制仍成立。
 
 手动电源代码已经实现但默认关闭，接口限制标识改为 runtime_writes_require_explicit_enable；这只是准确描述运行时条件，不把 RAM 策略当作执行授权。详见 [CPU 来源](cpu-metrics.md)与[电源接口](instance-power.md)。
+
+系统事件来源阶段再补入只读 ecs:DescribeInstanceHistoryEvents 与 cms:DescribeSystemEventAttribute，当前累计动作数为 14 / 20 / 28；三地域读取已实测通过，未修改真实授权。来源与语义边界见 [系统事件来源](system-events.md)。
