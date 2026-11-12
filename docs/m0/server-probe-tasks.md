@@ -57,3 +57,5 @@ linux/arm64 built 24692948 bytes
 ```
 
 产物在 `/var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-server-probes-build-0b7yzhkj`，未提交或上传；交叉构建不代替目标系统运行验收。本阶段无面板契约字段变化，未修改 web/ 或 docs/design/。
+
+后续目标/组合管理、唯一实例地址跟随、恢复调度和面板历史接口已接入，见[网络管理](network-management.md)；以上“尚无面板路由”描述为本机 worker 交付阶段的历史状态。

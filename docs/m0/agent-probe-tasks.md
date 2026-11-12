@@ -128,3 +128,5 @@ linux/arm64 built 10942140 bytes
 ```
 
 两个二进制输出到 `/var/folders/5p/9wnngjzj1k9f1z4hlc3j9x8m0000gn/T/hm-agent-probe-build-rfk_8pit`，未提交仓库、未上传机器。交叉编译通过不代替目标架构运行验收。本客户端阶段没有面板契约变化。
+
+后续目标/组合管理和周期调度已接入，agent 能力由当前 token 的近期测速轮询确认，运行历史通过面板接口读取，见[网络管理](network-management.md)。

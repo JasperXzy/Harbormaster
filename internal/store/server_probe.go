@@ -22,19 +22,26 @@ type ServerProbeResult struct {
 }
 
 func (s *Store) EnqueueServerProbe(ctx context.Context, key string, request netprobe.Request, now time.Time) (model.Job, error) {
-	if !probeKey.MatchString(key) || request.Validate() != nil {
-		return model.Job{}, netprobe.ErrInvalid
-	}
-	raw, err := json.Marshal(request)
-	if err != nil {
-		return model.Job{}, err
-	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return model.Job{}, err
 	}
 	defer tx.Rollback()
 	if err = expireNetworkProbes(ctx, tx, now); err != nil {
+		return model.Job{}, err
+	}
+	j, err := enqueueServerProbe(ctx, tx, key, request, now)
+	if err != nil {
+		return j, err
+	}
+	return j, tx.Commit()
+}
+func enqueueServerProbe(ctx context.Context, tx *sql.Tx, key string, request netprobe.Request, now time.Time) (model.Job, error) {
+	if !probeKey.MatchString(key) || request.Validate() != nil {
+		return model.Job{}, netprobe.ErrInvalid
+	}
+	raw, err := json.Marshal(request)
+	if err != nil {
 		return model.Job{}, err
 	}
 	var oldID, kind, oldRaw string
@@ -47,7 +54,7 @@ func (s *Store) EnqueueServerProbe(ctx context.Context, key string, request netp
 		if err != nil {
 			return j, err
 		}
-		return j, tx.Commit()
+		return j, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return model.Job{}, err
@@ -70,7 +77,7 @@ func (s *Store) EnqueueServerProbe(ctx context.Context, key string, request netp
 	if err != nil {
 		return j, err
 	}
-	return j, tx.Commit()
+	return j, nil
 }
 func (s *Store) ClaimServerProbe(ctx context.Context, now time.Time) (ServerProbeClaim, error) {
 	var claim ServerProbeClaim

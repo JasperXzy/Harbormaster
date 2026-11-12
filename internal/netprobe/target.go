@@ -103,3 +103,6 @@ func resolve(ctx context.Context, q Request, lookup func(context.Context, string
 	// Every connect uses the numeric address; no second DNS lookup or fallback.
 	return chosen, nil
 }
+
+// ValidateHost performs syntax and literal address checks only; it never resolves DNS.
+func ValidateHost(host string) error { _, err := normalizeHost(host); return err }

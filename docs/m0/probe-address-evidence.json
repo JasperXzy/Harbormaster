@@ -1,0 +1,67 @@
+{
+  "verified_date": "2026-11-12",
+  "cloud_writes": 0,
+  "network_probe_jobs": 0,
+  "probe_plans": 0,
+  "preset_targets": 4,
+  "migrations": 30,
+  "foreign_key_errors": 0,
+  "instances": [
+    {
+      "name": "Ali_ShangHai",
+      "kind": "ecs",
+      "probe_cache_present": true,
+      "current_credential_version": true,
+      "observed_at": "2026-11-12T15:01:07.786701000Z",
+      "ipv4_complete": true,
+      "ipv4_source_address_count": 1,
+      "ipv6_complete": true,
+      "ipv6_source_address_count": 1
+    },
+    {
+      "name": "hk-server-nano",
+      "kind": "ecs",
+      "probe_cache_present": true,
+      "current_credential_version": true,
+      "observed_at": "2026-11-12T15:01:07.786701000Z",
+      "ipv4_complete": true,
+      "ipv4_source_address_count": 1,
+      "ipv6_complete": true,
+      "ipv6_source_address_count": 0
+    },
+    {
+      "name": "sg-server-nano",
+      "kind": "ecs",
+      "probe_cache_present": false,
+      "current_credential_version": null,
+      "observed_at": null,
+      "ipv4_complete": false,
+      "ipv4_source_address_count": null,
+      "ipv6_complete": false,
+      "ipv6_source_address_count": null
+    },
+    {
+      "name": "sha-pro",
+      "kind": "swas",
+      "probe_cache_present": true,
+      "current_credential_version": true,
+      "observed_at": "2026-11-12T15:01:11.793565000Z",
+      "ipv4_complete": true,
+      "ipv4_source_address_count": 1,
+      "ipv6_complete": false,
+      "ipv6_source_address_count": null
+    }
+  ],
+  "account_sources": [
+    {
+      "account": "jasperxzy",
+      "sync_status": "failing",
+      "last_error_code": "aliyun_unreachable"
+    },
+    {
+      "account": "winnemjw",
+      "sync_status": "ok",
+      "last_error_code": null
+    }
+  ]
+}

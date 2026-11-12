@@ -21,6 +21,21 @@ var ErrProbeBusy = errors.New("probe_queue_full")
 // Only this typed entry point can create network_probe jobs. Collection workers
 // cannot claim, renew, finish or retry them.
 func (s *Store) EnqueueAgentProbe(ctx context.Context, instanceID, key string, request netprobe.Request, now time.Time) (model.Job, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return model.Job{}, err
+	}
+	defer tx.Rollback()
+	if err = expireNetworkProbes(ctx, tx, now); err != nil {
+		return model.Job{}, err
+	}
+	j, err := enqueueAgentProbe(ctx, tx, instanceID, key, request, now)
+	if err != nil {
+		return j, err
+	}
+	return j, tx.Commit()
+}
+func enqueueAgentProbe(ctx context.Context, tx *sql.Tx, instanceID, key string, request netprobe.Request, now time.Time) (model.Job, error) {
 	if !probeKey.MatchString(key) || request.Validate() != nil {
 		return model.Job{}, netprobe.ErrInvalid
 	}
@@ -28,11 +43,6 @@ func (s *Store) EnqueueAgentProbe(ctx context.Context, instanceID, key string, r
 	if err != nil {
 		return model.Job{}, err
 	}
-	tx, err := s.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return model.Job{}, err
-	}
-	defer tx.Rollback()
 	var agentID, accountID string
 	var version int64
 	var token []byte
@@ -41,9 +51,6 @@ func (s *Store) EnqueueAgentProbe(ctx context.Context, instanceID, key string, r
 		return model.Job{}, ErrAccountDisabled
 	}
 	if err != nil {
-		return model.Job{}, err
-	}
-	if err = expireNetworkProbes(ctx, tx, now); err != nil {
 		return model.Job{}, err
 	}
 	var oldID, oldInstance, oldRaw string
@@ -56,7 +63,7 @@ func (s *Store) EnqueueAgentProbe(ctx context.Context, instanceID, key string, r
 		if err != nil {
 			return j, err
 		}
-		return j, tx.Commit()
+		return j, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return model.Job{}, err
@@ -80,7 +87,7 @@ func (s *Store) EnqueueAgentProbe(ctx context.Context, instanceID, key string, r
 	if err != nil {
 		return j, err
 	}
-	return j, tx.Commit()
+	return j, nil
 }
 func authenticateProbeAgent(ctx context.Context, tx *sql.Tx, token, agentID string) error {
 	if len(token) < 16 || len(token) > 256 {
@@ -107,7 +114,10 @@ func expireNetworkProbes(ctx context.Context, tx *sql.Tx, now time.Time) error {
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE job SET status='failed',error_code='probe_expired',finished_at=?,lease_owner=NULL,lease_until=0 WHERE type='network_probe' AND ((status='running' AND lease_until<=?) OR (status='queued' AND id IN (SELECT job_id FROM network_probe_job WHERE queued_until<=?)))`, timestamp(now), now.Unix(), now.Unix())
-	return err
+	if err != nil {
+		return err
+	}
+	return validateQueuedProbeTargets(ctx, tx, now)
 }
 func (s *Store) ExpireNetworkProbes(ctx context.Context, now time.Time) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
@@ -131,6 +141,10 @@ func (s *Store) ClaimAgentProbe(ctx context.Context, token string, in agentproto
 	}
 	defer tx.Rollback()
 	if err = authenticateProbeAgent(ctx, tx, token, in.AgentID); err != nil {
+		return out, err
+	}
+	hash := sha256.Sum256([]byte(token))
+	if _, err = tx.ExecContext(ctx, "INSERT INTO agent_probe_contact(agent_id,token_hash,last_poll_at) VALUES(?,?,?) ON CONFLICT(agent_id) DO UPDATE SET token_hash=excluded.token_hash,last_poll_at=excluded.last_poll_at", in.AgentID, hash[:], timestamp(now)); err != nil {
 		return out, err
 	}
 	if err = expireNetworkProbes(ctx, tx, now); err != nil {

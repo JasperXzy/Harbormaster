@@ -47,6 +47,9 @@ func (s *Store) SaveScan(ctx context.Context, j model.Job, a model.Account, resu
 			return err
 		}
 	}
+	if _, err = tx.ExecContext(ctx, "UPDATE instance_probe_address SET ipv4_json=NULL,ipv6_json=NULL WHERE instance_id IN (SELECT id FROM instance WHERE account_id=?)", a.ID); err != nil {
+		return err
+	}
 	for _, v := range result.Snapshots {
 		if err = retainNetworkRates(ctx, tx, a.ID, v); err != nil {
 			return err
@@ -68,6 +71,9 @@ func (s *Store) SaveScan(ctx context.Context, j model.Job, a model.Account, resu
 		if v.Kind == "ecs" || v.Kind == "swas" {
 			if _, err = tx.ExecContext(ctx, `INSERT INTO instance(id,account_id,cloud_id,kind,name,region,status,desired_state,updated_at) VALUES(?,?,?,?,?,?,?,'stopped',?)
  ON CONFLICT(id) DO UPDATE SET name=excluded.name,status=excluded.status,updated_at=excluded.updated_at`, v.ID, a.ID, v.Payload["cloud_instance_id"], v.Kind, v.Payload["name"], v.Region, v.Payload["status"], timestamp(now)); err != nil {
+				return err
+			}
+			if err = saveProbeAddresses(ctx, tx, a, v, now); err != nil {
 				return err
 			}
 			if err = saveNetworkHistory(ctx, tx, v); err != nil {

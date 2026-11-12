@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Network management: add cached points, editable public/custom or managed-instance targets, revisioned probe plans and run history. Follow the unique public IP of the selected family; incomplete/stale/ambiguous discovery skips a run. Missed periods are not replayed: schedule one current run and advance from now. Mutations perform no synchronous DNS/cloud/probes; demo remains read-only.
 # 2026-11-12  Agent probe queue: reserve network_probe job type for persisted fixed ICMP/TCP tasks. Agent claim/result protocol is private; job result remains null in this queue phase. No panel submission route yet. Expired executions are terminal and never replayed.
 # 2026-11-12  Instance finance: add cached current-month DescribeInstanceBill rows matched by exact instance ID and product family. Preserve bill type/currency and payable/after-discount decimal strings; empty matches do not mean zero cost. No shared-resource allocation, refund netting or amortization. RAM drafts add bssapi:DescribeInstanceBill.
 # 2026-11-12  Quiet hours/maintenance: user confirmed record-only, no catch-up for non-urgent alerts. Add business-timezone daily settings and UTC maintenance window, persistent notification urgency/suppression metadata, enqueue/claim/pre-send gates. Urgent quota/agent events and explicit tests bypass; already authorized requests cannot be recalled.
@@ -134,10 +135,279 @@ tags:
   - name: notify
     description: 通知渠道、告警规则、通知记录
 
+  - name: network
+    description: 测速点、目标、组合与历史
+
 security:
   - sessionCookie: []
 
 paths:
+  /network/targets:
+    get:
+      tags: [network]
+      operationId: listNetworkTargets
+      summary: List cached network targets
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Cached rows ordered by ID ascending; live keyset pagination. No cloud, DNS or network probe on GET.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/NetworkTarget"}
+                  next_cursor: {type: string, nullable: true}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+    post:
+      tags: [network]
+      operationId: createNetworkTargets
+      summary: Create a network target
+      description: Local creation only. revision must be 0. New enabled plans are due immediately; no synchronous probe.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/NetworkTargetInput"}
+      responses:
+        "409": {description: network_configuration_changed}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/NetworkTarget"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /network/targets/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [network]
+      operationId: getNetworkTarget
+      summary: Get a network target
+      responses:
+        "200":
+          description: Current cached record
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/NetworkTarget"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+    put:
+      tags: [network]
+      operationId: updateNetworkTarget
+      summary: Replace a network target
+      description: Replace configuration with matching revision. Queued runs using old configuration are cancelled; already running measurements may finish. Enabled plans become due now. Optional numeric plan fields reset to documented defaults when omitted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/NetworkTargetInput"}
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/NetworkTarget"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {description: network_configuration_changed}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+    delete:
+      tags: [network]
+      operationId: deleteNetworkTarget
+      summary: Retire a network target
+      description: Retire with history retained; body revision is required. A target referenced by an undeleted plan returns target_in_use. Queued runs are cancelled; running measurements may finish.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              properties:
+                revision: {type: integer, format: int64, minimum: 0}
+      responses:
+        "204": {description: Retired}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {description: network_configuration_changed or target_in_use}
+  /network/plans:
+    get:
+      tags: [network]
+      operationId: listNetworkPlans
+      summary: List cached probe plans
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Cached rows ordered by ID ascending; live keyset pagination. No cloud, DNS or network probe on GET.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/ProbePlan"}
+                  next_cursor: {type: string, nullable: true}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+    post:
+      tags: [network]
+      operationId: createNetworkPlans
+      summary: Create a probe plan
+      description: Local creation only. revision must be 0. New enabled plans are due immediately; no synchronous probe.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ProbePlanInput"}
+      responses:
+        "409": {description: network_configuration_changed}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProbePlan"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /network/plans/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [network]
+      operationId: getNetworkProbePlan
+      summary: Get a probe plan
+      responses:
+        "200":
+          description: Current cached record
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProbePlan"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+    put:
+      tags: [network]
+      operationId: updateNetworkProbePlan
+      summary: Replace a probe plan
+      description: Replace configuration with matching revision. Queued runs using old configuration are cancelled; already running measurements may finish. Enabled plans become due now. Optional numeric plan fields reset to documented defaults when omitted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ProbePlanInput"}
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ProbePlan"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {description: network_configuration_changed}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+    delete:
+      tags: [network]
+      operationId: deleteNetworkProbePlan
+      summary: Retire a probe plan
+      description: Retire with history retained; body revision is required. A target referenced by an undeleted plan returns target_in_use. Queued runs are cancelled; running measurements may finish.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              properties:
+                revision: {type: integer, format: int64, minimum: 0}
+      responses:
+        "204": {description: Retired}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {description: network_configuration_changed or target_in_use}
+  /network/points:
+    get:
+      tags: [network]
+      operationId: listNetworkPoints
+      summary: List cached probe point availability
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Server plus managed instances, cached availability only. Agent availability requires fresh traffic heartbeat and a recent authenticated probe poll for the current token; it does not prove raw socket permissions or reachability.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/ProbePoint"}
+                  next_cursor: {type: string, nullable: true}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /network/plans/{id}/runs:
+    get:
+      tags: [network]
+      operationId: listProbeRuns
+      summary: Read probe runs and skipped attempts
+      description: Cached individual measurements and explicit skipped attempts. No backfilled data or zero-fill for missing periods; does not aggregate different resolved addresses. Retired plan history remains readable.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+        - name: from
+          in: query
+          required: true
+          schema: {type: string, format: date-time}
+        - name: to
+          in: query
+          required: true
+          schema: {type: string, format: date-time}
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Up to seven days, inclusive from/exclusive to, to no later than now. Newest run sequence first; cursor bound to plan and range.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/ProbeRun"}
+                  next_cursor: {type: string, nullable: true}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
   /setup/status:
     get:
       tags: [setup]
@@ -2036,6 +2306,152 @@ components:
             $ref: "#/components/schemas/JobAccepted"
 
   schemas:
+    NetworkTargetInput:
+      type: object
+      required: [revision, name, kind, host, instance_id, tcp_port, enabled]
+      properties:
+        revision: {type: integer, format: int64, minimum: 0}
+        name: {type: string, minLength: 1, maxLength: 100}
+        kind: {type: string, enum: [custom, instance]}
+        host:
+          type: string
+          nullable: true
+          description: Public IP or IDNA domain for custom targets; null for instance targets. No URL, port or credentials. DNS is checked only during execution.
+        instance_id:
+          type: string
+          nullable: true
+          description: Required only for instance targets. Follow the selected family's unique public address from complete discovery of the current credential version, at most ten minutes old; never choose arbitrarily.
+        tcp_port: {type: integer, nullable: true, minimum: 1, maximum: 65535}
+        enabled: {type: boolean}
+    NetworkTarget:
+      allOf:
+        - $ref: "#/components/schemas/NetworkTargetInput"
+        - type: object
+          required: [id, created_at, updated_at]
+          properties:
+            id: {type: string}
+            created_at: {type: string, format: date-time}
+            updated_at: {type: string, format: date-time}
+    ProbePlanInput:
+      type: object
+      required: [revision, name, point_kind, instance_id, target_id, family, method, enabled]
+      properties:
+        revision: {type: integer, format: int64, minimum: 0}
+        name: {type: string, minLength: 1, maxLength: 100}
+        point_kind: {type: string, enum: [server, agent]}
+        instance_id: {type: string, nullable: true, description: Source managed instance for agent point; null for server.}
+        target_id: {type: string}
+        family: {type: string, enum: [ipv4, ipv6]}
+        method: {type: string, enum: [icmp, tcp], description: TCP uses the target's explicit tcp_port; missing port skips execution.}
+        frequency_seconds: {type: integer, minimum: 60, maximum: 86400, default: 300}
+        count: {type: integer, minimum: 1, maximum: 20, default: 5}
+        timeout_ms: {type: integer, minimum: 100, maximum: 5000, default: 2000}
+        interval_ms: {type: integer, minimum: 100, maximum: 5000, default: 1000, description: Wait after each completed attempt; total worst-case measurement budget must not exceed 60 seconds.}
+        enabled: {type: boolean}
+    ProbePlan:
+      allOf:
+        - $ref: "#/components/schemas/ProbePlanInput"
+        - type: object
+          required: [id, created_at, updated_at, next_run_at, last_run]
+          properties:
+            id: {type: string}
+            created_at: {type: string, format: date-time}
+            updated_at: {type: string, format: date-time}
+            next_run_at: {type: string, format: date-time, nullable: true}
+            last_run:
+              type: object
+              nullable: true
+              allOf:
+                - $ref: "#/components/schemas/ProbeRun"
+    ProbePoint:
+      type: object
+      required: [id, name, point_kind, instance_id, available, unavailable_reason, updated_at]
+      properties:
+        id: {type: string, description: server or managed instance ID.}
+        name: {type: string}
+        point_kind: {type: string, enum: [server, agent]}
+        instance_id: {type: string, nullable: true}
+        available: {type: boolean}
+        unavailable_reason: {type: string, nullable: true}
+        updated_at: {type: string, format: date-time, nullable: true}
+    ProbeRun:
+      type: object
+      required: [id, plan_id, plan_revision, target_id, target_revision, point_kind, instance_id, created_at, updated_at, status, skip_reason, job_id, request, result, error]
+      properties:
+        id: {type: string}
+        plan_id: {type: string}
+        plan_revision: {type: integer, format: int64}
+        target_id: {type: string}
+        target_revision: {type: integer, format: int64}
+        point_kind: {type: string, enum: [server, agent]}
+        instance_id: {type: string, nullable: true}
+        created_at: {type: string, format: date-time, description: "Current scheduling attempt, never a fabricated missed-period sample."}
+        updated_at: {type: string, format: date-time}
+        status: {type: string, enum: [queued, running, succeeded, failed, skipped], description: "succeeded means measurement completed; inspect summary loss_percent for reachability."}
+        skip_reason: {type: string, nullable: true, description: "Stable reason such as target_disabled, target_discovery_incomplete, target_discovery_stale, target_no_public_address, target_ambiguous_address, agent_offline, previous_run_pending or probe_queue_full. No RTT is fabricated for skips."}
+        job_id: {type: string, nullable: true}
+        request:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ProbeRequest"
+        result:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ProbeResult"
+        error:
+          type: object
+          nullable: true
+          properties:
+            code: {type: string}
+            message: {type: string}
+
+    ProbeRequest:
+      type: object
+      required: [host, family, method, port, count, timeout_ms, interval_ms]
+      properties:
+        host: {type: string}
+        family: {type: string, enum: [ipv4, ipv6]}
+        method: {type: string, enum: [icmp, tcp]}
+        port: {type: integer, description: Zero for ICMP; explicit destination port for TCP.}
+        count: {type: integer}
+        timeout_ms: {type: integer}
+        interval_ms: {type: integer}
+    ProbeResult:
+      type: object
+      required: [started_at, finished_at, address, resolved_addresses, samples, summary]
+      properties:
+        started_at: {type: string, format: date-time}
+        finished_at: {type: string, format: date-time}
+        address: {type: string, description: Selected address; empty if execution failed before resolution.}
+        resolved_addresses:
+          type: array
+          items: {type: string}
+        samples:
+          type: array
+          items:
+            type: object
+            required: [sequence, started_at, rtt_ms, error_code]
+            properties:
+              sequence: {type: integer}
+              started_at: {type: string, format: date-time}
+              rtt_ms: {type: number, nullable: true, minimum: 0}
+              error_code: {type: string, nullable: true}
+        summary:
+          type: object
+          nullable: true
+          description: Recomputed from raw attempts. Local failure has no summary; complete 100% failure has null RTT statistics. Jitter uses only adjacent successful samples, never across failures. TCP loss_percent is failed connection attempts, not measured IP packet loss.
+          required: [attempts, succeeded, loss_percent, minimum_ms, maximum_ms, average_ms, jitter_ms]
+          properties:
+            attempts: {type: integer}
+            succeeded: {type: integer}
+            loss_percent: {type: number, minimum: 0, maximum: 100}
+            minimum_ms: {type: number, nullable: true}
+            maximum_ms: {type: number, nullable: true}
+            average_ms: {type: number, nullable: true}
+            jitter_ms: {type: number, nullable: true}
+
     ErrorResponse:
       type: object
       required: [error]
@@ -2127,7 +2543,7 @@ components:
           nullable: true
           description: |
             成功时的结果，结构取决于 type：`permission_check` 为 PermissionCheck；
-            `refresh`、`telegram_test`、`heartbeat_test`、`network_probe` 为 null。
+            `refresh`、`telegram_test`、`heartbeat_test`、`network_probe` 为 null；测速结果见 `/network/plans/{id}/runs`。
             `instance_power` 为 PowerJobResult（任务未完成时也保留请求与执行阶段）。
           additionalProperties: true
 
