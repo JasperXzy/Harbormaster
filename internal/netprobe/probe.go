@@ -1,4 +1,4 @@
-// Package netprobe executes only built-in ICMP echo and TCP connect probes.
+// Package netprobe executes built-in ICMP echo/TCP probes and bounded traces.
 // It never invokes a process, sends application data, or accepts a script.
 package netprobe
 
