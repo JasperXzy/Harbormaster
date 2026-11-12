@@ -92,4 +92,14 @@ func TestDemoTracesExposeReadOnlySyntheticSummaryDetailAndExport(t *testing.T) {
 	if err = s.DB.QueryRow("SELECT count(*) FROM network_probe_job").Scan(&count); err != nil || count != 0 {
 		t.Fatal("demo reads created real tasks", count, err)
 	}
+	for _, kind := range []string{"trace-schedule", "trace-snapshots?" + url.Values{"from": {now.Add(-time.Hour).Format(time.RFC3339Nano)}, "to": {now.Format(time.RFC3339Nano)}}.Encode()} {
+		w = call("GET", "/network/plans/demo-plan-server/"+kind, "", cookie, "")
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body)
+		}
+	}
+	w = call("PUT", "/network/plans/demo-plan-server/trace-schedule", `{"revision":1,"enabled":true,"notify_changes":true}`, cookie, session["csrf_token"])
+	if w.Code != 501 {
+		t.Fatal("demo enabled real snapshot schedule", w.Code, w.Body)
+	}
 }

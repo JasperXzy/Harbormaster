@@ -18,6 +18,18 @@ type TracePreconditionError struct{ Code string }
 func (e *TracePreconditionError) Error() string { return e.Code }
 
 func (s *Store) SubmitTrace(ctx context.Context, in model.TraceSubmission, now time.Time) (model.TraceAccepted, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return model.TraceAccepted{}, err
+	}
+	defer tx.Rollback()
+	out, err := submitTrace(ctx, tx, in, now)
+	if err != nil {
+		return out, err
+	}
+	return out, tx.Commit()
+}
+func submitTrace(ctx context.Context, tx *sql.Tx, in model.TraceSubmission, now time.Time) (model.TraceAccepted, error) {
 	var out model.TraceAccepted
 	if !in.Validate() {
 		return out, netprobe.ErrInvalid
@@ -26,11 +38,6 @@ func (s *Store) SubmitTrace(ctx context.Context, in model.TraceSubmission, now t
 	if err != nil {
 		return out, netprobe.ErrInvalid
 	}
-	tx, err := s.DB.BeginTx(ctx, nil)
-	if err != nil {
-		return out, err
-	}
-	defer tx.Rollback()
 	var oldJob string
 	var oldSeq sql.NullInt64
 	var oldInput sql.NullString
@@ -39,7 +46,7 @@ func (s *Store) SubmitTrace(ctx context.Context, in model.TraceSubmission, now t
 		if !oldSeq.Valid || oldInput.String != string(input) {
 			return out, ErrConflict
 		}
-		return model.TraceAccepted{JobID: oldJob, TraceID: strconv.FormatInt(oldSeq.Int64, 10)}, tx.Commit()
+		return model.TraceAccepted{JobID: oldJob, TraceID: strconv.FormatInt(oldSeq.Int64, 10)}, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return out, err
@@ -122,7 +129,7 @@ func (s *Store) SubmitTrace(ctx context.Context, in model.TraceSubmission, now t
 		return out, err
 	}
 	out = model.TraceAccepted{JobID: job.ID, TraceID: strconv.FormatInt(seq, 10)}
-	return out, tx.Commit()
+	return out, nil
 }
 
 // Persist the small list projection in the same transaction as the raw result.

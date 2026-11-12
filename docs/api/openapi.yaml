@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-13  Trace snapshots: add per-probe-plan daily trace schedules and bounded snapshot history/comparisons. User chose business-timezone 03:00 default, no historical backfill, one current catch-up; compare only complete reached paths with unchanged target IP and unique complete per-TTL ASN evidence, coalescing adjacent ASNs. Different ASN database versions establish a new starting point without an alert. Add optional non-urgent network_route_change event records; Telegram delivery remains separate.
 # 2026-11-13  Trace enrichment: persist background offline ASN/geolocation, bounded public-only PTR, per-TTL response statistics and evidence-based network labels separately from immutable agent reports. Detail/export read frozen results and dataset attribution; history adds enrichment_status only. Missing responses/ASN remain unknown; CN2 tier, Alibaba cross-border status and detour stay unconfirmed. Restored unfinished enrichment is cancelled with old work.
 # 2026-11-13  Offline IP database: add cached /network/ipdb status with source attribution, dataset versions/sizes and process memory evidence. User chose bundled ASN+country, optional city. Updates fetch monthly public DB-IP files in the background; record lookups stay offline. User approved an evidence-only label policy for the next trace integration: CN2 GIA/GT and Alibaba cross-border status stay unconfirmed; estimated geolocation does not prove detour.
 # 2026-11-13  Trace panel: add async POST /network/traces, bounded summary history, detail and text export. Submission snapshots point/target/request, checks source trace polling separately from ordinary probes and rechecks queued managed targets. GET reads stored data only; no synchronous DNS/cloud/probing. Per-hop absence is unknown, TCP reset means reached but closed. Demo reads are synthetic.
@@ -161,6 +162,71 @@ paths:
               schema: {$ref: "#/components/schemas/IPDatabaseStatus"}
         "401": {$ref: "#/components/responses/Unauthorized"}
         "503": {description: ipdb_unavailable}
+  /network/plans/{id}/trace-schedule:
+    get:
+      tags: [network]
+      operationId: getTraceSchedule
+      summary: Read a plan's daily trace settings
+      description: Default is disabled with revision 0. Active requires both schedule and probe plan enabled. Timezone is the business timezone last applied by the scheduler; next_run_at is null while inactive.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Cached schedule with no network operations
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TraceSchedule"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+    put:
+      tags: [network]
+      operationId: saveTraceSchedule
+      summary: Configure a daily trace snapshot
+      description: Session and CSRF required. Inherit the probe plan source, target, family and method; use the target's TCP port. Enabling requires an enabled plan. New or edited settings and plan edits start at the next daily time; downtime misses schedule one current trace and advance to the next daily time. Pausing, deletion or edits cancel queued old traces; running measurements can finish without stale alerts. No synchronous DNS or packets. Demo is read-only.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/TraceScheduleInput"}
+      responses:
+        "200":
+          description: Saved settings
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TraceSchedule"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {description: network_configuration_changed or plan_disabled}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /network/plans/{id}/trace-snapshots:
+    get:
+      tags: [network]
+      operationId: listTraceSnapshots
+      summary: List scheduled trace snapshots and comparisons
+      description: At most 31 days by actual scheduling time; inclusive from and exclusive to, no future to. Newest sequence first, cursor bound to plan and range. Includes skipped opportunities; never fabricate missed history. Retired plans retain history. Comparisons and notifications are generated in the background, never by GET. A comparison is with the immediately preceding opportunity, including gaps; manual traces do not enter this sequence.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+        - {name: from, in: query, required: true, schema: {type: string, format: date-time}}
+        - {name: to, in: query, required: true, schema: {type: string, format: date-time}}
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Stored opportunities and comparisons
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/TraceSnapshot"}}
+                  next_cursor: {type: string, nullable: true}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
   /network/traces:
     post:
       tags: [network]
@@ -2228,7 +2294,7 @@ paths:
       tags: [notify]
       operationId: listAlertRules
       summary: 内置告警规则
-      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss and network_unreachable. Usage/forecast rules are not returned until their metering source and policy are available.
+      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable and network_route_change. Usage/forecast rules are not returned until their metering source and policy are available.
       responses:
         "200":
           description: 告警规则
@@ -2523,6 +2589,76 @@ components:
         go_heap_alloc_bytes: {type: integer, format: int64, description: Current total Go heap; excludes mmap.}
         process_peak_rss_bytes: {type: integer, format: int64, nullable: true, description: OS peak process resident memory; not component-only or current RSS. Null if unavailable.}
         mapped_file_bytes: {type: integer, format: int64, description: Total sizes of mapped dataset files; not a resident-memory measurement.}
+    TraceScheduleInput:
+      type: object
+      additionalProperties: false
+      required: [revision, enabled, notify_changes]
+      properties:
+        revision: {type: integer, format: int64, minimum: 0}
+        enabled: {type: boolean}
+        notify_changes: {type: boolean, description: Explicit opt-in to change events; also requires the global network_route_change rule. No recovery event is invented.}
+        time_of_day: {type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$', default: '03:00'}
+        max_hops: {type: integer, minimum: 1, maximum: 30, default: 30}
+        count: {type: integer, minimum: 1, maximum: 5, default: 3}
+        timeout_ms: {type: integer, minimum: 100, maximum: 2000, default: 1000}
+      description: Same total packet budget as a manual TraceSubmission. A daily civil time uses its first occurrence; when absent at a timezone transition use the first valid minute after it. Never run twice in a repeated hour.
+    TraceSchedule:
+      type: object
+      required: [plan_id, revision, enabled, notify_changes, time_of_day, max_hops, count, timeout_ms, active, timezone, updated_at, next_run_at]
+      properties:
+        plan_id: {type: string}
+        revision: {type: integer, format: int64}
+        enabled: {type: boolean}
+        notify_changes: {type: boolean}
+        time_of_day: {type: string}
+        max_hops: {type: integer}
+        count: {type: integer}
+        timeout_ms: {type: integer}
+        active: {type: boolean}
+        timezone: {type: string}
+        updated_at: {type: string, format: date-time, nullable: true}
+        next_run_at: {type: string, format: date-time, nullable: true}
+    TraceSnapshot:
+      type: object
+      required: [id, plan_id, plan_name, plan_revision, schedule_revision, target_id, target_revision, due_at, created_at, updated_at, status, skip_reason, trace_id, job_id, notify_changes, comparison]
+      properties:
+        id: {type: string}
+        plan_id: {type: string}
+        plan_name: {type: string, description: Frozen at scheduling.}
+        plan_revision: {type: integer, format: int64}
+        schedule_revision: {type: integer, format: int64}
+        target_id: {type: string}
+        target_revision: {type: integer, format: int64}
+        due_at: {type: string, format: date-time, description: Original due opportunity; not a fabricated measurement timestamp.}
+        created_at: {type: string, format: date-time, description: Actual scheduling time.}
+        updated_at: {type: string, format: date-time}
+        status: {type: string, enum: [queued, running, succeeded, failed, skipped]}
+        skip_reason: {type: string, nullable: true}
+        trace_id: {type: string, nullable: true, description: Read raw result/enrichment/export through the existing trace endpoints.}
+        job_id: {type: string, nullable: true}
+        notify_changes: {type: boolean, description: Frozen opt-in when this opportunity was created.}
+        comparison: {$ref: "#/components/schemas/TraceComparison"}
+    TraceComparison:
+      type: object
+      required: [status, reason, previous_snapshot_id, previous_trace_id, address, previous_address, asns, previous_asns, asn_database, previous_asn_database, notification_id]
+      properties:
+        status: {type: string, enum: [waiting_result, waiting_enrichment, baseline, unchanged, changed, not_comparable]}
+        reason: {type: string, nullable: true, description: "Stable reason: first_snapshot, snapshot_skipped, measurement_failed, enrichment_unavailable, incomplete_responses, unknown_asn, multiple_asns, previous_not_comparable, configuration_changed, target_changed, asn_database_changed, or backup_restored."}
+        previous_snapshot_id: {type: string, nullable: true}
+        previous_trace_id: {type: string, nullable: true}
+        address: {type: string, nullable: true}
+        previous_address: {type: string, nullable: true}
+        asns: {type: array, items: {type: integer, format: int64}, description: Complete observed-IP ASN sequence with adjacent equal values coalesced; never claimed as BGP AS path. Empty if evidence is insufficient.}
+        previous_asns: {type: array, items: {type: integer, format: int64}}
+        asn_database:
+          type: object
+          nullable: true
+          allOf: [{$ref: "#/components/schemas/IPDatabaseDataset"}]
+        previous_asn_database:
+          type: object
+          nullable: true
+          allOf: [{$ref: "#/components/schemas/IPDatabaseDataset"}]
+        notification_id: {type: string, nullable: true, description: Linked event record when current settings authorize it; not proof of delivery. Stale completed observations are recorded without new delivery.}
     TraceCapability:
       type: object
       required: [available, unavailable_reason, methods, last_poll_at]
@@ -4745,7 +4881,7 @@ components:
 
     AlertRuleKey:
       type: string
-      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable]
+      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable, network_route_change]
       description: 内置规则；仅返回当前已实现且有可用来源的规则。
 
     Severity:
@@ -4754,12 +4890,12 @@ components:
 
     AlertRuleParams:
       type: object
-      description: 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient 和 instance_public_ip_changed 使用空对象，无额外阈值。公网 IP 变化按每次有效事件记录，不产生恢复通知。
+      description: 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient、instance_public_ip_changed 和 network_route_change 使用空对象，无额外阈值。公网 IP 和线路变化按每次有效事件记录，不产生恢复通知；线路还需要组合中明确开启 notify_changes。
       properties:
         probe_thresholds:
           type: array
           maxItems: 100
-          description: Network rules only. network_latency evaluates only listed plans with an explicit latency_ms; no latency limit is guessed. network_loss and network_unreachable apply to all enabled plans by default; entries override or disable individual plans. Empty list uses those defaults. Retired plan entries remain dormant. Threshold edits restart evidence windows without reinterpreting old runs. Disabling monitoring or replacing a point/target/protocol closes the old condition silently; it is not a recovery.
+          description: Latency/loss/unreachable rules only. network_latency evaluates only listed plans with an explicit latency_ms; no latency limit is guessed. network_loss and network_unreachable apply to all enabled plans by default; entries override or disable individual plans. Empty list uses those defaults. Retired plan entries remain dormant. Threshold edits restart evidence windows without reinterpreting old runs. Disabling monitoring or replacing a point/target/protocol closes the old condition silently; it is not a recovery.
           items:
             type: object
             required: [plan_id]
@@ -4780,7 +4916,7 @@ components:
           minimum: 1
           maximum: 1000
           default: 3
-          description: Network rules only. Consecutive valid healthy measurements required for recovery. Skipped/missing/local-failure samples interrupt counters and never imply recovery.
+          description: Latency/loss/unreachable rules only. Consecutive valid healthy measurements required for recovery. Skipped/missing/local-failure samples interrupt counters and never imply recovery.
         balance_thresholds:
           type: array
           maxItems: 100

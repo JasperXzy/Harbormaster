@@ -87,6 +87,6 @@ internal/traceinfo 7.697s
 
 ## 后续已确认的需求
 
-用户已确认下一阶段按每个启用的测速组合单独开启快照，配置业务时区每日时间、默认 03:00；停服不补历史，恢复仅一次当前快照。线路变化仅比较目标 IP 相同、均到达目标、每 TTL 的 ASN 唯一且完整的结果，合并连续相同 ASN 后比较；缺测、未知或多 ASN 为不可比较。此文所在阶段尚未实现定时快照/变化检测或双向追踪。
+用户已确认下一阶段按每个启用的测速组合单独开启快照，配置业务时区每日时间、默认 03:00；停服不补历史，恢复仅一次当前快照。线路变化仅比较目标 IP 相同、均到达目标、每 TTL 的 ASN 唯一且完整的结果，合并连续相同 ASN 后比较；缺测、未知或多 ASN 为不可比较。此文最初阶段尚未实现定时快照/变化检测；后续实现见[每日快照](trace-snapshots.md)，双向追踪仍独立记录。
 
 归属依据：[DB-IP Lite](https://db-ip.com/db/lite.php)，以及 [AS4809](https://rdap.apnic.net/autnum/4809)、[AS4134](https://rdap.apnic.net/autnum/4134)、[AS9929](https://rdap.apnic.net/autnum/9929)、[AS4837](https://rdap.apnic.net/autnum/4837)、[AS58453](https://rdap.apnic.net/autnum/58453)、[AS45102](https://rdap.apnic.net/autnum/45102) 的 APNIC 只读注册记录；实际核对过程已记录在离线库文档。

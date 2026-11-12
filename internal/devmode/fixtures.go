@@ -107,7 +107,7 @@ func makeFixtures(now time.Time, loc *time.Location) fixtures {
 	f.Packages = []object{{"id": "demo-package", "cloud_id": "cbwp-demo-only", "name": "sg-share (demo)", "account_id": "demo-account-1", "region_id": "ap-southeast-1", "bandwidth_mbps": 2000, "kind": "cbwp_dominant_traffic", "settled_by_cdt": true, "members": []object{{"eip_address": "192.0.2.10", "instance_id": "demo-sin", "instance_name": "sin-pro (demo)"}}, "today_rx_bytes": int64(3 << 30), "today_tx_bytes": int64(2 << 30), "today_metered_bytes": int64(3 << 30), "dominant_direction": "inbound", "updated_at": stamp}}
 	f.Packages = append(f.Packages, object{"id": "demo-package-hk", "cloud_id": "cbwp-hk-demo-only", "name": "hk-share (demo)", "account_id": "demo-account-1", "region_id": "cn-hongkong", "bandwidth_mbps": 2000, "kind": "cbwp_dominant_traffic", "settled_by_cdt": true, "members": []object{{"eip_address": "192.0.2.20", "instance_id": "demo-hkg", "instance_name": "hkg-pro (demo)"}}, "today_rx_bytes": nil, "today_tx_bytes": nil, "today_metered_bytes": nil, "dominant_direction": nil, "updated_at": nil})
 	f.Notifications = []object{{"id": "demo-notification", "created_at": stamp, "kind": "test", "severity": "info", "rule_key": nil, "title": "M0 demo placeholder", "body": "Synthetic data; no notification was sent.", "account_id": nil, "instance_id": nil, "probe_plan_id": nil, "delivery_status": "not_sent"}}
-	for _, key := range []string{"cdt_usage", "cdt_forecast_exceed", "account_api_failure", "agent_offline", "cdt_official_unavailable", "instance_expiring", "spec_bandwidth_insufficient", "instance_public_ip_changed", "balance_low", "network_latency", "network_loss", "network_unreachable"} {
+	for _, key := range []string{"cdt_usage", "cdt_forecast_exceed", "account_api_failure", "agent_offline", "cdt_official_unavailable", "instance_expiring", "spec_bandwidth_insufficient", "instance_public_ip_changed", "balance_low", "network_latency", "network_loss", "network_unreachable", "network_route_change"} {
 		params := object{}
 		switch key {
 		case "network_latency", "network_loss", "network_unreachable":
@@ -130,7 +130,7 @@ func makeFixtures(now time.Time, loc *time.Location) fixtures {
 		case "account_api_failure", "cdt_official_unavailable":
 			params["consecutive_failures"] = 3
 		}
-		f.Rules = append(f.Rules, object{"key": key, "enabled": true, "params": params, "urgent": key != "account_api_failure" && key != "instance_expiring" && key != "spec_bandwidth_insufficient" && key != "instance_public_ip_changed" && key != "balance_low" && !model.NetworkAlertRule(key)})
+		f.Rules = append(f.Rules, object{"key": key, "enabled": true, "params": params, "urgent": key != "account_api_failure" && key != "instance_expiring" && key != "spec_bandwidth_insufficient" && key != "instance_public_ip_changed" && key != "balance_low" && key != "network_route_change" && !model.NetworkAlertRule(key)})
 	}
 	return f
 }

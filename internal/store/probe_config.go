@@ -74,6 +74,9 @@ func cancelQueuedProbeRuns(ctx context.Context, tx *sql.Tx, column, id string, n
 	_, err := tx.ExecContext(ctx, "UPDATE job SET status='failed',error_code='probe_configuration_changed',finished_at=?,lease_owner=NULL,lease_until=0 WHERE status='queued' AND id IN (SELECT job_id FROM probe_plan_run WHERE "+column+"=?)", timestamp(now), id)
 	if err == nil && column == "target_id" {
 		_, err = tx.ExecContext(ctx, "UPDATE job SET status='failed',error_code='probe_configuration_changed',finished_at=?,lease_owner=NULL,lease_until=0 WHERE status='queued' AND id IN (SELECT job_id FROM network_trace_run WHERE target_id=?)", timestamp(now), id)
+		if err == nil {
+			err = cancelPendingNotifications(ctx, tx, "rule_key='network_route_change' AND probe_plan_id IN (SELECT id FROM probe_plan WHERE target_id=?)", []any{id}, "probe_configuration_changed", now)
+		}
 	}
 	return err
 }
@@ -269,6 +272,9 @@ func (s *Store) SaveProbePlan(ctx context.Context, id string, in model.ProbePlan
 		if err = cancelQueuedProbeRuns(ctx, tx, "plan_id", id, now); err != nil {
 			return in, err
 		}
+		if err = resetTraceSchedule(ctx, tx, id, now); err != nil {
+			return in, err
+		}
 	}
 	in.Revision++
 	in.UpdatedAt = now.UTC()
@@ -312,6 +318,9 @@ func (s *Store) DeleteProbePlan(ctx context.Context, id string, revision int64, 
 		return err
 	}
 	if err = cancelQueuedProbeRuns(ctx, tx, "plan_id", id, now); err != nil {
+		return err
+	}
+	if err = cancelTraceSnapshotWork(ctx, tx, id, now); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE probe_plan SET deleted=1,enabled=0,revision=revision+1 WHERE id=?", id); err != nil {

@@ -11,11 +11,14 @@ import (
 )
 
 func (s *Store) BusinessLocation(ctx context.Context, fallback string) (*time.Location, error) {
+	return businessLocation(ctx, s.DB, fallback)
+}
+func businessLocation(ctx context.Context, q queryRower, fallback string) (*time.Location, error) {
 	if fallback == "" {
 		fallback = "Asia/Shanghai"
 	}
 	zone := fallback
-	err := s.DB.QueryRowContext(ctx, "SELECT value FROM app_meta WHERE key='business_timezone'").Scan(&zone)
+	err := q.QueryRowContext(ctx, "SELECT value FROM app_meta WHERE key='business_timezone'").Scan(&zone)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
 	}

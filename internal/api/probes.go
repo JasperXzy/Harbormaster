@@ -107,6 +107,9 @@ func probeList[T any](w http.ResponseWriter, items []T, limit int, c probeCursor
 	writeJSON(w, 200, map[string]any{"items": items, "next_cursor": next})
 }
 func (p *productionPanel) networkProbes(w http.ResponseWriter, r *http.Request, path string) bool {
+	if p.networkTraceSnapshots(w, r, path) {
+		return true
+	}
 	if path == "/network/ipdb" {
 		if r.Method != "GET" {
 			writeError(w, 405, "method_not_allowed")

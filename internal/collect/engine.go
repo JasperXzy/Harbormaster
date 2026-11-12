@@ -133,6 +133,9 @@ func (e *Engine) Schedule(ctx context.Context) error {
 	if err := e.Store.ScheduleProbePlans(ctx, time.Now().UTC()); err != nil {
 		return err
 	}
+	if err := e.Store.ScheduleTraceSnapshots(ctx, e.Timezone, time.Now().UTC()); err != nil {
+		return err
+	}
 	if err := e.Store.ScheduleScans(ctx, e.scanInterval(), time.Now().UTC()); err != nil {
 		return err
 	}

@@ -174,6 +174,9 @@ func (h *handler) networkProbes(w http.ResponseWriter, r *http.Request, path str
 			respond(w, 200, plan)
 			return true
 		}
+		if len(parts) == 3 && h.demoTraceSnapshots(w, r, parts[2], plan, now) {
+			return true
+		}
 		if len(parts) == 3 && parts[2] == "runs" {
 			from, e1 := time.Parse(time.RFC3339Nano, r.URL.Query().Get("from"))
 			to, e2 := time.Parse(time.RFC3339Nano, r.URL.Query().Get("to"))
