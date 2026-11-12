@@ -48,6 +48,15 @@ func TestProductionBootstrapAndResetDoNotLogCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, query := range []string{
+		"UPDATE passkey_state SET password_enabled=0 WHERE id=1",
+		"INSERT INTO passkey(id,credential_id,name,credential_json,created_at) VALUES('retained-key',x'01','fixture','{}','now')",
+		"INSERT INTO passkey_ceremony(id,kind,binding_hash,epoch,name,session_json,expires_at) SELECT 'pending','login',zeroblob(32),epoch,'','{}','2099-01-01T00:00:00Z' FROM passkey_state WHERE id=1",
+	} {
+		if _, err = s.DB.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+	}
 	s.Close()
 	password := "cli-reset-password-not-a-real-secret"
 	var resetLogs bytes.Buffer
@@ -65,6 +74,20 @@ func TestProductionBootstrapAndResetDoNotLogCredentials(t *testing.T) {
 	var n int
 	if err = s.DB.QueryRow("SELECT count(*) FROM session").Scan(&n); err != nil || n != 0 {
 		t.Fatal("reset retained sessions", err)
+	}
+	if err = s.DB.QueryRow("SELECT count(*) FROM passkey_ceremony").Scan(&n); err != nil || n != 0 {
+		t.Fatal("reset retained challenges", err)
+	}
+	if err = s.DB.QueryRow("SELECT count(*) FROM passkey WHERE id='retained-key'").Scan(&n); err != nil || n != 1 {
+		t.Fatal("reset removed passkey", err)
+	}
+	var enabled bool
+	if err = s.DB.QueryRow("SELECT password_enabled FROM passkey_state WHERE id=1").Scan(&enabled); err != nil || !enabled {
+		t.Fatal("reset left password disabled", err)
+	}
+	var hash string
+	if err = s.DB.QueryRow("SELECT password_hash FROM administrator WHERE id=1").Scan(&hash); err != nil || !security.VerifyPassword(hash, []byte(password)) {
+		t.Fatal("reset password not persisted", err)
 	}
 }
 

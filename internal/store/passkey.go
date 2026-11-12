@@ -20,9 +20,10 @@ type Passkey struct {
 	CredentialJSON string  `json:"-"`
 }
 type PasskeySnapshot struct {
-	UserHandle []byte
-	Epoch      int64
-	Keys       []Passkey
+	PasswordEnabled bool
+	UserHandle      []byte
+	Epoch           int64
+	Keys            []Passkey
 }
 type PasskeyCeremony struct {
 	ID, Kind, Name, SessionJSON string
@@ -38,7 +39,7 @@ func (s *Store) Passkeys(ctx context.Context) (PasskeySnapshot, error) {
 		return result, err
 	}
 	defer tx.Rollback()
-	if err = tx.QueryRowContext(ctx, "SELECT user_handle,epoch FROM passkey_state WHERE id=1").Scan(&result.UserHandle, &result.Epoch); err != nil {
+	if err = tx.QueryRowContext(ctx, "SELECT user_handle,epoch,password_enabled FROM passkey_state WHERE id=1").Scan(&result.UserHandle, &result.Epoch, &result.PasswordEnabled); err != nil {
 		return result, err
 	}
 	rows, err := tx.QueryContext(ctx, "SELECT id,name,created_at,last_used_at,credential_id,credential_json FROM passkey ORDER BY created_at,id")
@@ -196,7 +197,7 @@ func (s *Store) CompletePasskeyLogin(ctx context.Context, c PasskeyCeremony, old
 	}
 	return tx.Commit()
 }
-func (s *Store) DeletePasskey(ctx context.Context, id string, binding []byte, now time.Time) error {
+func (s *Store) DeletePasskey(ctx context.Context, id string, binding []byte, eligible map[string]string, now time.Time) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -204,6 +205,26 @@ func (s *Store) DeletePasskey(ctx context.Context, id string, binding []byte, no
 	defer tx.Rollback()
 	if err = validPasskeySession(ctx, tx, binding, now); err != nil {
 		return err
+	}
+	var count int
+	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM passkey WHERE id=?", id).Scan(&count); err != nil {
+		return err
+	}
+	if count == 0 {
+		return ErrNotFound
+	}
+	var enabled bool
+	if err = tx.QueryRowContext(ctx, "SELECT password_enabled FROM passkey_state WHERE id=1").Scan(&enabled); err != nil {
+		return err
+	}
+	if !enabled {
+		ok, err := hasEligiblePasskey(ctx, tx, eligible, id)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return ErrLastPasskey
+		}
 	}
 	res, err := tx.ExecContext(ctx, "DELETE FROM passkey WHERE id=?", id)
 	if err != nil {

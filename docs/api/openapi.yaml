@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Password login policy: PATCH /session/password changes future password authentication only, with session+CSRF. Disabling requires a registered Passkey for the current RP; deleting its last eligible key is refused while disabled. User-approved CLI reset enables password login, clears sessions/challenges and retains Passkeys.
 # 2026-11-12  Agent quality correction: delayed reports no longer overwrite a detected backward clock jump with stale. History independently checks current and previous sample order, including legacy records.
 # 2026-11-12  Agent network history: add raw cumulative samples with nullable same-epoch interval deltas and monotonic-duration average rates. Preserve receipt quality, gaps and unavailable reasons; never bridge epochs or prorate a boundary-crossing interval into hourly/range totals.
 # 2026-11-12  Cloud network history: persist complete provider minute samples and expose GET /instances/{instance_id}/cloud-network-history with explicit <=7-day range and chronological keyset pagination. Gaps are missing observations, never zero; no byte integration or agent/cloud blending.
@@ -218,7 +219,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Session"
         "401":
-          description: 密码不正确（`invalid_credentials`）
+          description: 密码不正确或密码登录已关闭（`invalid_credentials`）
           content:
             application/json:
               schema:
@@ -244,6 +245,45 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /session/password:
+    patch:
+      tags: [session]
+      operationId: setPasswordLoginEnabled
+      summary: 开关密码登录
+      description: >-
+        只影响后续密码认证，保留现有会话。重新开启使用原密码，不修改密码。
+        关闭前要求至少一个已注册且 RP 与当前 HTTPS public_url 匹配的 Passkey，
+        与凭据删除在事务中防止竞态；不满足时返回 409 passkey_required。
+        丢失设备后使用 CLI reset-password，重新启用密码、清除所有会话和挑战、保留 Passkey。
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [enabled]
+              properties:
+                enabled: {type: boolean}
+      responses:
+        "200":
+          description: 已持久保存开关。
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [password_enabled]
+                properties:
+                  password_enabled: {type: boolean}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "415": {$ref: "#/components/responses/UnsupportedMediaType"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+
   /session/methods:
     get:
       tags: [session]
@@ -252,7 +292,7 @@ paths:
       security: []
       responses:
         "200":
-          description: 密码开关当前为 true；Passkey 需配置 HTTPS public_url 且已注册凭据。未初始化时两项均为 false。
+          description: 密码开关为持久设置；Passkey 需配置 HTTPS public_url 且已注册当前 RP 的凭据。未初始化时两项均为 false。
           content:
             application/json:
               schema:
@@ -292,12 +332,13 @@ paths:
       tags: [session]
       operationId: deletePasskey
       summary: 删除 Passkey
-      description: 立即阻止后续使用该凭据完成登录；不删除已建立的会话。密码登录本阶段仍启用。
+      description: 立即阻止后续使用该凭据完成登录；不删除已建立的会话。关闭密码登录时，不能删除当前 RP 的最后一个可用 Passkey（409 last_passkey）。
       security:
         - sessionCookie: []
           csrfToken: []
       responses:
         "204": {description: 已删除}
+        "409": {$ref: "#/components/responses/Conflict"}
         "401": {$ref: "#/components/responses/Unauthorized"}
         "403": {$ref: "#/components/responses/Forbidden"}
         "404": {$ref: "#/components/responses/NotFound"}

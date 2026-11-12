@@ -80,7 +80,7 @@ func TestPasskeyCommitRechecksRevocationAndSnapshot(t *testing.T) {
 			}
 			switch change {
 			case "delete":
-				err = s.DeletePasskey(ctx, k.ID, c.BindingHash, now)
+				err = s.DeletePasskey(ctx, k.ID, c.BindingHash, nil, now)
 			case "counter":
 				err = s.CompletePasskeyLogin(ctx, consumed, k, `{"publicKey":"fixture","counter":2}`, bytes.Repeat([]byte{3}, 32), now.Add(time.Hour), now)
 			case "reset":

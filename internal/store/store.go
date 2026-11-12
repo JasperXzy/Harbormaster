@@ -148,7 +148,7 @@ func (s *Store) ResetPassword(ctx context.Context, hash string) error {
 	if _, err = tx.ExecContext(ctx, "DELETE FROM passkey_ceremony"); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE passkey_state SET epoch=epoch+1 WHERE id=1"); err != nil {
+	if _, err = tx.ExecContext(ctx, "UPDATE passkey_state SET epoch=epoch+1,password_enabled=1 WHERE id=1"); err != nil {
 		return err
 	}
 	return tx.Commit()

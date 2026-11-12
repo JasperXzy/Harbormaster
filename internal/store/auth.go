@@ -87,6 +87,7 @@ func (s *Store) CompleteSetup(ctx context.Context, token []byte, passwordHash, t
 
 // CreateSession rechecks the password hash under the write lock: a login that
 // verified the old hash cannot race a password reset and restore a session.
+// Password policy is checked in that same transaction.
 func (s *Store) CreateSession(ctx context.Context, verifiedHash string, sessionHash []byte, expiry, now time.Time) error {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
@@ -97,7 +98,7 @@ func (s *Store) CreateSession(ctx context.Context, verifiedHash string, sessionH
 		return err
 	}
 	res, err := tx.ExecContext(ctx, `INSERT INTO session(token_hash,expires_at)
- SELECT ?,? WHERE EXISTS(SELECT 1 FROM administrator WHERE id=1 AND password_hash=?)`, sessionHash, timestamp(expiry), verifiedHash)
+ SELECT ?,? WHERE EXISTS(SELECT 1 FROM administrator WHERE id=1 AND password_hash=?) AND EXISTS(SELECT 1 FROM passkey_state WHERE password_enabled=1)`, sessionHash, timestamp(expiry), verifiedHash)
 	if err != nil {
 		return err
 	}

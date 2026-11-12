@@ -78,8 +78,7 @@ func (p *productionPanel) publicPasskeys(w http.ResponseWriter, r *http.Request,
 			passkeyError(w, err)
 			return true
 		}
-		_, rpErr := p.passkeyRP()
-		writeJSON(w, 200, map[string]bool{"password_enabled": initialized, "passkey_enabled": initialized && rpErr == nil && len(state.Keys) > 0})
+		writeJSON(w, 200, map[string]bool{"password_enabled": initialized && state.PasswordEnabled, "passkey_enabled": initialized && len(p.eligiblePasskeys(state)) > 0})
 		return true
 	}
 	if path != "/session/passkey/options" && path != "/session/passkey/finish" {
@@ -136,7 +135,12 @@ func (p *productionPanel) passkeys(w http.ResponseWriter, r *http.Request, path,
 			writeError(w, 404, "not_found")
 			return true
 		}
-		if err := p.s.DeletePasskey(r.Context(), id, passkeyBinding(token), p.now()); err != nil {
+		state, err := p.s.Passkeys(r.Context())
+		if err != nil {
+			passkeyError(w, err)
+			return true
+		}
+		if err := p.s.DeletePasskey(r.Context(), id, passkeyBinding(token), p.eligiblePasskeys(state), p.now()); err != nil {
 			passkeyError(w, err)
 		} else {
 			w.WriteHeader(204)
@@ -359,6 +363,10 @@ func (p *productionPanel) finishPasskey(w http.ResponseWriter, r *http.Request, 
 }
 func passkeyError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, store.ErrPasskeyRequired):
+		writeError(w, 409, "passkey_required")
+	case errors.Is(err, store.ErrLastPasskey):
+		writeError(w, 409, "last_passkey")
 	case errors.Is(err, store.ErrUnauthorized):
 		writeError(w, 401, "invalid_passkey")
 	case errors.Is(err, store.ErrNotFound):
