@@ -95,7 +95,12 @@ func (s *Store) APIKeys(ctx context.Context, before int64, limit int) ([]model.A
 }
 
 func (s *Store) RevokeAPIKey(ctx context.Context, id string, now time.Time) error {
-	result, err := s.DB.ExecContext(ctx, "UPDATE api_key SET revoked_at=coalesce(revoked_at,?) WHERE id=?", timestamp(now), id)
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, "UPDATE api_key SET revoked_at=coalesce(revoked_at,?) WHERE id=?", timestamp(now), id)
 	if err != nil {
 		return err
 	}
@@ -106,7 +111,15 @@ func (s *Store) RevokeAPIKey(ctx context.Context, id string, now time.Time) erro
 	if n == 0 {
 		return ErrNotFound
 	}
-	return nil
+	// The durable dispatch marker is the point after which we can no longer
+	// prove the operation was unsent. Preserve such work and its observations.
+	_, err = tx.ExecContext(ctx, `UPDATE job SET status='failed',error_code='api_key_revoked',finished_at=?,lease_owner=NULL,lease_until=0
+ WHERE type='instance_power' AND status IN ('queued','running') AND id IN
+ (SELECT k.job_id FROM api_key_power_job k JOIN instance_power_job p ON p.job_id=k.job_id WHERE k.key_id=? AND p.dispatch_started_at IS NULL)`, timestamp(now), id)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Consumers must name exactly one permitted scope. This authentication is

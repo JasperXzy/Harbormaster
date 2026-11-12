@@ -48,11 +48,15 @@ func NewProductionPanel(s *store.Store, c config.Config, engine *collect.Engine)
 func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "no-store")
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1")
+	if path == "/integrations" || strings.HasPrefix(path, "/integrations/") {
+		p.integrations(w, r, path)
+		return
+	}
 	source, ok := p.access.check(w, r)
 	if !ok {
 		return
 	}
-	path := strings.TrimPrefix(r.URL.Path, "/api/v1")
 	if path == "/setup/status" && r.Method == "GET" {
 		initialized, err := p.s.Initialized(r.Context())
 		if err != nil {

@@ -65,10 +65,19 @@ func (s *Store) EnqueuePowerJob(ctx context.Context, instanceID, action, stopMod
 		return model.Job{}, err
 	}
 	defer tx.Rollback()
+	keyID := model.APIKeyPrincipal(ctx)
+	principal := "panel"
+	if keyID != "" {
+		if err = requirePowerAPIKey(ctx, tx, keyID); err != nil {
+			return model.Job{}, err
+		}
+		principal = "api:" + keyID
+		ctx = model.WithJobTrigger(ctx, "api")
+	}
 	// Event keys outlive completion and restore. A transport retry must not
 	// create a second reboot or overwrite a newer user intent.
 	var previousID string
-	err = tx.QueryRowContext(ctx, "SELECT job_id FROM instance_power_request WHERE event_key=?", eventKey).Scan(&previousID)
+	err = tx.QueryRowContext(ctx, "SELECT job_id FROM instance_power_request WHERE principal_id=? AND event_key=?", principal, eventKey).Scan(&previousID)
 	if err == nil {
 		previous, e := readPower(ctx, tx, previousID)
 		if e != nil {
@@ -110,10 +119,17 @@ func (s *Store) EnqueuePowerJob(ctx context.Context, instanceID, action, stopMod
 		if e != nil {
 			return model.Job{}, e
 		}
+		var owner string
+		if e = tx.QueryRowContext(ctx, "SELECT coalesce((SELECT key_id FROM api_key_power_job WHERE job_id=?),'')", active.Job.ID).Scan(&owner); e != nil {
+			return model.Job{}, e
+		}
+		if owner != keyID {
+			return model.Job{}, ErrPowerBusy
+		}
 		if active.Action != action || active.StopMode != stopMode || active.AccountRevision != a.Revision {
 			return model.Job{}, ErrPowerBusy
 		}
-		if _, e = tx.ExecContext(ctx, "INSERT INTO instance_power_request(event_key,job_id) VALUES(?,?)", eventKey, active.Job.ID); e != nil {
+		if _, e = tx.ExecContext(ctx, "INSERT INTO instance_power_request(principal_id,event_key,job_id) VALUES(?,?,?)", principal, eventKey, active.Job.ID); e != nil {
 			return model.Job{}, e
 		}
 		return active.Job, tx.Commit()
@@ -135,8 +151,13 @@ func (s *Store) EnqueuePowerJob(ctx context.Context, instanceID, action, stopMod
 	if _, err = tx.ExecContext(ctx, "INSERT INTO instance_power_job(job_id,account_revision,action,stop_mode) VALUES(?,?,?,?)", id, a.Revision, action, mode); err != nil {
 		return model.Job{}, err
 	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO instance_power_request(event_key,job_id) VALUES(?,?)", eventKey, id); err != nil {
+	if _, err = tx.ExecContext(ctx, "INSERT INTO instance_power_request(principal_id,event_key,job_id) VALUES(?,?,?)", principal, eventKey, id); err != nil {
 		return model.Job{}, err
+	}
+	if keyID != "" {
+		if _, err = tx.ExecContext(ctx, "INSERT INTO api_key_power_job(job_id,key_id) VALUES(?,?)", id, keyID); err != nil {
+			return model.Job{}, err
+		}
 	}
 	desired := "running"
 	if action == "stop" {
@@ -230,6 +251,16 @@ func (s *Store) BeginPowerDispatch(ctx context.Context, j model.Job, now time.Ti
 	if p.DispatchStartedAt != nil {
 		return p, ErrPowerDispatched
 	}
+	var keyID string
+	if err = tx.QueryRowContext(ctx, "SELECT coalesce((SELECT key_id FROM api_key_power_job WHERE job_id=?),'')", j.ID).Scan(&keyID); err != nil {
+		return p, err
+	}
+	if keyID != "" {
+		if err = requirePowerAPIKey(ctx, tx, keyID); err != nil {
+			return p, err
+		}
+	}
+
 	a, err := loadAccount(ctx, tx, p.AccountID)
 	if err != nil {
 		return p, err

@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  API Key control: isolated /integrations/instances/{instance_id}/power and /integrations/jobs/{job_id} use Authorization Bearer plus instance:control, never cookie fallback. Keep HTTPS/host/admin-CIDR checks; Origin/CSRF are not required for explicit bearer credentials. Keys can query only their own power jobs. Idempotency is namespaced by key/panel, and active jobs do not merge across principals. Revocation cancels pre-dispatch jobs atomically while retaining intent; dispatched work keeps its evidence and is never replayed.
 # 2026-11-12  Manual power API: POST /instances/{instance_id}/power requires session+CSRF, a durable Idempotency-Key and explicit ECS stop mode. Returns 202 after local enqueue, never synchronously calls the cloud. Disabled by default via instance_power_enabled; SystemInfo exposes that capability. Instance desired_state/desired_state_updated_at are nullable until recorded intent exists, never inferred from cloud status or the legacy stopped default. Demo remains read-only.
 # 2026-11-12  Power confirmation: PowerJobResult adds nullable baseline/observation and confirmation_basis. Acceptance stays running until fresh targeted observations confirm the requested state/mode; reboot needs a newer start time or an observed transition. Timeouts and stop-mode fallback fail explicitly without replay. Execution remains separate from the production submission endpoint.
 # 2026-11-12  Power task storage: reserve job type instance_power and its persisted request/outcome result. Enqueue saves desired state atomically; durable action event keys retain deduplication after completion and restore; identical active requests reuse a job and conflicting active requests are rejected. A dispatch marker prevents replay after a crash; API acceptance is not observed completion. No power submission endpoint is exposed in this storage phase.
@@ -821,6 +822,106 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /integrations/instances/{instance_id}/power:
+    parameters:
+      - $ref: "#/components/parameters/InstanceId"
+    post:
+      security:
+        - integrationBearer: []
+      tags: [instances]
+      operationId: controlInstancePowerWithAPIKey
+      summary: API Key 提交实例电源操作
+      description: |
+        Requires instance:control. Bearer authentication only; cookies and query/body tokens are not accepted.
+        Keys are independent principals: active jobs from another key or the panel return 409 even for the same action.
+        Local enqueue only; the enabled power worker executes asynchronously. Save desired state at enqueue time and retain intent on failure.
+        Generate one Idempotency-Key per user action and reuse it on retries, including after a lost response or completed job.
+        Same-key different target/action/mode returns 409. Same active request can reuse an existing job; conflicting active requests return 409.
+        ECS stop requires explicit stop_mode; SWAS and start/reboot reject it. API acceptance does not imply actual state or economical mode.
+        Production requires instance_power_enabled=true; when disabled, validly authenticated requests return 503 instance_power_disabled without enqueueing. Development mode has no bearer integration consumer.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_-]{16,64}$'
+          description: Unique action event key, for example a UUID. Retained across task completion and backup restore.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [start, stop, reboot]
+                stop_mode:
+                  type: string
+                  enum: [keep_charging, stop_charging]
+      responses:
+        "202":
+          $ref: "#/components/responses/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: Instance is absent from managed discovery.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: instance_power_busy, idempotency_key_conflict, account_disabled or account_changed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          description: instance_power_disabled or internal_error; no synchronous cloud call.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /integrations/jobs/{job_id}:
+    get:
+      tags: [jobs]
+      operationId: getIntegrationPowerJob
+      summary: 查询该 API Key 创建的电源任务
+      security:
+        - integrationBearer: []
+      description: Requires instance:control. Only power jobs created by this key are visible; other keys' jobs and panel jobs return 404. No cloud calls. Key revocation also blocks history access; administrators retain full history.
+      parameters:
+        - name: job_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Persisted power task.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: insufficient_scope or forbidden transport/source.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /instances/{instance_id}/agent/install-command:
     parameters:
       - $ref: "#/components/parameters/InstanceId"
@@ -1265,6 +1366,11 @@ paths:
 
 components:
   securitySchemes:
+    integrationBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: Harbormaster API Key
+      description: Requires the endpoint scope; never grants a browser session or agent authentication.
     sessionCookie:
       type: apiKey
       in: cookie

@@ -54,6 +54,8 @@ func (p *productionPanel) instancePower(w http.ResponseWriter, r *http.Request, 
 	switch {
 	case err == nil:
 		writeJSON(w, 202, map[string]string{"job_id": j.ID})
+	case errors.Is(err, store.ErrUnauthorized), errors.Is(err, store.ErrAPIKeyScope):
+		apiKeyError(w, err)
 	case errors.Is(err, store.ErrPowerParameters):
 		fieldError(w, "stop_mode", "invalid_for_instance")
 	case errors.Is(err, store.ErrPowerBusy):
