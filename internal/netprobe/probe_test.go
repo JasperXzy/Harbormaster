@@ -123,7 +123,7 @@ func TestIncompleteRunsDoNotFabricateLossOrExposeRawError(t *testing.T) {
 func TestRequestLimitsRejectBeforeAnyIO(t *testing.T) {
 	for _, mutate := range []func(*Request){
 		func(q *Request) { q.Count = 0 }, func(q *Request) { q.Count = 21 }, func(q *Request) { q.TimeoutMS = 99 }, func(q *Request) { q.TimeoutMS = 5001 }, func(q *Request) { q.IntervalMS = 0 }, func(q *Request) { q.IntervalMS = 5001 },
-		func(q *Request) { q.Count = 20; q.TimeoutMS = 5000 }, func(q *Request) { q.Method = "exec" }, func(q *Request) { q.Port = 0 }, func(q *Request) { q.Port = 65536 }, func(q *Request) { q.Method = "icmp" }, func(q *Request) { q.Family = "auto" },
+		func(q *Request) { q.Count = 20; q.TimeoutMS = 5000 }, func(q *Request) { q.Method = "exec" }, func(q *Request) { q.Port = 0 }, func(q *Request) { q.Port = 65536 }, func(q *Request) { q.Method = "icmp" }, func(q *Request) { q.Family = "auto" }, func(q *Request) { q.Family = "ipv6" },
 		func(q *Request) { q.Host = "http://1.1.1.1" }, func(q *Request) { q.Host = "100.100.100.200" }, func(q *Request) { q.Host = "1.1.1.1:443" },
 	} {
 		q := request()

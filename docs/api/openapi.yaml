@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Agent probe queue: reserve network_probe job type for persisted fixed ICMP/TCP tasks. Agent claim/result protocol is private; job result remains null in this queue phase. No panel submission route yet. Expired executions are terminal and never replayed.
 # 2026-11-12  Instance finance: add cached current-month DescribeInstanceBill rows matched by exact instance ID and product family. Preserve bill type/currency and payable/after-discount decimal strings; empty matches do not mean zero cost. No shared-resource allocation, refund netting or amortization. RAM drafts add bssapi:DescribeInstanceBill.
 # 2026-11-12  Quiet hours/maintenance: user confirmed record-only, no catch-up for non-urgent alerts. Add business-timezone daily settings and UTC maintenance window, persistent notification urgency/suppression metadata, enqueue/claim/pre-send gates. Urgent quota/agent events and explicit tests bypass; already authorized requests cannot be recalled.
 # 2026-11-12  External heartbeat: add encrypted write-only URL settings and async heartbeat_test jobs. User-approved success gate requires local HTTP readiness/SQLite and recent collection scheduler progress. No old pings are replayed; settings reads omit URL because its path/query may contain credentials.
@@ -2070,7 +2071,7 @@ components:
 
     JobType:
       type: string
-      enum: [refresh, permission_check, telegram_test, instance_power, heartbeat_test]
+      enum: [refresh, permission_check, telegram_test, instance_power, heartbeat_test, network_probe]
 
     JobStatus:
       type: string
@@ -2126,7 +2127,7 @@ components:
           nullable: true
           description: |
             成功时的结果，结构取决于 type：`permission_check` 为 PermissionCheck；
-            `refresh`、`telegram_test`、`heartbeat_test` 为 null。
+            `refresh`、`telegram_test`、`heartbeat_test`、`network_probe` 为 null。
             `instance_power` 为 PowerJobResult（任务未完成时也保留请求与执行阶段）。
           additionalProperties: true
 

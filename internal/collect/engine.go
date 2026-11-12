@@ -130,6 +130,9 @@ func (e *Engine) SystemEventPollInterval() time.Duration {
 	return e.SystemEventInterval
 }
 func (e *Engine) Schedule(ctx context.Context) error {
+	if err := e.Store.ExpireNetworkProbes(ctx, time.Now().UTC()); err != nil {
+		return err
+	}
 	if err := e.Store.ScheduleScans(ctx, e.scanInterval(), time.Now().UTC()); err != nil {
 		return err
 	}

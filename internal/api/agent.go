@@ -74,6 +74,9 @@ func (a *agentAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if a.probes(w, r) {
+		return
+	}
 	if r.URL.Path != agentproto.Path && r.URL.Path != agentproto.BatchPath {
 		writeError(w, 404, "not_found")
 		return

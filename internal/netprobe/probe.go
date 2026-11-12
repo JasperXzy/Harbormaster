@@ -41,8 +41,14 @@ func (r Request) Validate() error {
 	if r.Method != "icmp" && r.Method != "tcp" || r.Method == "tcp" && (r.Port < 1 || r.Port > 65535) || r.Method == "icmp" && r.Port != 0 {
 		return ErrInvalid
 	}
-	_, err := normalizeHost(r.Host)
-	return err
+	host, err := normalizeHost(r.Host)
+	if err != nil {
+		return err
+	}
+	if ip, err := netip.ParseAddr(host); err == nil && ip.Is4() != (r.Family == "ipv4") {
+		return ErrInvalid
+	}
+	return nil
 }
 
 type Sample struct {
