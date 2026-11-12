@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Power task storage: reserve job type instance_power and its persisted request/outcome result. Enqueue saves desired state atomically; durable action event keys retain deduplication after completion and restore; identical active requests reuse a job and conflicting active requests are rejected. A dispatch marker prevents replay after a crash; API acceptance is not observed completion. No power submission endpoint is exposed in this storage phase.
 # 2026-11-12  Job history: GET /jobs adds stable cursor pagination and account/instance/type/status/trigger filters. Job now exposes account_ids, nullable instance_id and recorded trigger (panel/cli/schedule/system/unknown; api/telegram reserved for their consumers). Historical source is unknown; current collection/test jobs have no instance target. Reads never enqueue work or call cloud APIs.
 # 2026-11-12  Low balance alerts: add balance_low with per-account balance_thresholds (account_id, currency, amount), initially empty. Compare freshly fetched available_amount using exact decimal arithmetic and strict '<'; no currency conversion or stale-cache evaluation. Failed/mismatched sources preserve unknown state. Removing a target or changing its currency cancels the previous condition without a fake recovery; dispatch remains separate.
 # 2026-11-12  Encrypted backup download: POST /backups accepts a write-only backup_password via session+CSRF and returns a complete password-encrypted binary attachment. Prepare before sending success headers, with bounded concurrency and session revalidation. No cloud I/O. Restore is an offline CLI into a new directory; user approved cancelling unfinished work and pending notifications, clearing leases and login sessions.
@@ -1325,7 +1326,7 @@ components:
 
     JobType:
       type: string
-      enum: [refresh, permission_check, telegram_test]
+      enum: [refresh, permission_check, telegram_test, instance_power]
 
     JobStatus:
       type: string
@@ -1382,7 +1383,25 @@ components:
           description: |
             成功时的结果，结构取决于 type：`permission_check` 为 PermissionCheck；
             `refresh`、`telegram_test` 为 null。
+            `instance_power` 为 PowerJobResult（任务未完成时也保留请求与执行阶段）。
           additionalProperties: true
+
+    PowerJobResult:
+      type: object
+      required: [action, stop_mode, dispatch_outcome]
+      properties:
+        action:
+          type: string
+          enum: [start, stop, reboot]
+        stop_mode:
+          type: string
+          nullable: true
+          enum: [keep_charging, stop_charging, null]
+          description: Required only for ECS stop; null for other operations.
+        dispatch_outcome:
+          type: string
+          enum: [not_sent, dispatching, accepted, rejected, unknown]
+          description: Acceptance is not proof of the final instance state. Unknown outcomes must not be automatically replayed.
 
     SetupStatus:
       type: object

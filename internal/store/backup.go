@@ -58,6 +58,15 @@ func (s *Store) PrepareRestoredCopy(ctx context.Context, now time.Time) (Restore
 		return result, err
 	}
 	defer tx.Rollback()
+	// A backup captured between the dispatch marker and response cannot tell
+	// whether that cloud operation completed. Keep that uncertainty in history
+	// while cancelling the work, never turning it into a queued retry.
+	if _, err = tx.ExecContext(ctx, "UPDATE instance_power_job SET dispatch_outcome='unknown' WHERE dispatch_outcome='dispatching' AND job_id IN (SELECT id FROM job WHERE status IN ('queued','running'))"); err != nil {
+		return result, err
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE job SET result_json="+powerResultSQL+" WHERE type='instance_power' AND status IN ('queued','running')"); err != nil {
+		return result, err
+	}
 	jobs, err := tx.ExecContext(ctx, "UPDATE job SET status='failed',error_code='backup_restored',finished_at=?,lease_owner=NULL,lease_until=0 WHERE status IN ('queued','running')", timestamp(now))
 	if err != nil {
 		return result, err

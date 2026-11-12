@@ -1,10 +1,10 @@
 # 实例电源操作
 
-2026-11-12：本阶段完成固定云调用层及模拟测试；生产任务入队、执行 worker、实际状态确认和面板 API 尚未接入。没有使用真实凭据发起电源操作或 DryRun。
+2026-11-12：固定云调用层、持久化任务存储及模拟测试已完成；执行 worker、实际状态确认和面板提交 API 尚未接入。没有使用真实凭据发起电源操作或 DryRun。
 
 ## 已确认的业务语义
 
-用户确认：手动开关机任务入队时，事务内保存期望状态；云调用失败仍保留用户意图，在任务记录中显示错误。停机排队期间，后续保活不得按旧意图开机。该决定待下一阶段存储和任务实现，不能由本阶段调用层代替。
+用户确认：手动开关机任务入队时，事务内保存期望状态；云调用失败仍保留用户意图，在任务记录中显示错误。停机排队期间，后续保活不得按旧意图开机。现已实现原子入队和保存意图；云调用结果只影响任务状态，不回滚意图。
 
 用户另已确认备份恢复取消未完成任务和待发通知、清空租约；该逻辑已在 `60839f3` 实现，恢复不会重放旧操作。新增电源任务时仍须遵守此策略。
 
@@ -70,4 +70,50 @@ git diff --check
 （无输出）
 ```
 
-本阶段没有面板接口变更，无需生成前端类型或修改 OpenAPI。生产电源接口接入前会先更新契约和顶部变更记录。
+调用层阶段没有面板接口变更。后续任务存储阶段已先在 OpenAPI 增加 instance_power 任务类型与 PowerJobResult，尚无电源提交接口；前端可以识别该任务类型，不能据此启用电源按钮。
+
+## 持久化任务阶段
+
+迁移 017 扩展 job 类型约束。迁移在原事务内暂存并恢复 job_change、job_order、cdt_observation 和通知的 job_id 关联，全程保持 foreign_keys 开启。保留原任务字段、分页序号及 SSE 高水位，不制造通知发送事件。
+
+`EnqueuePowerJob` 仅允许仍在已启用账号、已配置地域中被发现的 ECS/SWAS。每次新动作必须携带持久事件键（16–64 位字母、数字、下划线或连字符，可使用 UUID）。事件键与任务关联长期保留，完成或恢复后的相同请求仍返回原任务；同键不同目标/动作报 idempotency_key_conflict。活动任务去重时也保存新事件键的关联，避免完成后旧 HTTP 重试再次开机或重启。请求和期望状态在同一事务写入：start/reboot 为 running，stop 为 stopped。相同实例已有相同动作/模式/账号修订的活动任务时复用；不同请求返回 instance_power_busy，不覆盖已有意图。
+
+独立 `ClaimPowerJob` 不与只读领取器混用。租约为 60 秒；发送前因进程中断可重新领取，最多 3 次。`BeginPowerDispatch` 重新检查账号启用状态、配置修订、地域及实例是否仍存在，并持久化发送标记后才允许调用云接口。发送标记只可写一次，过期 owner 不能写结果。
+
+`RecordPowerDispatch` 仅接受固定结果及错误码。accepted 保持 running，等待后续实际状态确认；其他结果为 failed。发送后租约失效会将未知响应记为 power_outcome_unknown；已接受但确认过程丢失记为 power_confirmation_interrupted。两者都不会被重新领取发送。通用 FinishJob/RetryJob 拒绝电源任务，避免套用读请求的重试语义。
+
+恢复时取消排队、执行中及等待确认的电源任务；dispatching 改为 unknown，已知 accepted 保留，完成的拒绝记录不改写。期望状态保留为备份时的用户意图，恢复不会运行 worker。
+
+本阶段的内部工程选择：同一实例只允许一个活动电源任务；冲突请求明确报错。发送前最多领取三次沿用现有任务上限，云请求本身仍最多一次。未实现自动化、豁免、控制台停机询问、实际状态确认和写 worker；没有把这些标为完成。生产启动与 run-once 仍只有只读采集。
+
+持久任务阶段最终检查（均退出 0）：
+
+```text
+go test ./internal/store -run Power -count=1
+ok github.com/JasperXzy/harbormaster/internal/store 0.775s
+
+go build ./... && go vet ./...
+（无输出）
+
+go test -race ./...
+ok github.com/JasperXzy/harbormaster/internal/api 42.805s
+ok github.com/JasperXzy/harbormaster/internal/backup 37.742s
+ok github.com/JasperXzy/harbormaster/internal/cli 8.620s
+ok github.com/JasperXzy/harbormaster/internal/cloud/aliyun 4.407s
+ok github.com/JasperXzy/harbormaster/internal/collect 4.156s
+ok github.com/JasperXzy/harbormaster/internal/devmode 6.972s
+ok github.com/JasperXzy/harbormaster/internal/m0 1.595s
+ok github.com/JasperXzy/harbormaster/internal/model 1.326s
+ok github.com/JasperXzy/harbormaster/internal/notify 2.045s
+ok github.com/JasperXzy/harbormaster/internal/store 21.825s
+其余有测试的包均 ok (cached)，命令包等为 [no test files]。
+
+npm --prefix web run lint:api
+../docs/api/openapi.yaml: validated in 23ms
+Woohoo! Your API description is valid.
+
+git diff --check
+（无输出）
+```
+
+覆盖原子失败回滚、并发重复请求、完成/恢复后的事件键重试、只读 worker 隔离、租约过期与旧 owner、发送后的不重放、账号修改/停用及实例消失、已接受结果不冒充已完成，以及迁移后的四类旧引用和两个序号高水位。没有对真实验证数据库运行本迁移，也没有执行真实云操作。
