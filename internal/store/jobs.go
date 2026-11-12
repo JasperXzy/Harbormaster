@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/model"
 )
 
-const jobColumns = "id,type,status,created_at,started_at,finished_at,error_code,result_json,account_ids_json,coalesce(lease_owner,''),attempts,scope"
+const jobColumns = "id,type,status,created_at,started_at,finished_at,error_code,result_json,account_ids_json,coalesce(lease_owner,''),attempts,scope,trigger_source,instance_id,(SELECT seq FROM job_order WHERE job_id=job.id)"
 
 type rowScanner interface{ Scan(...any) error }
 
@@ -19,7 +20,7 @@ func readJob(row rowScanner) (model.Job, error) {
 	var created string
 	var started, finished, code, result sql.NullString
 	var ids string
-	err := row.Scan(&j.ID, &j.Type, &j.Status, &created, &started, &finished, &code, &result, &ids, &j.Owner, &j.Attempts, &j.Scope)
+	err := row.Scan(&j.ID, &j.Type, &j.Status, &created, &started, &finished, &code, &result, &ids, &j.Owner, &j.Attempts, &j.Scope, &j.Trigger, &j.InstanceID, &j.Sequence)
 	if errors.Is(err, sql.ErrNoRows) {
 		return j, ErrNotFound
 	}
@@ -54,6 +55,9 @@ func readJob(row rowScanner) (model.Job, error) {
 	if err = json.Unmarshal([]byte(ids), &j.AccountIDs); err != nil {
 		return j, err
 	}
+	if j.AccountIDs == nil {
+		j.AccountIDs = []string{}
+	}
 	return j, nil
 }
 func enqueueJob(ctx context.Context, tx *sql.Tx, kind, scope string, ids []string, now time.Time) (model.Job, error) {
@@ -67,13 +71,19 @@ func enqueueJob(ctx context.Context, tx *sql.Tx, kind, scope string, ids []strin
 	if !errors.Is(err, ErrNotFound) {
 		return j, err
 	}
-	j = model.Job{ID: model.NewID("job_"), Type: kind, Status: "queued", CreatedAt: now, AccountIDs: ids}
+	if ids == nil {
+		ids = []string{}
+	}
+	j = model.Job{ID: model.NewID("job_"), Type: kind, Status: "queued", CreatedAt: now, AccountIDs: ids, Trigger: model.JobTrigger(ctx)}
 	raw, err := json.Marshal(ids)
 	if err != nil {
 		return j, err
 	}
-	_, err = tx.ExecContext(ctx, "INSERT INTO job(id,type,scope,account_ids_json,status,created_at,available_at) VALUES(?,?,?,?,?,?,?)", j.ID, kind, scope, string(raw), j.Status, timestamp(now), now.Unix())
-	return j, err
+	_, err = tx.ExecContext(ctx, "INSERT INTO job(id,type,scope,account_ids_json,status,created_at,available_at,trigger_source) VALUES(?,?,?,?,?,?,?,?)", j.ID, kind, scope, string(raw), j.Status, timestamp(now), now.Unix(), j.Trigger)
+	if err != nil {
+		return j, err
+	}
+	return readJob(tx.QueryRowContext(ctx, "SELECT "+jobColumns+" FROM job WHERE id=?", j.ID))
 }
 func (s *Store) EnqueueJob(ctx context.Context, kind, scope string, ids []string, now time.Time) (model.Job, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
@@ -98,6 +108,43 @@ func (s *Store) EnqueueJob(ctx context.Context, kind, scope string, ids []string
 }
 func (s *Store) Job(ctx context.Context, id string) (model.Job, error) {
 	return readJob(s.DB.QueryRowContext(ctx, "SELECT "+jobColumns+" FROM job WHERE id=?", id))
+}
+
+func (s *Store) Jobs(ctx context.Context, filter model.JobFilter, before int64, limit int) ([]model.Job, error) {
+	if before < 0 || limit < 1 || limit > 201 || len(filter.Validate()) != 0 {
+		return nil, ErrNotFound
+	}
+	clauses := []string{"1=1"}
+	args := []any{}
+	for _, field := range []struct{ column, value string }{{"job.type", filter.Type}, {"job.status", filter.Status}, {"job.trigger_source", filter.Trigger}, {"job.instance_id", filter.InstanceID}} {
+		if field.value != "" {
+			clauses = append(clauses, field.column+"=?")
+			args = append(args, field.value)
+		}
+	}
+	if filter.AccountID != "" {
+		clauses = append(clauses, "EXISTS (SELECT 1 FROM json_each(job.account_ids_json) WHERE value=?)")
+		args = append(args, filter.AccountID)
+	}
+	if before != 0 {
+		clauses = append(clauses, "job_order.seq<?")
+		args = append(args, before)
+	}
+	args = append(args, limit)
+	rows, err := s.DB.QueryContext(ctx, "SELECT "+jobColumns+" FROM job JOIN job_order ON job_order.job_id=job.id WHERE "+strings.Join(clauses, " AND ")+" ORDER BY job_order.seq DESC LIMIT ?", args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	jobs := []model.Job{}
+	for rows.Next() {
+		j, err := readJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, j)
+	}
+	return jobs, rows.Err()
 }
 
 func (s *Store) JobChangeHead(ctx context.Context) (int64, error) {
@@ -233,6 +280,7 @@ func (s *Store) RetryJob(ctx context.Context, j model.Job, delay time.Duration, 
 	return nil
 }
 func (s *Store) ScheduleScans(ctx context.Context, interval time.Duration, now time.Time) error {
+	ctx = model.WithJobTrigger(ctx, "schedule")
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err

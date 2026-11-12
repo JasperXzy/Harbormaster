@@ -53,6 +53,13 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 		}
 	}
 	w = call("GET", "/instances?limit=1", "", cookie, "")
+	jobs := call("GET", "/jobs?type=refresh&trigger=panel&account_id=demo-account-1", "", cookie, "")
+	if jobs.Code != 200 || !strings.Contains(jobs.Body.String(), `"id":"demo-job-refresh"`) || strings.Contains(jobs.Body.String(), "demo-job-permissions") {
+		t.Fatal("demo job filters", jobs.Code, jobs.Body)
+	}
+	if jobs := call("GET", "/jobs/demo-job-refresh", "", cookie, ""); jobs.Code != 200 {
+		t.Fatal("demo job detail", jobs.Code)
+	}
 	events := call("GET", "/instance-events?instance_id=demo-sin&limit=1", "", cookie, "")
 	var eventPage struct {
 		Items []object `json:"items"`

@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Job history: GET /jobs adds stable cursor pagination and account/instance/type/status/trigger filters. Job now exposes account_ids, nullable instance_id and recorded trigger (panel/cli/schedule/system/unknown; api/telegram reserved for their consumers). Historical source is unknown; current collection/test jobs have no instance target. Reads never enqueue work or call cloud APIs.
 # 2026-11-12  Low balance alerts: add balance_low with per-account balance_thresholds (account_id, currency, amount), initially empty. Compare freshly fetched available_amount using exact decimal arithmetic and strict '<'; no currency conversion or stale-cache evaluation. Failed/mismatched sources preserve unknown state. Removing a target or changing its currency cancels the previous condition without a fake recovery; dispatch remains separate.
 # 2026-11-12  Encrypted backup download: POST /backups accepts a write-only backup_password via session+CSRF and returns a complete password-encrypted binary attachment. Prepare before sending success headers, with bounded concurrency and session revalidation. No cloud I/O. Restore is an offline CLI into a new directory; user approved cancelling unfinished work and pending notifications, clearing leases and login sessions.
 # 2026-11-12  RAM policy drafts: GET /ram-policies returns readonly, instance_power and resource_management documents for copying, with cloud-write flags and explicit verification limitations. These are policy text only, never grants or permission-test results. CDT action, account/resource narrowing and creation dependencies remain unverified; write policies do not enable runtime cloud operations.
@@ -344,6 +345,56 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /jobs:
+    get:
+      tags: [jobs]
+      operationId: listJobs
+      summary: 任务记录
+      description: Newest persisted enqueue sequence first, including completed/failed tasks and disabled accounts. Cursor order remains stable when new jobs arrive. Existing records receive a stable migration order; their trigger is unknown. No cloud calls or task creation.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - name: account_id
+          in: query
+          schema:
+            type: string
+        - name: instance_id
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/JobType"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/JobStatus"
+        - name: trigger
+          in: query
+          schema:
+            $ref: "#/components/schemas/JobTrigger"
+      responses:
+        "200":
+          description: Matching tasks; unknown account/instance filters produce an empty page.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Job"
+                  next_cursor:
+                    type: string
+                    nullable: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
@@ -1280,6 +1331,10 @@ components:
       type: string
       enum: [queued, running, succeeded, failed]
 
+    JobTrigger:
+      type: string
+      enum: [panel, cli, api, telegram, schedule, system, unknown]
+
     Job:
       type: object
       required: [id, type, status, created_at, started_at, finished_at, error, result]
@@ -1288,6 +1343,17 @@ components:
           type: string
         type:
           $ref: "#/components/schemas/JobType"
+        account_ids:
+          type: array
+          description: Account scope captured at enqueue time; an empty list means this task has no account target.
+          items:
+            type: string
+        instance_id:
+          type: string
+          nullable: true
+          description: Specific instance target, or null for current collection and Telegram-test tasks. Never inferred from scope strings.
+        trigger:
+          $ref: "#/components/schemas/JobTrigger"
         status:
           $ref: "#/components/schemas/JobStatus"
         created_at:

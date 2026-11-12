@@ -34,6 +34,7 @@ import (
 // Server returns a process exit code. Error output is deliberately restricted
 // to fixed local messages; SDK or transport errors may contain secrets.
 func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
+	ctx = model.WithJobTrigger(ctx, "cli")
 	log := logging.New(errOut, "info")
 	fail := func(code string) int { log.Error(code); return 1 }
 	if len(args) == 0 {

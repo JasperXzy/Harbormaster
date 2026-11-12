@@ -165,7 +165,10 @@ type Job struct {
 	FinishedAt *time.Time `json:"finished_at"`
 	Error      *APIError  `json:"error"`
 	Result     any        `json:"result"`
-	AccountIDs []string   `json:"-"`
+	AccountIDs []string   `json:"account_ids"`
+	InstanceID *string    `json:"instance_id"`
+	Trigger    string     `json:"trigger"`
+	Sequence   int64      `json:"-"`
 	Owner      string     `json:"-"`
 	Attempts   int        `json:"-"`
 	Scope      string     `json:"-"`

@@ -111,13 +111,6 @@ func (p *productionPanel) business(w http.ResponseWriter, r *http.Request, path 
 		} else {
 			writeJSON(w, 202, map[string]string{"job_id": j.ID})
 		}
-	case strings.HasPrefix(path, "/jobs/") && r.Method == "GET":
-		j, err := p.s.Job(r.Context(), strings.TrimPrefix(path, "/jobs/"))
-		if err != nil {
-			businessError(w, err)
-		} else {
-			writeJSON(w, 200, j)
-		}
 	case path == "/instances" && r.Method == "GET":
 		p.instances(w, r)
 	case path == "/regions" && r.Method == "GET":

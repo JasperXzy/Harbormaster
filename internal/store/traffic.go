@@ -45,6 +45,7 @@ func (s *Store) SaveCDT(ctx context.Context, j model.Job, a model.Account, o mod
 	return tx.Commit()
 }
 func (s *Store) ScheduleCDT(ctx context.Context, interval time.Duration, now time.Time) error {
+	ctx = model.WithJobTrigger(ctx, "schedule")
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return err

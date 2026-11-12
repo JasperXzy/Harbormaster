@@ -51,7 +51,7 @@
 | F5.1 | 部分：最新两点速率可用；24h/7d 曲线、小时聚合和未装 agent 的 CMS 回退未实现。 |
 | F5.2 | CPU/积分指标采集与展示数据接口未实现。M0 的 CMS 读通不等于这些功能完成。 |
 | F6.1–F6.13 | 自动化规则、调度电源动作、保活、期望状态确认、豁免、主备、提前量、试运行、模拟用量和排除自身的业务逻辑未实现。仅有初始 desired_state 列不算功能完成。 |
-| F7.1、F7.5 | 刷新与权限查询已走持久队列；开机/关机/重启及其期望状态联动未实现。 |
+| F7.1、F7.5 | 刷新与权限查询已走持久队列；任务列表/详情、分页筛选和来源记录已实现。开机/关机/重启及其期望状态联动未实现。[任务记录](job-history.md) |
 | F7.2–F7.4 | 换 EIP、创建与释放 ECS 未实现，也未执行真实操作。 |
 | F8.1 | 有 Telegram 发送层、加密配置存储和安全 GET；生产配置写入口、测试发送及 worker 尚未接通。[发送边界](telegram-delivery-design.md)、[队列](notification-storage.md) |
 | F8.2 | CDT/流量包用量阈值通知未启用；CDT 暂定单位期间的策略仍待答。 |
@@ -127,4 +127,4 @@
 - M3/M4：核心功能及验收均未完成。
 - 非功能：常驻内存/CPU、10 台实例长期数据库 ≤1GB、保留期、保护响应 ≤30 秒、真实发送可靠性与跨平台运行仍缺对应实测。已有编译、单元测试和接口查询不覆盖这些指标。
 
-最近运行代码的构建、race、vet 与契约检查见 [余额告警验证](balance-alerts.md)。之前检查见 [备份恢复验证](backup-format.md)、[RAM 草稿验证](ram-policy.md)、[公网 IP 告警验证](public-ip-alerts.md)、[实例事件验证](instance-events.md)、[IPv6 验证](ipv6-discovery.md)、[规格带宽告警验证](bandwidth-alerts.md)，初始跨平台命令见 [M0 原始输出](validation.txt)。当前未实现项仍需推进，不能据此将持续目标标记完成。
+最近运行代码的构建、race、vet 与契约检查见 [任务列表验证](job-history.md)。之前检查见 [余额告警验证](balance-alerts.md)、[备份恢复验证](backup-format.md)、[RAM 草稿验证](ram-policy.md)、[公网 IP 告警验证](public-ip-alerts.md)、[实例事件验证](instance-events.md)、[IPv6 验证](ipv6-discovery.md)、[规格带宽告警验证](bandwidth-alerts.md)，初始跨平台命令见 [M0 原始输出](validation.txt)。当前未实现项仍需推进，不能据此将持续目标标记完成。

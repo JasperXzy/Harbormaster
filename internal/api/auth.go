@@ -21,6 +21,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/buildinfo"
 	"github.com/JasperXzy/harbormaster/internal/collect"
 	"github.com/JasperXzy/harbormaster/internal/config"
+	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
 )
@@ -77,6 +78,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 403, "csrf_failed")
 		return
 	}
+	r = r.WithContext(model.WithJobTrigger(r.Context(), "panel"))
 	if path == "/session" {
 		switch r.Method {
 		case "GET":
@@ -96,7 +98,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.business(w, r, path) {
+	if p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.jobHistory(w, r, path) || p.business(w, r, path) {
 		return
 	}
 	if r.Method != "GET" {

@@ -60,6 +60,10 @@ func TestAccountAPIUsesEncryptedTasksAndSnapshotReads(t *testing.T) {
 	if scanner.calls != 0 {
 		t.Fatal("POST performed synchronous cloud I/O")
 	}
+	job, err := p.s.Job(context.Background(), created.JobID)
+	if err != nil || job.Trigger != "panel" || len(job.AccountIDs) != 1 || job.AccountIDs[0] != created.Account.ID {
+		t.Fatal("account creation did not record panel origin", job, err)
+	}
 	for _, path := range []string{"/accounts", "/accounts/" + created.Account.ID + "/finance", "/instances", "/regions?site=china", "/jobs/" + created.JobID, "/traffic/billing-subjects", "/bandwidth-packages"} {
 		w = panelRequest(p, "GET", path, nil, cookie, "")
 		if w.Code != 200 {
