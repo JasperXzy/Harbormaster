@@ -1,0 +1,464 @@
+{
+  "checked_on": "2026-11-12",
+  "source_kind": "official_public_openapi_metadata",
+  "account_permissions_verified": false,
+  "apis": [
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "api": "StartInstance",
+      "source": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/StartInstance/api.json",
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "ecs:StartInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "ECS",
+                "resourceType": "Instance",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:instance/{#instanceId}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "api": "StopInstance",
+      "source": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/StopInstance/api.json",
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "ecs:StopInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "ECS",
+                "resourceType": "Instance",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:instance/{#instanceId}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "api": "RebootInstance",
+      "source": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/RebootInstance/api.json",
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "ecs:RebootInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "ECS",
+                "resourceType": "Instance",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:instance/{#instanceId}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "api": "RunInstances",
+      "source": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/RunInstances/api.json",
+      "ram_actions": [
+        {
+          "operationType": "create",
+          "ramAction": {
+            "action": "ecs:RunInstances",
+            "authLevel": "resource",
+            "actionConditions": [
+              {
+                "conditionKey": "vpc:IsDefaultVSwitch",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "vpc:IsDefaultVpc",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "vpc:VPC",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "ecs:IsDiskEncrypted",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "ecs:InstanceTypeFamily",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "ecs:InstanceType",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "ecs:ImageOwnerId",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "ecs:ImageSource",
+                "validationType": "always"
+              },
+              {
+                "conditionKey": "ecs:NotSpecifySecurityGroupId"
+              },
+              {
+                "conditionKey": "ecs:LoginAsNonRoot"
+              },
+              {
+                "conditionKey": "ecs:IsSystemDiskByokEncrypted"
+              },
+              {
+                "conditionKey": "ecs:IsDiskByokEncrypted"
+              },
+              {
+                "conditionKey": "ecs:PasswordInherit"
+              },
+              {
+                "conditionKey": "ecs:PasswordCustomized"
+              },
+              {
+                "conditionKey": "ecs:IsSystemDiskEncrypted"
+              },
+              {
+                "conditionKey": "ecs:ImagePlatform"
+              },
+              {
+                "conditionKey": "ecs:IsDiskEncrypted"
+              },
+              {
+                "conditionKey": "ecs:SecurityHardeningMode"
+              },
+              {
+                "conditionKey": "ecs:AssociatePublicIpAddress"
+              },
+              {
+                "conditionKey": "vpc:CreateDefaultVpc"
+              },
+              {
+                "conditionKey": "ecs:SecurityEnhancementStrategy"
+              },
+              {
+                "conditionKey": "ecs:InstanceChargeType"
+              }
+            ],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "ECS",
+                "resourceType": "全部资源",
+                "arn": "*"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "Ecs",
+      "version": "2014-05-26",
+      "api": "DeleteInstance",
+      "source": "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/DeleteInstance/api.json",
+      "ram_actions": [
+        {
+          "operationType": "delete",
+          "ramAction": {
+            "action": "ecs:DeleteInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "ECS",
+                "resourceType": "Instance",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:instance/{#instanceId}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "SWAS-OPEN",
+      "version": "2020-06-01",
+      "api": "StartInstance",
+      "source": "https://api.aliyun.com/meta/v1/products/SWAS-OPEN/versions/2020-06-01/apis/StartInstance/api.json",
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "swas-open:StartInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "SimpleApplicationServer",
+                "resourceType": "Instance",
+                "arn": "acs:swas-open:{#regionId}:{#accountId}:instance/{#InstanceId}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "SWAS-OPEN",
+      "version": "2020-06-01",
+      "api": "StopInstance",
+      "source": "https://api.aliyun.com/meta/v1/products/SWAS-OPEN/versions/2020-06-01/apis/StopInstance/api.json",
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "swas-open:StopInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "SimpleApplicationServer",
+                "resourceType": "Instance",
+                "arn": "acs:swas-open:{#regionId}:{#accountId}:instance/{#InstanceId}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "SWAS-OPEN",
+      "version": "2020-06-01",
+      "api": "RebootInstance",
+      "source": "https://api.aliyun.com/meta/v1/products/SWAS-OPEN/versions/2020-06-01/apis/RebootInstance/api.json",
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "swas-open:RebootInstance",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "SimpleApplicationServer",
+                "resourceType": "Instance",
+                "arn": "acs:swas-open:{#regionId}:{#accountId}:instance/{#InstanceId}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "api": "AllocateEipAddress",
+      "source": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/AllocateEipAddress/api.json",
+      "ram_actions": [
+        {
+          "operationType": "create",
+          "ramAction": {
+            "action": "vpc:AllocateEipAddress",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "Address",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:eip/*"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "api": "AssociateEipAddress",
+      "source": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/AssociateEipAddress/api.json",
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "vpc:AssociateEipAddress",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "Address",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:eip/{#AllocationId}"
+              },
+              {
+                "validationType": "conditional",
+                "product": "VPC",
+                "resourceType": "NatGateway",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:natgateway/{#NatGatewayId}"
+              },
+              {
+                "validationType": "conditional",
+                "product": "VPC",
+                "resourceType": "Instance",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:instance/{#InstanceId}"
+              },
+              {
+                "validationType": "conditional",
+                "product": "VPC",
+                "resourceType": "Association",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:havip/{#HaVipId}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "api": "UnassociateEipAddress",
+      "source": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/UnassociateEipAddress/api.json",
+      "ram_actions": [
+        {
+          "operationType": "delete",
+          "ramAction": {
+            "action": "vpc:UnassociateEipAddress",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "conditional",
+                "product": "VPC",
+                "resourceType": "Instance",
+                "arn": "acs:ecs:{#regionId}:{#accountId}:instance/{#InstanceId}"
+              },
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "Address",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:eip/{#AllocationId}"
+              },
+              {
+                "validationType": "conditional",
+                "product": "VPC",
+                "resourceType": "HaVip",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:havip/{#HaVipId}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "api": "ReleaseEipAddress",
+      "source": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/ReleaseEipAddress/api.json",
+      "ram_actions": [
+        {
+          "operationType": "update",
+          "ramAction": {
+            "action": "vpc:ReleaseEipAddress",
+            "authLevel": "resource",
+            "actionConditions": [
+              {
+                "conditionKey": "vpc:tag",
+                "validationType": "always"
+              }
+            ],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "Address",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:eip/{#AllocationId}"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "api": "CreateVpc",
+      "source": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/CreateVpc/api.json",
+      "ram_actions": [
+        {
+          "operationType": "create",
+          "ramAction": {
+            "action": "vpc:CreateVpc",
+            "authLevel": "resource",
+            "actionConditions": [],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "VPC",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:vpc/*"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "product": "Vpc",
+      "version": "2016-04-28",
+      "api": "CreateVSwitch",
+      "source": "https://api.aliyun.com/meta/v1/products/Vpc/versions/2016-04-28/apis/CreateVSwitch/api.json",
+      "ram_actions": [
+        {
+          "operationType": "create",
+          "ramAction": {
+            "action": "vpc:CreateVSwitch",
+            "authLevel": "resource",
+            "actionConditions": [
+              {
+                "conditionKey": "vpc:tag",
+                "validationType": "always"
+              }
+            ],
+            "resources": [
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "VPC",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:vpc/{#VpcId}"
+              },
+              {
+                "validationType": "always",
+                "product": "VPC",
+                "resourceType": "VSwitch",
+                "arn": "acs:vpc:{#regionId}:{#accountId}:vswitch/*"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

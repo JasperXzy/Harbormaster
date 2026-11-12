@@ -1,0 +1,40 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeInstances",
+        "ecs:DescribeNetworkInterfaces",
+        "ecs:DescribeInstanceAutoRenewAttribute",
+        "vpc:DescribeEipAddresses",
+        "vpc:DescribeCommonBandwidthPackages",
+        "swas-open:ListInstances",
+        "swas-open:ListInstancesTrafficPackages",
+        "cms:QueryMetricList",
+        "bss:DescribeAcccount",
+        "bss:DescribeBillList",
+        "bss:DescribeInstances"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:StartInstance",
+        "ecs:StopInstance",
+        "ecs:RebootInstance"
+      ],
+      "Resource": "acs:ecs:*:*:instance/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "swas-open:StartInstance",
+        "swas-open:StopInstance",
+        "swas-open:RebootInstance"
+      ],
+      "Resource": "acs:swas-open:*:*:instance/*"
+    }
+  ]
+}

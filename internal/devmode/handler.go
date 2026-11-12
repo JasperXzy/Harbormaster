@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JasperXzy/harbormaster/internal/rampolicy"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
 )
@@ -121,6 +122,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, object{"items": []object{{"id": "ap-southeast-1", "mainland": false}, {"id": "cn-hongkong", "mainland": false}, {"id": "cn-shanghai", "mainland": true}}})
 	case "/accounts":
 		respond(w, 200, object{"items": f.Accounts})
+	case "/ram-policies":
+		respond(w, 200, object{"items": rampolicy.Catalog()})
 	case "/api-keys":
 		items, cursor, err := paginate([]object{{"id": "demo-key-widget", "name": "Widget (demo)", "scopes": []string{"summary:read"}, "created_at": now.Add(-time.Hour).Format(time.RFC3339), "last_used_at": nil, "revoked_at": nil}}, r)
 		if err != nil {

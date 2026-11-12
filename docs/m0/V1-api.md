@@ -8,6 +8,8 @@
 
 下文方法与 SDK 缺口描述保留为初始文档核对记录；“未调用”仅指当时步骤，最新可用性以本节为准。账号凭据已提供，无需再次导入。
 
+2026-11-12 补充：重新读取 14 个写接口的官方 RAM Action/资源元数据，生成三档[策略草稿与复制接口](ram-policy.md)。这确认了模板所列的 Action 名称与实例 ARN 模式，不证明真实身份拥有写权限，也不证明 M4 创建链路的全部关联授权已经齐全。
+
 ## 验证方法
 
 2026-11-11 下载阿里云官方 Go SDK，逐项查找 Client 方法；读取官方 OpenAPI 元数据的 parameters、operationType、ramActions。没有向真实账号发送请求。31 项结果、官方链接和固定 SDK commit 见 [接口矩阵](api-table.md)；全部顶层参数名、类型、必选标志及 RAM 资源范围见 [机器可读记录](api-evidence.json)。required=true 不是场景全部必选条件。
