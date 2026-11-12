@@ -8,9 +8,81 @@ import (
 	"testing"
 	"time"
 
+	"github.com/JasperXzy/harbormaster/internal/ipinfo"
 	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/netprobe"
+	"github.com/JasperXzy/harbormaster/internal/traceinfo"
 )
+
+type tracePTRResolver struct{ Calls int }
+
+func (p *tracePTRResolver) LookupAddr(context.Context, string) ([]string, error) {
+	p.Calls++
+	return []string{"router.example."}, nil
+}
+
+func TestTracePanelOnlyReadsSavedEnrichmentAndExportRetainsAttribution(t *testing.T) {
+	p := testPanel(t)
+	cookie, _ := setupPanel(t, p)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	in := model.DefaultTraceSubmission()
+	in.RequestKey = strings.Repeat("e", 32)
+	in.PointKind = "server"
+	in.Host = new("1.1.1.1")
+	in.Family = "ipv4"
+	in.Method = "icmp"
+	in.Count = 1
+	in.MaxHops = 1
+	a, err := p.s.SubmitTrace(ctx, in, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := p.s.ClaimServerTrace(ctx, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := netprobe.TraceResult{StartedAt: now, FinishedAt: now, Address: "1.1.1.1", ResolvedAddresses: []string{"1.1.1.1"}, Hops: []netprobe.TraceHop{{TTL: 1, Samples: []netprobe.TraceSample{{Sequence: 1, StartedAt: now, Address: new("1.1.1.1"), RTTMS: new(float64(3)), Reply: new("echo_reply"), ICMPType: new(0), ICMPCode: new(0)}}}}}
+	if err = p.s.FinishServerTrace(ctx, c, result, "", now); err != nil {
+		t.Fatal(err)
+	}
+	path := "/network/traces/" + a.TraceID
+	for _, suffix := range []string{"", "/export"} {
+		w := panelRequest(p, "GET", path+suffix, nil, cookie, "")
+		if w.Code != 200 {
+			t.Fatal(w.Code, w.Body)
+		}
+	}
+	var state string
+	if err = p.s.DB.QueryRow("SELECT state FROM trace_enrichment WHERE trace_seq=?", a.TraceID).Scan(&state); err != nil || state != "queued" {
+		t.Fatal("GET mutated work", state, err)
+	}
+	db, err := ipinfo.New(ipinfo.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	resolver := &tracePTRResolver{}
+	runner := traceinfo.Runner{Store: p.s, Enricher: traceinfo.Enricher{Database: db, Resolver: resolver}}
+	if worked, err := runner.RunOne(ctx); err != nil || !worked {
+		t.Fatal(worked, err)
+	}
+	db.Close()
+	w := panelRequest(p, "GET", path, nil, cookie, "")
+	var d model.TraceDetail
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &d) != nil || d.Enrichment == nil || d.EnrichmentStatus != "complete" || d.Enrichment.Addresses[0].ASN.Number != 13335 || d.Enrichment.Addresses[0].PTR.Names[0] != "router.example" {
+		t.Fatal(w.Code, w.Body)
+	}
+	w = panelRequest(p, "GET", path+"/export", nil, cookie, "")
+	for _, want := range []string{"2026-11", "IP Geolocation by DB-IP <https://db-ip.com>", "router.example", "AS"} {
+		if w.Code != 200 || !strings.Contains(w.Body.String(), want) {
+			t.Fatal("export evidence", want, w.Code, w.Body)
+		}
+	}
+	if resolver.Calls != 1 {
+		t.Fatal("GET/export resolved PTR again", resolver.Calls)
+	}
+}
 
 func traceBody(key string) map[string]any {
 	return map[string]any{"request_key": strings.Repeat(key, 32), "point_kind": "server", "instance_id": nil, "target_id": nil, "target_revision": nil, "host": "trace.invalid", "family": "ipv4", "method": "icmp", "port": 0}

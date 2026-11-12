@@ -70,7 +70,7 @@ func TestDemoTracesExposeReadOnlySyntheticSummaryDetailAndExport(t *testing.T) {
 	for _, id := range []string{"1", "2"} {
 		w = call("GET", "/network/traces/"+id, "", cookie, "")
 		var d model.TraceDetail
-		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &d) != nil || d.Result == nil {
+		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &d) != nil || d.Result == nil || d.Enrichment == nil || d.EnrichmentStatus != "complete" || d.Enrichment.DetourStatus != "unconfirmed" {
 			t.Fatal(w.Code, w.Body)
 		}
 		if netprobe.ValidateTraceResult(d.Request, d.Result, nil, time.Now()) != nil {
@@ -80,6 +80,9 @@ func TestDemoTracesExposeReadOnlySyntheticSummaryDetailAndExport(t *testing.T) {
 	w = call("GET", "/network/traces/1/export", "", cookie, "")
 	if w.Code != 200 || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/plain") || !strings.Contains(w.Body.String(), "2 5 * * - - - probe_timeout") || !strings.Contains(w.Body.String(), "tcp_reset") {
 		t.Fatal(w.Code, w.Body)
+	}
+	if !strings.Contains(w.Body.String(), "synthetic country (demo)") || !strings.Contains(w.Body.String(), "IP Geolocation by DB-IP <https://db-ip.com>") {
+		t.Fatal("demo export lost enrichment or attribution", w.Body)
 	}
 	w = call("POST", "/network/traces", `{}`, cookie, session["csrf_token"])
 	if w.Code != 501 {

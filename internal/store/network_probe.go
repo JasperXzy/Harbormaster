@@ -322,7 +322,7 @@ func (s *Store) acceptAgentNetwork(ctx context.Context, token string, in agentNe
 		return ack, err
 	}
 	if in.Action == "trace" {
-		if err = saveTraceOutcome(ctx, tx, in.TaskID, raw); err != nil {
+		if err = saveTraceOutcome(ctx, tx, in.TaskID, raw, now); err != nil {
 			return ack, err
 		}
 	}

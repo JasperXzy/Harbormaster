@@ -212,7 +212,7 @@ func (s *Store) finishServerNetwork(ctx context.Context, job model.Job, request 
 		return err
 	}
 	if action == "trace" {
-		if err = saveTraceOutcome(ctx, tx, job.ID, string(raw)); err != nil {
+		if err = saveTraceOutcome(ctx, tx, job.ID, string(raw), now); err != nil {
 			return err
 		}
 	}

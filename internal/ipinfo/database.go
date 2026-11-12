@@ -301,12 +301,40 @@ func optional(s string) *string {
 }
 
 func (m *Manager) Lookup(ip netip.Addr) Record {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.lookupLocked(ip)
+}
+
+// Batch pins one generation while copying all records, including versions for
+// absent records. Monthly updates cannot mix editions within one trace.
+type Batch struct {
+	ASN, Location Dataset
+	Records       []Record
+}
+
+func (m *Manager) LookupBatch(ips []netip.Addr) (Batch, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.closed {
+		return Batch{}, ErrUnavailable
+	}
+	geo := m.dbs["country"]
+	if city := m.dbs["city"]; city != nil {
+		geo = city
+	}
+	b := Batch{ASN: m.dbs["asn"].info, Location: geo.info, Records: make([]Record, 0, len(ips))}
+	for _, ip := range ips {
+		b.Records = append(b.Records, m.lookupLocked(ip))
+	}
+	return b, nil
+}
+
+func (m *Manager) lookupLocked(ip netip.Addr) Record {
 	v := Record{Address: ip.String(), ASNStatus: "not_public", LocationStatus: "not_public"}
 	if !netprobe.PublicAddress(ip) {
 		return v
 	}
-	m.mu.RLock()
-	defer m.mu.RUnlock()
 	v.ASNStatus, v.LocationStatus = "not_found", "not_found"
 	if m.closed {
 		v.ASNStatus, v.LocationStatus = "unavailable", "unavailable"

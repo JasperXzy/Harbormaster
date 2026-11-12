@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JasperXzy/harbormaster/internal/ipinfo"
 	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/netprobe"
 )
@@ -60,9 +61,52 @@ func demoTraceFixtures(now time.Time) []model.TraceDetail {
 		}
 		summary := model.SummarizeTrace(r)
 		v.Outcome = &summary
-		out = append(out, model.TraceDetail{TraceRun: v, Result: &r})
+		v.EnrichmentStatus = "complete"
+		out = append(out, model.TraceDetail{TraceRun: v, Result: &r, Enrichment: demoTraceInfo(r)})
 	}
 	return out
+}
+
+// Explicit synthetic fixtures: demo reads never resolve PTR or open databases.
+func demoTraceInfo(r netprobe.TraceResult) *model.TraceEnrichment {
+	dataset := ipinfo.Dataset{Name: "synthetic ASN (demo)", Edition: "2026-11", BuiltAt: r.StartedAt, Origin: "bundled", Storage: "memory", SourceURL: "https://db-ip.com"}
+	geo := dataset
+	geo.Name = "synthetic country (demo)"
+	e := &model.TraceEnrichment{EnrichedAt: r.FinishedAt, Status: "complete", ASNDatabase: &dataset, LocationDatabase: &geo, Addresses: []model.TraceAddressInfo{}, Hops: []model.TraceHopInfo{}, Labels: []model.TraceNetworkLabel{}, DetourStatus: "unconfirmed", Attribution: ipinfo.AttributionNotice()}
+	seen := map[string]bool{}
+	for _, h := range r.Hops {
+		info := model.TraceHopInfo{TTL: h.TTL, Attempts: 3, Responses: 3, NoResponsePercent: new(float64(0)), MinimumMS: new(float64(h.TTL*8 + 1)), MaximumMS: new(float64(h.TTL*8 + 3)), AverageMS: new(float64(h.TTL*8 + 2)), Addresses: []string{}, ASNCandidates: []uint32{}, CountryCodes: []string{}, UnknownASN: true, UnknownLocation: true}
+		if h.TTL == 2 {
+			info.Responses, info.NoResponsePercent = 2, new(float64(100)/3)
+		}
+		for _, s := range h.Samples {
+			if s.Address == nil {
+				continue
+			}
+			address := *s.Address
+			if len(info.Addresses) == 0 {
+				info.Addresses = append(info.Addresses, address)
+			}
+			if address == "1.1.1.1" {
+				info.ASNCandidates, info.CountryCodes = []uint32{13335}, []string{"AU"}
+				info.UnknownASN, info.UnknownLocation = false, false
+			}
+			if seen[address] {
+				continue
+			}
+			seen[address] = true
+			a := model.TraceAddressInfo{Record: ipinfo.Record{Address: address, ASNStatus: "not_public", LocationStatus: "not_public"}, PTR: model.TracePTR{Status: "not_public", Names: []string{}}}
+			if address == "1.1.1.1" {
+				a.ASNStatus, a.LocationStatus = "ok", "ok"
+				a.ASN = &ipinfo.ASN{Number: 13335, Organization: new("Cloudflare (demo)"), Prefix: "1.1.1.0/24", Dataset: dataset}
+				a.Location = &ipinfo.Location{CountryCode: new("AU"), CountryName: new("Australia (demo)"), Prefix: "1.1.1.0/24", Granularity: "country", Dataset: geo}
+				a.PTR = model.TracePTR{Status: "ok", Names: []string{"router.example"}}
+			}
+			e.Addresses = append(e.Addresses, a)
+		}
+		e.Hops = append(e.Hops, info)
+	}
+	return e
 }
 func demoTraces(w http.ResponseWriter, r *http.Request, path string, now time.Time) bool {
 	if path != "/network/traces" && !strings.HasPrefix(path, "/network/traces/") {

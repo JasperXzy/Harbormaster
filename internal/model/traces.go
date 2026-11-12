@@ -83,23 +83,26 @@ func SummarizeTrace(r netprobe.TraceResult) TraceOutcome {
 }
 
 type TraceRun struct {
-	ID         string                `json:"id"`
-	JobID      string                `json:"job_id"`
-	PointID    string                `json:"point_id"`
-	PointName  string                `json:"point_name"`
-	PointKind  string                `json:"point_kind"`
-	InstanceID *string               `json:"instance_id"`
-	Target     *NetworkTarget        `json:"target"`
-	Request    netprobe.TraceRequest `json:"request"`
-	CreatedAt  time.Time             `json:"created_at"`
-	UpdatedAt  time.Time             `json:"updated_at"`
-	Status     string                `json:"status"`
-	Outcome    *TraceOutcome         `json:"outcome"`
-	Error      *APIError             `json:"error"`
+	ID               string                `json:"id"`
+	JobID            string                `json:"job_id"`
+	PointID          string                `json:"point_id"`
+	PointName        string                `json:"point_name"`
+	PointKind        string                `json:"point_kind"`
+	InstanceID       *string               `json:"instance_id"`
+	Target           *NetworkTarget        `json:"target"`
+	Request          netprobe.TraceRequest `json:"request"`
+	CreatedAt        time.Time             `json:"created_at"`
+	UpdatedAt        time.Time             `json:"updated_at"`
+	Status           string                `json:"status"`
+	EnrichmentStatus string                `json:"enrichment_status"`
+	Outcome          *TraceOutcome         `json:"outcome"`
+	Error            *APIError             `json:"error"`
 }
 type TraceDetail struct {
 	TraceRun
-	Result *netprobe.TraceResult `json:"result"`
+	Result          *netprobe.TraceResult `json:"result"`
+	Enrichment      *TraceEnrichment      `json:"enrichment"`
+	EnrichmentError *APIError             `json:"enrichment_error"`
 }
 type TraceAccepted struct {
 	JobID   string `json:"job_id"`
@@ -116,12 +119,16 @@ func (f TraceFilter) Validate() bool {
 	return f.From.Before(f.To) && f.To.Sub(f.From) <= 31*24*time.Hour && len(f.PointID) <= 128 && len(f.TargetID) <= 128 && f.Before >= 0 && f.Limit >= 1 && f.Limit <= 201
 }
 
-// TraceText exports stored observations only, without DNS or IP enrichment.
+// TraceText exports stored observations and enrichment without doing lookups.
 func TraceText(d TraceDetail) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "trace: %s\njob: %s\nsource: %q (%s)\nstatus: %s\ntarget: %q\nfamily: %s\nmethod: %s\nport: %d\ncreated_at: %s\n", d.ID, d.JobID, d.PointName, d.PointID, d.Status, d.Request.Host, d.Request.Family, d.Request.Method, d.Request.Port, d.CreatedAt.Format(time.RFC3339Nano))
 	if d.Error != nil {
 		fmt.Fprintf(&b, "error: %s\n", d.Error.Code)
+	}
+	fmt.Fprintf(&b, "enrichment_status: %s\n", d.EnrichmentStatus)
+	if d.EnrichmentError != nil {
+		fmt.Fprintf(&b, "enrichment_error: %s\n", d.EnrichmentError.Code)
 	}
 	if d.Result == nil {
 		b.WriteString("result: pending_or_unavailable\n")
@@ -155,5 +162,6 @@ func TraceText(d TraceDetail) string {
 		}
 	}
 	b.WriteString("* = no observed response; intermediate silence does not prove forwarding loss.\nTCP reset = target reached with port closed, not a successful service connection.\n")
+	traceEnrichmentText(&b, d.Enrichment)
 	return b.String()
 }

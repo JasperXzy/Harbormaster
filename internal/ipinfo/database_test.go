@@ -77,6 +77,31 @@ func TestCacheFailureFallsBackToBundleAndCloseIsSafe(t *testing.T) {
 		}
 	}
 }
+
+func TestBatchPinsVersionsAndCopiesAllReturnedData(t *testing.T) {
+	m := manager(t)
+	ips := []netip.Addr{netip.MustParseAddr("1.1.1.1"), netip.MustParseAddr("8.8.8.8"), netip.MustParseAddr("59.43.1.1"), netip.MustParseAddr("10.0.0.1")}
+	b, err := m.LookupBatch(ips)
+	if err != nil || len(b.Records) != 4 || b.ASN.Edition != "2026-11" || b.Location.Edition != "2026-11" || b.Records[2].ASNStatus != "not_found" || b.Records[3].ASNStatus != "not_public" {
+		t.Fatal(b, err)
+	}
+	for _, r := range b.Records {
+		if r.ASN != nil && r.ASN.Dataset != b.ASN {
+			t.Fatal("mixed ASN version", r)
+		}
+		if r.Location != nil && r.Location.Dataset != b.Location {
+			t.Fatal("mixed geo version", r)
+		}
+	}
+	*b.Records[0].ASN.Organization = "changed copy"
+	m.Close()
+	if b.Records[1].ASN.Number != 15169 || *b.Records[1].Location.CountryCode != "US" {
+		t.Fatal("reader closure invalidated copies", b)
+	}
+	if _, err = m.LookupBatch(ips); !errors.Is(err, ErrUnavailable) {
+		t.Fatal(err)
+	}
+}
 func TestCityFileIntegration(t *testing.T) {
 	path := os.Getenv("HM_TEST_CITY_MMDB")
 	if path == "" {

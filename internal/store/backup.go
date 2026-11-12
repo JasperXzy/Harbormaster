@@ -83,6 +83,9 @@ func (s *Store) PrepareRestoredCopy(ctx context.Context, now time.Time) (Restore
 	if err != nil {
 		return result, err
 	}
+	if _, err = tx.ExecContext(ctx, "UPDATE trace_enrichment SET state='failed',updated_at=?,error_code='backup_restored',result_json=NULL,lease_owner=NULL,lease_until=0 WHERE state IN ('queued','running')", timestamp(now)); err != nil {
+		return result, err
+	}
 	for _, query := range []string{
 		"DELETE FROM session",
 		"DELETE FROM setup_credential",

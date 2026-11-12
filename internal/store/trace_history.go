@@ -127,7 +127,7 @@ func (s *Store) SubmitTrace(ctx context.Context, in model.TraceSubmission, now t
 
 // Persist the small list projection in the same transaction as the raw result.
 // Private queue tasks without a panel history row simply update zero rows.
-func saveTraceOutcome(ctx context.Context, tx *sql.Tx, id, raw string) error {
+func saveTraceOutcome(ctx context.Context, tx *sql.Tx, id, raw string, now time.Time) error {
 	var wrapped struct {
 		Result netprobe.TraceResult `json:"result"`
 	}
@@ -139,18 +139,23 @@ func saveTraceOutcome(ctx context.Context, tx *sql.Tx, id, raw string) error {
 		return err
 	}
 	_, err = tx.ExecContext(ctx, "UPDATE network_trace_run SET outcome_json=? WHERE job_id=?", string(projection), id)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, "INSERT OR IGNORE INTO trace_enrichment(trace_seq,state,updated_at) SELECT seq,'queued',? FROM network_trace_run WHERE job_id=?", timestamp(now), id)
 	return err
 }
 
-const traceColumns = `r.seq,r.job_id,r.point_id,r.point_name,p.point_kind,p.instance_id,r.target_json,p.request_json,r.created_at,coalesce(j.finished_at,j.started_at),j.status,j.error_code,r.outcome_json`
-const traceJoins = ` FROM network_trace_run r JOIN network_probe_job p ON p.job_id=r.job_id JOIN job j ON j.id=r.job_id `
+const traceColumns = `r.seq,r.job_id,r.point_id,r.point_name,p.point_kind,p.instance_id,r.target_json,p.request_json,r.created_at,coalesce(j.finished_at,j.started_at),j.status,j.error_code,r.outcome_json,coalesce(e.state,CASE WHEN j.status IN ('queued','running') THEN 'waiting_result' ELSE 'not_available' END),e.updated_at,e.error_code`
+const traceJoins = ` FROM network_trace_run r JOIN network_probe_job p ON p.job_id=r.job_id JOIN job j ON j.id=r.job_id LEFT JOIN trace_enrichment e ON e.trace_seq=r.seq `
 
 func readTrace(row rowScanner) (model.TraceDetail, error) {
 	var d model.TraceDetail
 	var seq int64
 	var created, request string
 	var target, updated, code, outcome, result sql.NullString
-	err := row.Scan(&seq, &d.JobID, &d.PointID, &d.PointName, &d.PointKind, &d.InstanceID, &target, &request, &created, &updated, &d.Status, &code, &outcome, &result)
+	var enrichmentUpdated, enrichmentCode, enrichment sql.NullString
+	err := row.Scan(&seq, &d.JobID, &d.PointID, &d.PointName, &d.PointKind, &d.InstanceID, &target, &request, &created, &updated, &d.Status, &code, &outcome, &d.EnrichmentStatus, &enrichmentUpdated, &enrichmentCode, &result, &enrichment)
 	if err != nil {
 		return d, err
 	}
@@ -162,6 +167,18 @@ func readTrace(row rowScanner) (model.TraceDetail, error) {
 	d.UpdatedAt = d.CreatedAt
 	if t := parseAgentTime(updated); t != nil {
 		d.UpdatedAt = *t
+	}
+	if t := parseAgentTime(enrichmentUpdated); t != nil && t.After(d.UpdatedAt) {
+		d.UpdatedAt = *t
+	}
+	if enrichmentCode.Valid {
+		d.EnrichmentError = model.Error(enrichmentCode.String)
+	}
+	if enrichment.Valid {
+		d.Enrichment = new(model.TraceEnrichment)
+		if err = json.Unmarshal([]byte(enrichment.String), d.Enrichment); err != nil {
+			return d, err
+		}
 	}
 	if code.Valid {
 		d.Error = model.Error(code.String)
@@ -197,7 +214,7 @@ func (s *Store) Trace(ctx context.Context, id string) (model.TraceDetail, error)
 	if err != nil || seq < 1 {
 		return model.TraceDetail{}, ErrNotFound
 	}
-	d, err := readTrace(s.DB.QueryRowContext(ctx, "SELECT "+traceColumns+",p.result_json"+traceJoins+"WHERE r.seq=?", seq))
+	d, err := readTrace(s.DB.QueryRowContext(ctx, "SELECT "+traceColumns+",p.result_json,e.result_json"+traceJoins+"WHERE r.seq=?", seq))
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -207,7 +224,7 @@ func (s *Store) Traces(ctx context.Context, f model.TraceFilter) ([]model.TraceR
 	if !f.Validate() {
 		return nil, netprobe.ErrInvalid
 	}
-	rows, err := s.DB.QueryContext(ctx, "SELECT "+traceColumns+",NULL"+traceJoins+"WHERE r.created_at>=? AND r.created_at<? AND (?='' OR r.point_id=?) AND (?='' OR r.target_id=?) AND (?=0 OR r.seq<?) ORDER BY r.seq DESC LIMIT ?", timestamp(f.From), timestamp(f.To), f.PointID, f.PointID, f.TargetID, f.TargetID, f.Before, f.Before, f.Limit)
+	rows, err := s.DB.QueryContext(ctx, "SELECT "+traceColumns+",NULL,NULL"+traceJoins+"WHERE r.created_at>=? AND r.created_at<? AND (?='' OR r.point_id=?) AND (?='' OR r.target_id=?) AND (?=0 OR r.seq<?) ORDER BY r.seq DESC LIMIT ?", timestamp(f.From), timestamp(f.To), f.PointID, f.PointID, f.TargetID, f.TargetID, f.Before, f.Before, f.Limit)
 	if err != nil {
 		return nil, err
 	}

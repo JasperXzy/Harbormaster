@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-13  Trace enrichment: persist background offline ASN/geolocation, bounded public-only PTR, per-TTL response statistics and evidence-based network labels separately from immutable agent reports. Detail/export read frozen results and dataset attribution; history adds enrichment_status only. Missing responses/ASN remain unknown; CN2 tier, Alibaba cross-border status and detour stay unconfirmed. Restored unfinished enrichment is cancelled with old work.
 # 2026-11-13  Offline IP database: add cached /network/ipdb status with source attribution, dataset versions/sizes and process memory evidence. User chose bundled ASN+country, optional city. Updates fetch monthly public DB-IP files in the background; record lookups stay offline. User approved an evidence-only label policy for the next trace integration: CN2 GIA/GT and Alibaba cross-border status stay unconfirmed; estimated geolocation does not prove detour.
 # 2026-11-13  Trace panel: add async POST /network/traces, bounded summary history, detail and text export. Submission snapshots point/target/request, checks source trace polling separately from ordinary probes and rechecks queued managed targets. GET reads stored data only; no synchronous DNS/cloud/probing. Per-hop absence is unknown, TCP reset means reached but closed. Demo reads are synthetic.
 # 2026-11-13  Trace queue: network_probe also covers fixed traceroute tasks. Private agent claim/result endpoints keep trace payloads separate from ordinary probes; old agents cannot claim traces. Shared point leases and expiry prevent overlap/replay. Job.result stays null; no panel trace submission/history route is introduced in this phase.
@@ -232,7 +233,7 @@ paths:
       tags: [network]
       operationId: exportNetworkTrace
       summary: Export stored trace as plain text
-      description: Includes state, request and individual responses; no online enrichment or inferred route label. Pending traces export their current state with no fabricated hops.
+      description: Includes state, request, individual responses and any saved enrichment with dataset versions and attribution. Export starts no lookups. Pending traces export their current state with no fabricated hops or metadata.
       parameters:
         - {name: id, in: path, required: true, schema: {type: string}}
       responses:
@@ -2573,7 +2574,7 @@ components:
         sample_count: {type: integer}
     TraceRun:
       type: object
-      required: [id, job_id, point_id, point_name, point_kind, instance_id, target, request, created_at, updated_at, status, outcome, error]
+      required: [id, job_id, point_id, point_name, point_kind, instance_id, target, request, created_at, updated_at, status, outcome, error, enrichment_status]
       properties:
         id: {type: string}
         job_id: {type: string}
@@ -2590,6 +2591,7 @@ components:
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
         status: {type: string, enum: [queued, running, succeeded, failed], description: "succeeded means complete execution; connectivity is described by outcome."}
+        enrichment_status: {type: string, enum: [waiting_result, not_available, queued, running, complete, partial, failed], description: Independent background processing. Complete can include missing database coverage or absent PTR; partial means a lookup failed or timed out. No lookups are started by a GET.}
         outcome:
           type: object
           nullable: true
@@ -2604,12 +2606,124 @@ components:
       allOf:
         - $ref: "#/components/schemas/TraceRun"
         - type: object
-          required: [result]
+          required: [result, enrichment, enrichment_error]
           properties:
+            enrichment:
+              type: object
+              nullable: true
+              allOf: [{$ref: "#/components/schemas/TraceEnrichment"}]
+            enrichment_error:
+              type: object
+              nullable: true
+              properties:
+                code: {type: string}
+                message: {type: string}
             result:
               type: object
               nullable: true
               allOf: [{$ref: "#/components/schemas/TraceResult"}]
+    TraceEnrichment:
+      type: object
+      required: [enriched_at, status, asn_database, location_database, addresses, hops, labels, detour_status, attribution]
+      description: Frozen at enrichment time, not silently rewritten by database updates. IP ownership/geolocation and PTR do not prove the forwarding path, physical location or verified host identity. Only observed responding addresses are enriched. Hop candidate sets preserve multipath and gaps instead of claiming a unique BGP AS path.
+      properties:
+        enriched_at: {type: string, format: date-time}
+        status: {type: string, enum: [complete, partial]}
+        asn_database:
+          type: object
+          nullable: true
+          allOf: [{$ref: "#/components/schemas/IPDatabaseDataset"}]
+        location_database:
+          type: object
+          nullable: true
+          allOf: [{$ref: "#/components/schemas/IPDatabaseDataset"}]
+        addresses:
+          type: array
+          maxItems: 150
+          items: {$ref: "#/components/schemas/TraceAddressInfo"}
+        hops:
+          type: array
+          maxItems: 30
+          items: {$ref: "#/components/schemas/TraceHopInfo"}
+        labels:
+          type: array
+          items: {$ref: "#/components/schemas/TraceNetworkLabel"}
+        detour_status: {type: string, enum: [unconfirmed], description: Estimated location sequence alone cannot establish detour.}
+        attribution:
+          type: array
+          description: Show the DB-IP attribution link wherever these data are displayed; retain it in exports.
+          items:
+            type: object
+            required: [name, url, license, license_url]
+            properties:
+              name: {type: string}
+              url: {type: string, format: uri}
+              license: {type: string}
+              license_url: {type: string, format: uri}
+    TraceAddressInfo:
+      type: object
+      required: [address, asn, location, asn_status, location_status, ptr]
+      properties:
+        address: {type: string}
+        asn_status: {type: string, enum: [ok, not_found, not_public, unavailable]}
+        location_status: {type: string, enum: [ok, not_found, not_public, unavailable]}
+        asn:
+          type: object
+          nullable: true
+          required: [number, organization, prefix, dataset]
+          properties:
+            number: {type: integer, format: int64, minimum: 1}
+            organization: {type: string, nullable: true}
+            prefix: {type: string, description: Matched offline database network.}
+            dataset: {$ref: "#/components/schemas/IPDatabaseDataset"}
+        location:
+          type: object
+          nullable: true
+          required: [country_code, country_name, region, city, latitude, longitude, prefix, granularity, dataset]
+          properties:
+            country_code: {type: string, nullable: true}
+            country_name: {type: string, nullable: true}
+            region: {type: string, nullable: true}
+            city: {type: string, nullable: true}
+            latitude: {type: number, nullable: true}
+            longitude: {type: number, nullable: true}
+            prefix: {type: string}
+            granularity: {type: string, enum: [country, city]}
+            dataset: {$ref: "#/components/schemas/IPDatabaseDataset"}
+        ptr:
+          type: object
+          required: [status, names, truncated]
+          properties:
+            status: {type: string, enum: [ok, not_found, not_public, timeout, unavailable, invalid_response]}
+            names: {type: array, maxItems: 8, items: {type: string, maxLength: 253}}
+            truncated: {type: boolean}
+    TraceHopInfo:
+      type: object
+      required: [ttl, attempts, responses, no_response_percent, minimum_ms, maximum_ms, average_ms, addresses, asn_candidates, unknown_asn, country_codes, unknown_location]
+      properties:
+        ttl: {type: integer}
+        attempts: {type: integer, description: "Actually recorded attempts, including timeouts; never fabricate missing attempts."}
+        responses: {type: integer}
+        no_response_percent: {type: number, nullable: true, description: Fraction of recorded attempts without a response; not forwarding packet loss. Null when no attempts were recorded.}
+        minimum_ms: {type: number, nullable: true}
+        maximum_ms: {type: number, nullable: true}
+        average_ms: {type: number, nullable: true}
+        addresses: {type: array, items: {type: string}}
+        asn_candidates: {type: array, items: {type: integer, format: int64}}
+        unknown_asn: {type: boolean, description: Any unanswered attempt or response lacking ASN coverage; also true for a TTL without recorded attempts.}
+        country_codes: {type: array, items: {type: string}}
+        unknown_location: {type: boolean}
+    TraceNetworkLabel:
+      type: object
+      required: [code, asn, addresses, ttls, service_tier, cross_border, reference_url]
+      properties:
+        code: {type: string, enum: [cn2, chinanet_163, cu_9929, cu_4837, cmi, alibaba_network]}
+        asn: {type: integer, format: int64}
+        addresses: {type: array, items: {type: string}, description: Responding IPs actually assigned this ASN by the frozen database. No prefix guesses.}
+        ttls: {type: array, items: {type: integer}}
+        service_tier: {type: string, nullable: true, enum: [unconfirmed, null], description: CN2 GIA/GT remains unconfirmed; null for other networks.}
+        cross_border: {type: string, nullable: true, enum: [unconfirmed, null], description: Alibaba cross-border use remains unconfirmed; null for other networks.}
+        reference_url: {type: string, format: uri, description: "ASN registry reference for the label, not a live lookup or route verification."}
     TraceResult:
       type: object
       required: [started_at, finished_at, address, resolved_addresses, hops, reached, stop_reason]

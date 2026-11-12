@@ -232,6 +232,21 @@ func TestTraceSourceNeedsSeparateAuthenticatedCapabilityAndCachesAgentResult(t *
 	if err != nil || detail.Outcome == nil || !detail.Outcome.Reached || detail.Result == nil || detail.PointID != "ecs" {
 		t.Fatal(detail, err)
 	}
+	enrichment, err := s.ClaimTraceEnrichment(ctx, now.Add(2*time.Second))
+	if err != nil || enrichment.TraceID != accepted.TraceID {
+		t.Fatal(enrichment, err)
+	}
+	if err = s.FinishTraceEnrichment(ctx, enrichment, &model.TraceEnrichment{Status: "complete", EnrichedAt: now.Add(2 * time.Second)}, "", now.Add(2*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	ack, err := s.AcceptTraceResult(ctx, token, traceReport(work.Task.ID, owner, agent, now), now.Add(3*time.Second))
+	if err != nil || !ack.Duplicate {
+		t.Fatal("enrichment changed canonical duplicate ACK", ack, err)
+	}
+	var enrichments int
+	if err = s.DB.QueryRow("SELECT count(*) FROM trace_enrichment").Scan(&enrichments); err != nil || enrichments != 1 {
+		t.Fatal("duplicate queued extra enrichment", enrichments, err)
+	}
 	if _, err = s.DB.Exec("UPDATE agent_trace_contact SET token_hash=zeroblob(32)"); err != nil {
 		t.Fatal(err)
 	}
