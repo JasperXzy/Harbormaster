@@ -114,6 +114,8 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 	}
 	ops := []operation{}
 	switch options.Check {
+	case "ecs-metric-schema":
+		ops = append(ops, newOperation(p, "DescribeMetricMetaList", p.Regions[0], map[string]string{"Namespace": "acs_ecs_dashboard", "PageNumber": "1", "PageSize": "30"}, "PageNumber", "Resources.Resource"))
 	case "metric-schema":
 		for _, metric := range [][2]string{{"acs_vpc_eip", "net.rx"}, {"acs_vpc_eip", "net.tx"}, {"acs_bandwidth_package", "net_rx.rate"}, {"acs_bandwidth_package", "net_tx.rate"}} {
 			ops = append(ops, newOperation(p, "DescribeMetricMetaList", p.Regions[0], map[string]string{"Namespace": metric[0], "MetricName": metric[1], "PageNumber": "1", "PageSize": "100"}, "", ""))
@@ -165,7 +167,7 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			ops = append(ops, newOperation(p, "DescribeMetricList", p.Regions[0], map[string]string{"Namespace": ns, "MetricName": name, "Dimensions": string(dim), "StartTime": end.Add(-time.Hour).Format(time.RFC3339), "EndTime": end.Format(time.RFC3339), "Period": "60"}, "", ""))
 		}
 	default:
-		return nil, errors.New("check_must_be_inventory_billing_metrics_metric_schema_or_cdt")
+		return nil, errors.New("check_must_be_inventory_billing_metrics_metric_schema_ecs_metric_schema_or_cdt")
 	}
 	return ops, nil
 }

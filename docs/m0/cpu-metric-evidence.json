@@ -1,0 +1,58 @@
+{
+  "verified_at": "2026-11-12T10:18:00Z",
+  "account_alias": "jasperxzy",
+  "region": "cn-shanghai",
+  "action": "DescribeMetricMetaList",
+  "status": "passed",
+  "complete": true,
+  "pages": 11,
+  "catalog_records": 307,
+  "cloud_writes": 0,
+  "metrics": [
+    {
+      "Namespace": "acs_ecs_dashboard",
+      "MetricName": "AdvanceCredit",
+      "Description": "突发性能实例预支CPU积分",
+      "Unit": "count",
+      "Dimensions": "userId,instanceId",
+      "Periods": "60,300,3600",
+      "Statistics": "Average,Minimum,Maximum"
+    },
+    {
+      "Namespace": "acs_ecs_dashboard",
+      "MetricName": "BurstCredit",
+      "Description": "突发性能实例已消耗CPU积分",
+      "Unit": "count",
+      "Dimensions": "userId,instanceId",
+      "Periods": "60,300,3600",
+      "Statistics": "Maximum,Minimum,Average"
+    },
+    {
+      "Namespace": "acs_ecs_dashboard",
+      "MetricName": "CPUUtilization",
+      "Description": "(ECS)CPU使用率\t",
+      "Unit": "%",
+      "Dimensions": "userId,instanceId",
+      "Periods": "60,300,3600",
+      "Statistics": "Average,Minimum,Maximum"
+    },
+    {
+      "Namespace": "acs_ecs_dashboard",
+      "MetricName": "NotpaidSurplusCredit",
+      "Description": "突发性能实例超额CPU积分",
+      "Unit": "count",
+      "Dimensions": "userId,instanceId",
+      "Periods": "60,300,3600",
+      "Statistics": "Minimum,Average,Maximum"
+    },
+    {
+      "Namespace": "acs_ecs_dashboard",
+      "MetricName": "TotalCredit",
+      "Description": "突发性能实例累积CPU积分",
+      "Unit": "count",
+      "Dimensions": "userId,instanceId",
+      "Periods": "60,300,3600",
+      "Statistics": "Average,Maximum,Minimum"
+    }
+  ]
+}

@@ -10,6 +10,8 @@
 
 2026-11-12 补充：重新读取 14 个写接口的官方 RAM Action/资源元数据，生成三档[策略草稿与复制接口](ram-policy.md)。这确认了模板所列的 Action 名称与实例 ARN 模式，不证明真实身份拥有写权限，也不证明 M4 创建链路的全部关联授权已经齐全。
 
+2026-11-12 补充：ECS 指标目录在 jasperxzy/cn-shanghai 真实只读查询完成（11 页、307 项）。已确认 CPUUtilization（%）与 TotalCredit（count），尚未查询实例时间序列或启用积分告警。见 [CPU 来源验证](cpu-metrics.md)。
+
 ## 验证方法
 
 2026-11-11 下载阿里云官方 Go SDK，逐项查找 Client 方法；读取官方 OpenAPI 元数据的 parameters、operationType、ramActions。没有向真实账号发送请求。31 项结果、官方链接和固定 SDK commit 见 [接口矩阵](api-table.md)；全部顶层参数名、类型、必选标志及 RAM 资源范围见 [机器可读记录](api-evidence.json)。required=true 不是场景全部必选条件。
