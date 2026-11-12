@@ -26,12 +26,12 @@ const usage = `hm-server m0 <import|set-regions|plan|query> --account NAME [opti
 Options:
   --vault PATH       encrypted credentials file (outside a Git repository)
   --key-file PATH    master-key file (outside the vault directory and repository)
-  --check NAME       inventory (default), billing, metrics, metric-schema, ecs-metric-schema, swas-cpu, event-schema, system-events or cdt
+  --check NAME       inventory (default), billing, metrics, metric-schema, ecs-metric-schema, swas-cpu, swas-network, event-schema, system-events or cdt
   --month YYYY-MM    required for billing
   --region ID        select one region already stored for this account
   --regions LIST     comma-separated list for set-regions
-  --metric-source    ecs, eip or bandwidth (metrics only)
-  --resource-id ID   cloud instance/EIP/shared-bandwidth ID (metrics or swas-cpu)
+  --metric-source    ecs, ecs-network, eip or bandwidth (metrics only)
+  --resource-id ID   cloud instance/EIP/shared-bandwidth ID (metrics, swas-cpu or swas-network)
   --output PATH     write query report to a NEW private file outside repositories
 HM_MASTER_KEY / HM_MASTER_KEY_FILE override the default key source. Never pass
 AccessKey values as flags. Import/plan make no cloud requests. Query rejects DEBUG.

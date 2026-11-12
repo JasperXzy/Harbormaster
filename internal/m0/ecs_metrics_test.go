@@ -63,3 +63,32 @@ func TestSWASCPUPlanIsFixedReadOnlyInstanceQuery(t *testing.T) {
 		t.Fatal(o)
 	}
 }
+
+func TestNetworkMetricProbesAreFixedReadOnlyQueries(t *testing.T) {
+	p := exampleProfile()
+	p.Regions = p.Regions[:1]
+	for _, tc := range []struct {
+		check, source, action string
+		names                 []string
+	}{
+		{"metrics", "ecs-network", "DescribeMetricList", []string{"InternetInRate", "InternetOutRate", "InternetIn", "InternetOut", "VPC_PublicIP_InternetInRate", "VPC_PublicIP_InternetOutRate"}},
+		{"swas-network", "", "DescribeMonitorData", []string{"VPC_PUBLICIP_INTERNETIN_RATE", "VPC_PUBLICIP_INTERNETOUT_RATE", "FLOW_USED"}},
+	} {
+		ops, err := plan(p, queryOptions{Check: tc.check, MetricSource: tc.source, ResourceID: "i-example"})
+		if err != nil || len(ops) != len(tc.names) {
+			t.Fatal(ops, err)
+		}
+		for i, o := range ops {
+			if o.Action != tc.action || o.Query["MetricName"] != tc.names[i] || o.Query["Period"] != "60" || o.Region != p.Regions[0] {
+				t.Fatal(o)
+			}
+		}
+	}
+	if _, err := plan(p, queryOptions{Check: "metrics", MetricSource: "arbitrary-network-metric", ResourceID: "i-example"}); err == nil {
+		t.Fatal("arbitrary metric accepted")
+	}
+	p.Regions = append(p.Regions, "cn-hongkong")
+	if _, err := plan(p, queryOptions{Check: "swas-network", ResourceID: "i-example"}); err == nil {
+		t.Fatal("ambiguous resource region accepted")
+	}
+}

@@ -158,7 +158,7 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			return nil, errors.New("billing_month_required_yyyy_mm")
 		}
 		ops = append(ops, newOperation(p, "QueryAccountBalance", p.Regions[0], map[string]string{}, "", ""), newOperation(p, "QueryBillOverview", p.Regions[0], map[string]string{"BillingCycle": options.Month}, "", ""), newOperation(p, "QueryInstanceBill", p.Regions[0], map[string]string{"BillingCycle": options.Month, "Granularity": "MONTHLY", "IsBillingItem": "true", "PageNum": "1", "PageSize": "100"}, "PageNum", "Data.Items.Item"))
-	case "swas-cpu":
+	case "swas-cpu", "swas-network":
 		if !regexp.MustCompile(`^[a-zA-Z0-9-]{1,128}$`).MatchString(options.ResourceID) {
 			return nil, errors.New("metric_resource_id_required")
 		}
@@ -166,7 +166,13 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			return nil, errors.New("metrics_require_one_selected_region")
 		}
 		end := time.Now().UTC()
-		ops = append(ops, newOperation(p, "DescribeMonitorData", p.Regions[0], map[string]string{"RegionId": p.Regions[0], "InstanceId": options.ResourceID, "MetricName": "CPU_UTILIZATION", "Period": "60", "StartTime": end.Add(-15 * time.Minute).Format(time.RFC3339), "EndTime": end.Format(time.RFC3339), "Length": "1440"}, "", ""))
+		names := []string{"CPU_UTILIZATION"}
+		if options.Check == "swas-network" {
+			names = []string{"VPC_PUBLICIP_INTERNETIN_RATE", "VPC_PUBLICIP_INTERNETOUT_RATE", "FLOW_USED"}
+		}
+		for _, name := range names {
+			ops = append(ops, newOperation(p, "DescribeMonitorData", p.Regions[0], map[string]string{"RegionId": p.Regions[0], "InstanceId": options.ResourceID, "MetricName": name, "Period": "60", "StartTime": end.Add(-15 * time.Minute).Format(time.RFC3339), "EndTime": end.Format(time.RFC3339), "Length": "1440"}, "", ""))
+		}
 	case "metrics":
 		if !regexp.MustCompile(`^[a-zA-Z0-9-]{1,128}$`).MatchString(options.ResourceID) {
 			return nil, errors.New("metric_resource_id_required")
@@ -177,6 +183,9 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 		case "ecs":
 			ns = "acs_ecs_dashboard"
 			names = []string{"CPUUtilization", "TotalCredit"}
+		case "ecs-network":
+			ns = "acs_ecs_dashboard"
+			names = []string{"InternetInRate", "InternetOutRate", "InternetIn", "InternetOut", "VPC_PublicIP_InternetInRate", "VPC_PublicIP_InternetOutRate"}
 		case "eip":
 			ns = "acs_vpc_eip"
 			names = []string{"net.rx", "net.tx"}
@@ -184,7 +193,7 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			ns = "acs_bandwidth_package"
 			names = []string{"net_rx.rate", "net_tx.rate"}
 		default:
-			return nil, errors.New("metric_source_must_be_ecs_eip_or_bandwidth")
+			return nil, errors.New("metric_source_must_be_ecs_ecs_network_eip_or_bandwidth")
 		}
 		// One resource belongs to one region; do not silently try it in all regions.
 		if len(p.Regions) != 1 {
@@ -196,7 +205,7 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			ops = append(ops, newOperation(p, "DescribeMetricList", p.Regions[0], map[string]string{"Namespace": ns, "MetricName": name, "Dimensions": string(dim), "StartTime": end.Add(-time.Hour).Format(time.RFC3339), "EndTime": end.Format(time.RFC3339), "Period": "60"}, "", ""))
 		}
 	default:
-		return nil, errors.New("check_must_be_inventory_billing_metrics_metric_schema_ecs_metric_schema_swas_cpu_event_schema_system_events_or_cdt")
+		return nil, errors.New("check_must_be_inventory_billing_metrics_metric_schema_ecs_metric_schema_swas_cpu_swas_network_event_schema_system_events_or_cdt")
 	}
 	return ops, nil
 }
