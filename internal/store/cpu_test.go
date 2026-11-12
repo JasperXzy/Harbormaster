@@ -18,7 +18,7 @@ func TestCPUSnapshotsRetainLastValueAndSampleTimeAcrossRestart(t *testing.T) {
 	for index := 0; index < 3; index++ {
 		at := now.Add(time.Duration(index) * time.Minute)
 		j, a := startIPv6Scan(t, s, at)
-		cpu := &model.InstanceCPU{Source: "cms", Namespace: "acs_ecs_dashboard", Usage: model.EmptyCPUMetric("CPUUtilization", at), CreditBalance: model.EmptyCPUMetric("TotalCredit", at)}
+		cpu := model.NewECSCPU(at)
 		if index == 0 {
 			zero := float64(0)
 			cpu.Usage.Value = &zero
@@ -75,5 +75,46 @@ func TestCPUSnapshotsRetainLastValueAndSampleTimeAcrossRestart(t *testing.T) {
 			}
 			t.Cleanup(func() { s.Close() })
 		}
+	}
+}
+
+func TestSWASCPUFailurePreservesItsOwnPreviousSample(t *testing.T) {
+	s := powerStore(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	sampled := now.Add(-time.Minute)
+	for step := 0; step < 2; step++ {
+		at := now.Add(time.Duration(step) * time.Minute)
+		j, a := startIPv6Scan(t, s, at)
+		usage := model.EmptyCPUMetric("CPU_UTILIZATION", at)
+		if step == 0 {
+			v := 0.133
+			usage.Value = &v
+			usage.ObservedAt = &sampled
+			usage.Status = "ok"
+			usage.LastError = nil
+		} else {
+			usage.LastError = model.Error("permission_denied")
+		}
+		cpu := &model.InstanceCPU{Source: "swas_describe_monitor_data", Usage: usage}
+		result := model.ScanResult{Snapshots: []model.Snapshot{{ID: "swas", Kind: "swas", Region: "cn-shanghai", Payload: map[string]any{"id": "swas", "cloud_instance_id": "swas-uuid", "name": "light", "status": "running", "cpu": cpu}}}, CompleteScopes: map[string]bool{"swas:cn-shanghai": true}}
+		if err := s.SaveScan(ctx, j, a, result, at); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.FinishJob(ctx, j, nil, "", at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	snapshots, err := s.Snapshots(ctx, []string{"swas"}, "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(snapshots[0]["cpu"])
+	var got model.InstanceCPU
+	if err = json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Source != "swas_describe_monitor_data" || got.Namespace != nil || got.CreditBalance != nil || got.Usage.Value == nil || *got.Usage.Value != 0.133 || got.Usage.Status != "stale" || !got.Usage.ObservedAt.Equal(sampled) || got.Usage.LastError.Code != "permission_denied" {
+		t.Fatal(got)
 	}
 }

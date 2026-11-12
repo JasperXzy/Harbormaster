@@ -27,12 +27,12 @@ func Catalog() []Draft {
 	read := Statement{Effect: "Allow", Resource: "*", Action: []string{
 		"ecs:DescribeInstances", "ecs:DescribeNetworkInterfaces", "ecs:DescribeInstanceAutoRenewAttribute",
 		"vpc:DescribeEipAddresses", "vpc:DescribeCommonBandwidthPackages",
-		"swas-open:ListInstances", "swas-open:ListInstancesTrafficPackages",
+		"swas-open:ListInstances", "swas-open:ListInstancesTrafficPackages", "swas-open:DescribeMonitorData",
 		"cms:QueryMetricList", "bss:DescribeAcccount", "bss:DescribeBillList", "bss:DescribeInstances",
 	}}
 	base := []string{"cdt_action_unverified", "public_metadata_actions_unverified", "resource_scope_not_account_bound"}
 	readonly := Draft{ID: "readonly", ReviewedOn: "2026-11-12", Verification: "draft", Limitations: append([]string{}, base...), Document: Document{Version: "1", Statement: []Statement{read}}}
-	power := Draft{ID: "instance_power", ReviewedOn: "2026-11-12", Verification: "draft", CloudWritePermissions: true, Limitations: append(append([]string{}, base...), "runtime_writes_unimplemented"), Document: Document{Version: "1", Statement: []Statement{
+	power := Draft{ID: "instance_power", ReviewedOn: "2026-11-12", Verification: "draft", CloudWritePermissions: true, Limitations: append(append([]string{}, base...), "runtime_writes_require_explicit_enable"), Document: Document{Version: "1", Statement: []Statement{
 		read,
 		{Effect: "Allow", Resource: "acs:ecs:*:*:instance/*", Action: []string{"ecs:StartInstance", "ecs:StopInstance", "ecs:RebootInstance"}},
 		{Effect: "Allow", Resource: "acs:swas-open:*:*:instance/*", Action: []string{"swas-open:StartInstance", "swas-open:StopInstance", "swas-open:RebootInstance"}},

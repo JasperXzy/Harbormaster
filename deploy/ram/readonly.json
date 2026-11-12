@@ -11,6 +11,7 @@
         "vpc:DescribeCommonBandwidthPackages",
         "swas-open:ListInstances",
         "swas-open:ListInstancesTrafficPackages",
+        "swas-open:DescribeMonitorData",
         "cms:QueryMetricList",
         "bss:DescribeAcccount",
         "bss:DescribeBillList",

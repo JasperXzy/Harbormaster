@@ -41,7 +41,7 @@ func inventoryFixture(_ context.Context, _ Credentials, action, region string, q
 		return map[string]any{"Instances": []any{map[string]any{"InstanceId": "swas-test", "InstanceName": "light", "Status": "Running", "ChargeType": "PrePaid", "PlanId": "plan-test", "PublicIpAddress": "203.0.113.12", "ResourceSpec": map[string]any{"Bandwidth": 200}}}, "TotalCount": 1}, nil
 	case "ListInstancesTrafficPackages":
 		return map[string]any{"InstanceTrafficPackageUsages": []any{}}, nil
-	case "DescribeMetricList":
+	case "DescribeMetricList", "DescribeMonitorData":
 		return map[string]any{"Success": true, "Datapoints": "[]"}, nil
 	case "ListCdtInternetTraffic":
 		return map[string]any{"TrafficDetails": []any{}}, nil

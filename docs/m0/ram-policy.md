@@ -73,3 +73,10 @@ go run ./internal/rampolicy/export ./deploy/ram
 JSON 检查输出 `readonly actions=11`、`instance_power actions=17`、`resource_management actions=25`。官方证据覆盖新增 14 个 Action；认证测试证明 GET 不创建任务或凭据，POST 不能应用策略。
 
 F1.4 尚缺具体资源范围收紧、独立最小权限身份验收、M4 创建/换 EIP 依赖以及 Claude 的复制界面。CDT 与公开元数据未列 Action 的缺口仍保留，没有用通配授权掩盖。
+
+
+## 轻量 CPU 读取补充（2026-11-12）
+
+官方 DescribeMonitorData 元数据确认只读 RAM Action 为 swas-open:DescribeMonitorData，资源格式为 `acs:swas-open:{#regionId}:{#accountId}:instance/{#InstanceId}`；sha-pro 真实只读调用已通过。三档策略均加入此动作，当前累计动作数为 12、18、26，部署 JSON 已从 Catalog 重新生成。没有更改真实 RAM 授权；资源范围未按账号收窄、CDT Action 与创建依赖等既有草稿限制仍成立。
+
+手动电源代码已经实现但默认关闭，接口限制标识改为 runtime_writes_require_explicit_enable；这只是准确描述运行时条件，不把 RAM 策略当作执行授权。详见 [CPU 来源](cpu-metrics.md)与[电源接口](instance-power.md)。

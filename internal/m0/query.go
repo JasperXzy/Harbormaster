@@ -34,6 +34,7 @@ type definition struct{ product, version, params string }
 
 // Exact allowlist, deliberately no arbitrary RPC command or endpoint flags.
 var allowed = map[string]definition{
+	"DescribeMonitorData": {"swas", "2020-06-01", "RegionId InstanceId MetricName Period StartTime EndTime Length"},
 	// ActionTrail documents this read; the request shape comes from the PRD reference project.
 	"ListCdtInternetTraffic":          {"cdt", "2021-08-13", "RegionId"},
 	"DescribeRegions":                 {"ecs", "2014-05-26", ""},
@@ -141,6 +142,15 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			return nil, errors.New("billing_month_required_yyyy_mm")
 		}
 		ops = append(ops, newOperation(p, "QueryAccountBalance", p.Regions[0], map[string]string{}, "", ""), newOperation(p, "QueryBillOverview", p.Regions[0], map[string]string{"BillingCycle": options.Month}, "", ""), newOperation(p, "QueryInstanceBill", p.Regions[0], map[string]string{"BillingCycle": options.Month, "Granularity": "MONTHLY", "IsBillingItem": "true", "PageNum": "1", "PageSize": "100"}, "PageNum", "Data.Items.Item"))
+	case "swas-cpu":
+		if !regexp.MustCompile(`^[a-zA-Z0-9-]{1,128}$`).MatchString(options.ResourceID) {
+			return nil, errors.New("metric_resource_id_required")
+		}
+		if len(p.Regions) != 1 {
+			return nil, errors.New("metrics_require_one_selected_region")
+		}
+		end := time.Now().UTC()
+		ops = append(ops, newOperation(p, "DescribeMonitorData", p.Regions[0], map[string]string{"RegionId": p.Regions[0], "InstanceId": options.ResourceID, "MetricName": "CPU_UTILIZATION", "Period": "60", "StartTime": end.Add(-15 * time.Minute).Format(time.RFC3339), "EndTime": end.Format(time.RFC3339), "Length": "1440"}, "", ""))
 	case "metrics":
 		if !regexp.MustCompile(`^[a-zA-Z0-9-]{1,128}$`).MatchString(options.ResourceID) {
 			return nil, errors.New("metric_resource_id_required")
@@ -170,7 +180,7 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			ops = append(ops, newOperation(p, "DescribeMetricList", p.Regions[0], map[string]string{"Namespace": ns, "MetricName": name, "Dimensions": string(dim), "StartTime": end.Add(-time.Hour).Format(time.RFC3339), "EndTime": end.Format(time.RFC3339), "Period": "60"}, "", ""))
 		}
 	default:
-		return nil, errors.New("check_must_be_inventory_billing_metrics_metric_schema_ecs_metric_schema_or_cdt")
+		return nil, errors.New("check_must_be_inventory_billing_metrics_metric_schema_ecs_metric_schema_swas_cpu_or_cdt")
 	}
 	return ops, nil
 }

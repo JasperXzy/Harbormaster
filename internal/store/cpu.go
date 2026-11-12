@@ -11,11 +11,11 @@ import (
 
 func retainCPU(ctx context.Context, tx *sql.Tx, accountID string, snapshot model.Snapshot) error {
 	cpu, ok := snapshot.Payload["cpu"].(*model.InstanceCPU)
-	if snapshot.Kind != "ecs" || !ok {
+	if (snapshot.Kind != "ecs" && snapshot.Kind != "swas") || !ok {
 		return nil
 	}
 	var raw string
-	err := tx.QueryRowContext(ctx, "SELECT payload_json FROM resource_snapshot WHERE account_id=? AND kind='ecs' AND id=? AND region=?", accountID, snapshot.ID, snapshot.Region).Scan(&raw)
+	err := tx.QueryRowContext(ctx, "SELECT payload_json FROM resource_snapshot WHERE account_id=? AND kind=? AND id=? AND region=?", accountID, snapshot.Kind, snapshot.ID, snapshot.Region).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
@@ -32,7 +32,9 @@ func retainCPU(ctx context.Context, tx *sql.Tx, accountID string, snapshot model
 		return nil
 	}
 	retainMetric(&cpu.Usage, previous.CPU.Usage)
-	retainMetric(&cpu.CreditBalance, previous.CPU.CreditBalance)
+	if cpu.CreditBalance != nil && previous.CPU.CreditBalance != nil {
+		retainMetric(cpu.CreditBalance, *previous.CPU.CreditBalance)
+	}
 	return nil
 }
 func retainMetric(current *model.CPUMetric, previous model.CPUMetric) {

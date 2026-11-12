@@ -1,6 +1,6 @@
 # CPU 使用率与积分来源验证
 
-2026-11-12，PRD F5.2 / F11.2。状态：ECS CMS 指标与 CPU 时间序列已真实只读确认；ECS 后台采集、缓存与只读字段已实现。轻量 CPU 来源和积分百分比告警尚未实现。
+2026-11-12，PRD F5.2 / F11.2。状态：ECS CMS 指标、ECS 与轻量 CPU 时间序列已真实只读确认；两类实例的 CPU 后台采集、缓存与只读字段已实现。真实突发积分余额及积分百分比告警尚未验证/实现。
 
 ## 方法与实际结果
 
@@ -31,7 +31,7 @@
 
 ## 未完成与后续条件
 
-- F5.2 的 ECS 采集、持久化、新鲜度处理和契约现已接入；轻量仍待来源验证。
+- F5.2 的 ECS 与轻量 CPU 采集、持久化、新鲜度处理和契约现已接入；真实突发积分余额仍待验证。
 - 上海 ECS 的 CPU 序列已验证；t5/t6 真实积分余额尚未验证。若没有真实突发实例，只能模拟测试积分流程，不能为了验证而创建收费资源。
 - F2.4 的“本地备注、一个分组、多个文本标签”模型仍待用户确认；本轮未提前修改其接口或数据库。
 
@@ -88,7 +88,7 @@ go run ./cmd/hm-server m0 query --account jasperxzy   --vault /Users/jasperxzy/.
 
 最新数据随已有 resource_snapshot 持久化，无需额外历史表。失败/空结果保留旧值与旧样本时间，状态改为 stale；返回更旧的样本也不会倒退覆盖。API 只读取缓存，距离样本超过 10 分钟时即时将响应状态标为 stale，不改写数据库或请求云接口。10 分钟是当前新鲜度工程边界，采集频率仍跟随已配置的资源扫描周期（默认 5 分钟）。
 
-开发模式提供明确的合成 CPU 使用率和未知积分；SWAS 的 cpu=null。hm-agent 没有增加 CPU 采集，未启用百分比积分告警，未改变 CDT 对齐、估算或停机条件。前端需按 source/status/unit/两个时间字段展示，不能把 TotalCredit 的 count 当百分比。
+ECS 接入阶段的开发模式提供合成 CPU 使用率和未知积分，SWAS 当时为 cpu=null；后续轻量接入见下节。hm-agent 没有增加 CPU 采集，未启用百分比积分告警，未改变 CDT 对齐、估算或停机条件。前端需按 source/status/unit/两个时间字段展示，不能把 TotalCredit 的 count 当百分比。
 
 ECS 生产采集阶段最终检查（均退出 0）：
 
@@ -124,3 +124,56 @@ git diff --check
 ```
 
 新增验证覆盖 50 台分批、跨页、部分失败不发布、显式零值、绝对积分、空/错实例/非法时间与数值、重启后保留旧样本、拒绝更旧样本覆盖，以及 HTTP 读缓存过期不改时间、不写数据库、不入队。没有真实云写操作或前端源码变更。
+
+
+## 轻量 CPU 接入
+
+2026-11-12 核对 [DescribeMonitorData 文档](https://help.aliyun.com/zh/simple-application-server/developer-reference/api-swas-open-2020-06-01-describemonitordata)及其[官方 OpenAPI 元数据](https://api.aliyun.com/meta/v1/products/SWAS-OPEN/versions/2020-06-01/apis/DescribeMonitorData/api.json)：CPU_UTILIZATION 的单位为百分比，支持 Period=60，按 RegionId/InstanceId 查询，Datapoints 为 JSON 字符串，NextToken/Length 用于分页。所需 RAM 动作为 swas-open:DescribeMonitorData（get），对应实例 ARN。
+
+对已纳管 sha-pro 做真实只读查询，2026-11-12T10:33:06Z 返回 passed、complete=true，15 个一分钟样本；最新样本时间 2026-11-12T10:33:00Z，Average=0.133%。响应的 instanceId 是 SWAS 实例 ID，可直接与查询目标核对；未使用元数据返回的底层 ECS ID。没有安装 agent、云监控插件或调用云助手。
+
+```text
+go run ./cmd/hm-server m0 query --account winnemjw   --vault /Users/jasperxzy/.local/share/harbormaster-m0/credentials.enc   --key-file /Users/jasperxzy/.config/harbormaster/keys/m0.key   --region cn-shanghai --check swas-cpu   --resource-id dadf5c812fd5476a8ce33ab385a84c8f   --output /Users/jasperxzy/.local/share/harbormaster-m0/cpu-schema-_z5_lw7p/swas-cpu-samples.json
+{"account":"winnemjw","cloud_writes":0,"status":"report_written"}
+```
+
+退出 0。仓库中的证据摘录不含响应里的 userId。
+
+生产扫描为每台轻量实例查询最近 15 分钟的 CPU 样本，与 ECS 共用样本校验、分页上限、5 秒查询预算、失败保留旧样本和 10 分钟新鲜度判断。此 API 只支持单实例参数，因此不套用 ECS 的 50 台批量查询方式。
+
+契约变化：轻量的 `Instance.cpu.source=swas_describe_monitor_data`、`usage.metric_name=CPU_UTILIZATION`；`namespace=null`，因为该接口不是 CMS 命名空间查询；`credit_balance=null`，因为该接口没有 CPU 积分指标。ECS 保持 cms / acs_ecs_dashboard / TotalCredit 的原有语义。开发示例同时提供两种来源，前端应按 nullable 字段处理。
+
+三档 RAM 草稿新增只读动作 swas-open:DescribeMonitorData，动作总数变为 12 / 18 / 26；仅更新仓库文本，没有为真实账号附加或修改权限。原 runtime_writes_unimplemented 提示也改为 runtime_writes_require_explicit_enable，以匹配现已实现、默认关闭的手动电源接口。创建/换 EIP 等运行时功能仍未实现，不因策略草稿存在而获得执行能力。
+
+轻量阶段最终验证（均退出 0）：
+
+```text
+go test ./internal/cloud/aliyun ./internal/store ./internal/devmode ./internal/rampolicy
+ok github.com/JasperXzy/harbormaster/internal/cloud/aliyun 3.414s
+ok github.com/JasperXzy/harbormaster/internal/store 1.760s
+ok github.com/JasperXzy/harbormaster/internal/devmode 0.841s
+ok github.com/JasperXzy/harbormaster/internal/rampolicy 0.152s
+
+go build ./... && go vet ./...
+（无输出）
+
+go test -race ./...
+ok github.com/JasperXzy/harbormaster/internal/api 47.750s
+ok github.com/JasperXzy/harbormaster/internal/cli 8.804s
+ok github.com/JasperXzy/harbormaster/internal/cloud/aliyun 5.084s
+ok github.com/JasperXzy/harbormaster/internal/collect 4.973s
+ok github.com/JasperXzy/harbormaster/internal/devmode 6.429s
+ok github.com/JasperXzy/harbormaster/internal/m0 2.122s
+ok github.com/JasperXzy/harbormaster/internal/rampolicy 1.551s
+ok github.com/JasperXzy/harbormaster/internal/store 29.416s
+其余有测试的包均 ok (cached)，命令包等为 [no test files]。
+
+npm --prefix web run lint:api
+../docs/api/openapi.yaml: validated in 41ms
+Woohoo! Your API description is valid.
+
+git diff --check
+（无输出）
+```
+
+新增测试覆盖固定 SWAS 签名/端点与实例参数、分页、错误 ID、超范围 CPU、空结果、重复游标、失败后保留轻量自己的样本及不伪造积分字段。三档策略部署副本与 Catalog 一致性检查通过。真实云写操作数仍为 0。

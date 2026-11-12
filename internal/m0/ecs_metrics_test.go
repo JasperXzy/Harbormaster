@@ -50,3 +50,16 @@ func TestECSMetricDataUsesVerifiedNamesAndOnlyInstanceDimension(t *testing.T) {
 		}
 	}
 }
+
+func TestSWASCPUPlanIsFixedReadOnlyInstanceQuery(t *testing.T) {
+	p := exampleProfile()
+	p.Regions = p.Regions[:1]
+	ops, err := plan(p, queryOptions{Check: "swas-cpu", ResourceID: "swas-test"})
+	if err != nil || len(ops) != 1 {
+		t.Fatal(ops, err)
+	}
+	o := ops[0]
+	if o.Action != "DescribeMonitorData" || o.Product != "swas" || o.Query["InstanceId"] != "swas-test" || o.Query["MetricName"] != "CPU_UTILIZATION" || o.Query["Period"] != "60" || o.Query["RegionId"] != p.Regions[0] {
+		t.Fatal(o)
+	}
+}

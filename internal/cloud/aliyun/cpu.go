@@ -19,14 +19,17 @@ func (c Inventory) attachCPU(ctx context.Context, cred Credentials, region strin
 	now := time.Now().UTC()
 	for _, s := range snapshots {
 		if s.Kind == "swas" {
-			s.Payload["cpu"] = nil
+			id, _ := s.Payload["cloud_instance_id"].(string)
+			readings, err := c.cpuMetric(ctx, cred, region, []string{id}, "CPU_UTILIZATION", before)
+			observe("swas_read", err)
+			s.Payload["cpu"] = &model.InstanceCPU{Source: "swas_describe_monitor_data", Usage: readings[id]}
 			continue
 		}
 		if s.Kind != "ecs" {
 			continue
 		}
 		id, _ := s.Payload["cloud_instance_id"].(string)
-		cpu := &model.InstanceCPU{Source: "cms", Namespace: "acs_ecs_dashboard", Usage: model.EmptyCPUMetric("CPUUtilization", now), CreditBalance: model.EmptyCPUMetric("TotalCredit", now)}
+		cpu := model.NewECSCPU(now)
 		s.Payload["cpu"] = cpu
 		if id != "" {
 			targets[id] = cpu
@@ -44,7 +47,7 @@ func (c Inventory) attachCPU(ctx context.Context, cred Credentials, region strin
 				if name == "CPUUtilization" {
 					targets[id].Usage = reading
 				} else {
-					targets[id].CreditBalance = reading
+					targets[id].CreditBalance = &reading
 				}
 			}
 		}
@@ -66,8 +69,13 @@ func (c Inventory) cpuMetric(ctx context.Context, cred Credentials, region strin
 		}
 		return result, err
 	}
-	if name != "CPUUtilization" && name != "TotalCredit" || len(ids) == 0 || len(ids) > 50 {
+	if name != "CPUUtilization" && name != "TotalCredit" && name != "CPU_UTILIZATION" || len(ids) == 0 || len(ids) > 50 || (name == "CPU_UTILIZATION" && len(ids) != 1) {
 		return fail(failure("invalid_metric_request"))
+	}
+	for _, id := range ids {
+		if !powerIDPattern.MatchString(id) {
+			return fail(failure("invalid_metric_request"))
+		}
 	}
 	dimensions := make([]map[string]string, 0, len(ids))
 	for _, id := range ids {
@@ -75,6 +83,11 @@ func (c Inventory) cpuMetric(ctx context.Context, cred Credentials, region strin
 	}
 	raw, _ := json.Marshal(dimensions)
 	query := map[string]string{"Namespace": "acs_ecs_dashboard", "MetricName": name, "Dimensions": string(raw), "StartTime": strconv.FormatInt(start.UnixMilli(), 10), "EndTime": strconv.FormatInt(now.UnixMilli(), 10), "Period": "60", "Length": "1440"}
+	action := "DescribeMetricList"
+	if name == "CPU_UTILIZATION" {
+		action = "DescribeMonitorData"
+		query = map[string]string{"RegionId": region, "InstanceId": ids[0], "MetricName": name, "Period": "60", "Length": "1440", "StartTime": strconv.FormatInt(start.UnixMilli(), 10), "EndTime": strconv.FormatInt(now.UnixMilli(), 10)}
+	}
 	readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	tokens := map[string]bool{}
@@ -83,7 +96,7 @@ func (c Inventory) cpuMetric(ctx context.Context, cred Credentials, region strin
 		if err := before(); err != nil {
 			return fail(err)
 		}
-		body, err := c.Caller.Call(readCtx, cred, "DescribeMetricList", region, query)
+		body, err := c.Caller.Call(readCtx, cred, action, region, query)
 		if err != nil {
 			return fail(err)
 		}
@@ -124,7 +137,7 @@ func (c Inventory) cpuMetric(ctx context.Context, cred Credentials, region strin
 				return fail(failure("invalid_response"))
 			}
 			value, ok := metricNumber(point["Average"])
-			if !ok || value < 0 || name == "CPUUtilization" && value > 100 {
+			if !ok || value < 0 || name != "TotalCredit" && value > 100 {
 				return fail(failure("invalid_response"))
 			}
 			pointKey := id + ":" + strconv.FormatInt(millis, 10)

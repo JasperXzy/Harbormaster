@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  SWAS CPU: Instance.cpu also supports swas_describe_monitor_data / CPU_UTILIZATION with percent samples; namespace and credit_balance are null for SWAS. Preserve the same stale/unknown and timestamp behavior. RAM drafts add the read-only swas-open:DescribeMonitorData action, and runtime limitation text reflects explicit power enablement.
 # 2026-11-12  ECS CPU snapshots: optional Instance.cpu exposes CMS CPUUtilization (%) and TotalCredit (absolute count), sampled at 60 seconds. Background inventory queries only; failed/empty sources retain older values as stale, and reads age samples after ten minutes. Unknown remains null, never zero. SWAS CPU remains null pending source verification; no CPU-credit percentage alert or traffic protection is enabled.
 # 2026-11-12  API Key control: isolated /integrations/instances/{instance_id}/power and /integrations/jobs/{job_id} use Authorization Bearer plus instance:control, never cookie fallback. Keep HTTPS/host/admin-CIDR checks; Origin/CSRF are not required for explicit bearer credentials. Keys can query only their own power jobs. Idempotency is namespaced by key/panel, and active jobs do not merge across principals. Revocation cancels pre-dispatch jobs atomically while retaining intent; dispatched work keeps its evidence and is never replayed.
 # 2026-11-12  Manual power API: POST /instances/{instance_id}/power requires session+CSRF, a durable Idempotency-Key and explicit ECS stop mode. Returns 202 after local enqueue, never synchronously calls the cloud. Disabled by default via instance_power_enabled; SystemInfo exposes that capability. Instance desired_state/desired_state_updated_at are nullable until recorded intent exists, never inferred from cloud status or the legacy stopped default. Demo remains read-only.
@@ -2170,14 +2171,19 @@ components:
       properties:
         source:
           type: string
-          enum: [cms]
+          enum: [cms, swas_describe_monitor_data]
         namespace:
           type: string
-          enum: [acs_ecs_dashboard]
+          nullable: true
+          enum: [acs_ecs_dashboard, null]
         usage:
           $ref: "#/components/schemas/CPUMetric"
         credit_balance:
-          $ref: "#/components/schemas/CPUMetric"
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/CPUMetric"
+          description: ECS absolute credits; null for SWAS, whose CPU endpoint does not expose this metric.
 
     CPUMetric:
       type: object
@@ -2185,7 +2191,7 @@ components:
       properties:
         metric_name:
           type: string
-          enum: [CPUUtilization, TotalCredit]
+          enum: [CPUUtilization, TotalCredit, CPU_UTILIZATION]
         unit:
           type: string
           enum: [percent, count]
@@ -2281,7 +2287,7 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/InstanceCPU"
-          description: ECS cached CPU samples. Null for SWAS until its source is verified. GET performs no cloud calls.
+          description: Cached CPU samples from ECS CMS or SWAS DescribeMonitorData. GET performs no cloud calls.
         public_ips:
           type: array
           description: 公网 IPv4。

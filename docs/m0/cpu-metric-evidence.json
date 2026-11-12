@@ -85,5 +85,29 @@
         "sample_count": 0
       }
     ]
+  },
+  "swas_sample_query": {
+    "account_alias": "winnemjw",
+    "instance_alias": "sha-pro",
+    "region": "cn-shanghai",
+    "action": "DescribeMonitorData",
+    "metric_name": "CPU_UTILIZATION",
+    "unit": "percent",
+    "period_seconds": 60,
+    "status": "passed",
+    "complete": true,
+    "fetched_at": "2026-11-12T10:33:06Z",
+    "sample_count": 15,
+    "latest": {
+      "timestamp": 1794479580000,
+      "Average": 0.133,
+      "Minimum": 0.133,
+      "Maximum": 0.133
+    },
+    "cloud_writes": 0,
+    "official_api": "https://api.aliyun.com/meta/v1/products/SWAS-OPEN/versions/2020-06-01/apis/DescribeMonitorData/api.json",
+    "ram_action": "swas-open:DescribeMonitorData",
+    "ram_access": "get",
+    "ram_resource": "acs:swas-open:{#regionId}:{#accountId}:instance/{#InstanceId}"
   }
 }

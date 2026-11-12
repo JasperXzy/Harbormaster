@@ -46,6 +46,7 @@ func Code(err error) string {
 type definition struct{ product, version, params string }
 
 var reads = map[string]definition{
+	"DescribeMonitorData":                {"swas", "2020-06-01", "RegionId InstanceId MetricName Period StartTime EndTime Length NextToken"},
 	"DescribeInstanceAutoRenewAttribute": {"ecs", "2014-05-26", "RegionId InstanceId PageNumber PageSize"},
 	"QueryAvailableInstances":            {"bss", "2017-12-14", "InstanceIDs SubscriptionType PageNum PageSize"},
 	"DescribeRegions":                    {"ecs", "2014-05-26", ""},
