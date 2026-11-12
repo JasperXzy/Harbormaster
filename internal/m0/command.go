@@ -26,7 +26,7 @@ const usage = `hm-server m0 <import|set-regions|plan|query> --account NAME [opti
 Options:
   --vault PATH       encrypted credentials file (outside a Git repository)
   --key-file PATH    master-key file (outside the vault directory and repository)
-  --check NAME       inventory (default), billing, metrics, metric-schema, ecs-metric-schema, swas-cpu, swas-network, event-schema, system-events or cdt
+  --check NAME       inventory (default), billing, instance-billing, metrics, metric-schema, ecs-metric-schema, swas-cpu, swas-network, event-schema, system-events or cdt
   --month YYYY-MM    required for billing
   --region ID        select one region already stored for this account
   --regions LIST     comma-separated list for set-regions

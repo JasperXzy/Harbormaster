@@ -49,6 +49,7 @@ var allowed = map[string]definition{
 	"ListInstancesTrafficPackages":    {"swas", "2020-06-01", "RegionId InstanceIds"},
 	"QueryAccountBalance":             {"bss", "2017-12-14", ""},
 	"QueryBillOverview":               {"bss", "2017-12-14", "BillingCycle"},
+	"DescribeInstanceBill":            {"bss", "2017-12-14", "BillingCycle Granularity IsBillingItem MaxResults NextToken"},
 	"QueryInstanceBill":               {"bss", "2017-12-14", "BillingCycle Granularity IsBillingItem PageNum PageSize"},
 	"DescribeMetricList":              {"cms", "2019-01-01", "Namespace MetricName Dimensions StartTime EndTime Period"},
 	"DescribeMetricMetaList":          {"cms", "2019-01-01", "Namespace MetricName PageNumber PageSize"},
@@ -153,6 +154,11 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 				ops = append(ops, newOperation(p, item[0], region, map[string]string{"RegionId": region, "PageNumber": "1", "PageSize": size}, "PageNumber", item[1]))
 			}
 		}
+	case "instance-billing":
+		if _, err := time.Parse("2006-01", options.Month); err != nil {
+			return nil, errors.New("billing_month_required_yyyy_mm")
+		}
+		ops = append(ops, newOperation(p, "DescribeInstanceBill", p.Regions[0], map[string]string{"BillingCycle": options.Month, "Granularity": "MONTHLY", "IsBillingItem": "false", "MaxResults": "300"}, "NextToken", "Data.Items"))
 	case "billing":
 		if _, err := time.Parse("2006-01", options.Month); err != nil {
 			return nil, errors.New("billing_month_required_yyyy_mm")
@@ -205,7 +211,7 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			ops = append(ops, newOperation(p, "DescribeMetricList", p.Regions[0], map[string]string{"Namespace": ns, "MetricName": name, "Dimensions": string(dim), "StartTime": end.Add(-time.Hour).Format(time.RFC3339), "EndTime": end.Format(time.RFC3339), "Period": "60"}, "", ""))
 		}
 	default:
-		return nil, errors.New("check_must_be_inventory_billing_metrics_metric_schema_ecs_metric_schema_swas_cpu_swas_network_event_schema_system_events_or_cdt")
+		return nil, errors.New("check_must_be_inventory_billing_instance_billing_metrics_metric_schema_ecs_metric_schema_swas_cpu_swas_network_event_schema_system_events_or_cdt")
 	}
 	return ops, nil
 }
@@ -273,7 +279,11 @@ func (s sdkCaller) call(ctx context.Context, p profile, o operation) (map[string
 	for k, v := range o.Query {
 		q[k] = dara.String(v)
 	}
-	params := &openapi.Params{Action: dara.String(o.Action), Version: dara.String(o.Version), Protocol: dara.String("HTTPS"), Pathname: dara.String("/"), Method: dara.String(methodFor(o)), AuthType: dara.String("AK"), Style: dara.String("RPC"), ReqBodyType: dara.String("formData"), BodyType: dara.String("json")}
+	bodyType := "json"
+	if o.Product == "bss" {
+		bodyType = "string"
+	}
+	params := &openapi.Params{Action: dara.String(o.Action), Version: dara.String(o.Version), Protocol: dara.String("HTTPS"), Pathname: dara.String("/"), Method: dara.String(methodFor(o)), AuthType: dara.String("AK"), Style: dara.String("RPC"), ReqBodyType: dara.String("formData"), BodyType: dara.String(bodyType)}
 	callCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	result, err := c.CallApiWithCtx(callCtx, params, &openapi.OpenApiRequest{Query: q}, &dara.RuntimeOptions{Autoretry: dara.Bool(false), MaxAttempts: dara.Int(1)})
@@ -288,6 +298,18 @@ func (s sdkCaller) call(ctx context.Context, p profile, o operation) (map[string
 		return nil, "request_failed"
 	}
 	body, ok := result["body"].(map[string]any)
+	if o.Product == "bss" {
+		raw, valid := result["body"].(string)
+		if !valid {
+			return nil, "invalid_response"
+		}
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		decoder.UseNumber()
+		if decoder.Decode(&body) != nil || body == nil || decoder.Decode(new(any)) != io.EOF {
+			return nil, "invalid_response"
+		}
+		ok = true
+	}
 	if !ok {
 		return nil, "invalid_response"
 	}
@@ -356,8 +378,9 @@ func execute(ctx context.Context, p profile, ops []operation, call callFunc, int
 		o := ops[index]
 		r := queryResult{Action: o.Action, MetricName: o.Query["MetricName"], Region: o.Region, Status: "passed", Complete: false, Pages: []any{}}
 		seen := 0
+		tokens := map[string]bool{}
 		for page := 1; page <= 50; page++ {
-			if o.PageKey != "" {
+			if o.PageKey != "" && o.PageKey != "NextToken" {
 				o.Query[o.PageKey] = strconv.Itoa(page)
 			}
 			if interval > 0 {
@@ -409,6 +432,33 @@ func execute(ctx context.Context, p profile, ops []operation, call callFunc, int
 				r.ErrorCode = "pagination_shape_unknown"
 				break
 			}
+			if o.PageKey == "NextToken" {
+				seen += len(list)
+				raw, exists := atPath(body, "Data.NextToken")
+				token, valid := raw.(string)
+				if exists && !valid && raw != nil || len(token) > 8192 {
+					r.ErrorCode = "pagination_shape_unknown"
+					break
+				}
+				if token == "" {
+					if total, hasTotal := totalCount(body); hasTotal && seen != total {
+						r.ErrorCode = "pagination_incomplete"
+						break
+					}
+					r.Complete = true
+					break
+				}
+				if tokens[token] {
+					r.ErrorCode = "pagination_token_repeated"
+					break
+				}
+				tokens[token] = true
+				o.Query["NextToken"] = token
+				if page == 50 {
+					r.ErrorCode = "page_limit_reached"
+				}
+				continue
+			}
 			seen += len(list)
 			total, hasTotal := totalCount(body)
 			if hasTotal && seen < total && len(list) == 0 {
@@ -459,6 +509,9 @@ func totalCount(body map[string]any) (int, bool) {
 		if n >= 0 {
 			return n, true
 		}
+	case json.Number:
+		i, e := strconv.Atoi(string(n))
+		return i, e == nil && i >= 0
 	case string:
 		i, e := strconv.Atoi(n)
 		return i, e == nil && i >= 0

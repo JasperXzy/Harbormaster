@@ -1,0 +1,76 @@
+{
+  "verified_date": "2026-11-12",
+  "action": "DescribeInstanceBill",
+  "granularity": "MONTHLY",
+  "is_billing_item": false,
+  "billing_cycle": "2026-11",
+  "cloud_writes": 0,
+  "accounts": [
+    {
+      "account": "jasperxzy",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-12T13:37:23Z",
+      "pages": 1,
+      "rows": 15,
+      "matched_rows": [
+        {
+          "instance": "sg-server-nano",
+          "ProductCode": "ecs",
+          "PipCode": "ecs",
+          "CommodityCode": "ecs",
+          "Item": "PayAsYouGoBill",
+          "Currency": "CNY",
+          "PretaxAmount": "0.0",
+          "AfterDiscountAmount": "0.2117096354"
+        },
+        {
+          "instance": "hk-server-nano",
+          "ProductCode": "ecs",
+          "PipCode": "ecs",
+          "CommodityCode": "ecs",
+          "Item": "PayAsYouGoBill",
+          "Currency": "CNY",
+          "PretaxAmount": "0.0",
+          "AfterDiscountAmount": "2.271211628"
+        }
+      ],
+      "unmatched_managed": [
+        "Ali_ShangHai"
+      ],
+      "payment_fields_present": false
+    },
+    {
+      "account": "winnemjw",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-12T13:37:23Z",
+      "pages": 1,
+      "rows": 2,
+      "matched_rows": [
+        {
+          "instance": "sha-pro",
+          "ProductCode": "ace_eweb",
+          "PipCode": "swas",
+          "CommodityCode": "swas",
+          "Item": "SubscriptionOrder",
+          "Currency": "CNY",
+          "PretaxAmount": "0.0",
+          "AfterDiscountAmount": "270.0"
+        },
+        {
+          "instance": "sha-pro",
+          "ProductCode": "ace_eweb",
+          "PipCode": "swas",
+          "CommodityCode": "swas",
+          "Item": "SubscriptionOrder",
+          "Currency": "CNY",
+          "PretaxAmount": "68.0",
+          "AfterDiscountAmount": "68.0"
+        }
+      ],
+      "unmatched_managed": [],
+      "payment_fields_present": false
+    }
+  ]
+}
