@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  External heartbeat: add encrypted write-only URL settings and async heartbeat_test jobs. User-approved success gate requires local HTTP readiness/SQLite and recent collection scheduler progress. No old pings are replayed; settings reads omit URL because its path/query may contain credentials.
 # 2026-11-12  Password login policy: PATCH /session/password changes future password authentication only, with session+CSRF. Disabling requires a registered Passkey for the current RP; deleting its last eligible key is refused while disabled. User-approved CLI reset enables password login, clears sessions/challenges and retains Passkeys.
 # 2026-11-12  Agent quality correction: delayed reports no longer overwrite a detected backward clock jump with stale. History independently checks current and previous sample order, including legacy records.
 # 2026-11-12  Agent network history: add raw cumulative samples with nullable same-epoch interval deltas and monotonic-duration average rates. Preserve receipt quality, gaps and unavailable reasons; never bridge epochs or prorate a boundary-crossing interval into hourly/range totals.
@@ -575,6 +576,91 @@ paths:
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
         "422": {$ref: "#/components/responses/ValidationFailed"}
+
+  /settings/heartbeat:
+    get:
+      tags: [settings]
+      operationId: getHeartbeatSettings
+      summary: 外部心跳配置和最近结果
+      description: URL 可能自带密钥，永不回读；不调用外部服务。
+      responses:
+        "200":
+          description: 初始为 disabled、未配置地址、60 秒周期。
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/HeartbeatSettings"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+    put:
+      tags: [settings]
+      operationId: putHeartbeatSettings
+      summary: 保存外部心跳
+      description: >-
+        配置保存在本地，不同步发送。URL 完整 AES-GCM 加密；省略 url 保留，空字符串清除（仅 disabled 时允许）。
+        使用 HTTPS GET，不携带日志或其他凭据，不跟随重定向、不读取环境代理。默认 60 秒，范围 15–86400 秒。
+        revision 必须匹配；修改清除旧结果、取消未完成测试并隔离旧 worker 回写。
+        已开始的网络请求不能撤回。只在生产 serve 启用；run-once 和开发模式不发心跳。
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision, enabled, interval_seconds]
+              properties:
+                revision: {type: integer, format: int64, minimum: 0}
+                enabled: {type: boolean}
+                interval_seconds: {type: integer, minimum: 15, maximum: 86400}
+                url: {type: string, writeOnly: true, maxLength: 2048}
+      responses:
+        "200":
+          description: 已加密保存；尚不代表外部送达。
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/HeartbeatSettings"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+        "415": {$ref: "#/components/responses/UnsupportedMediaType"}
+        "503":
+          description: 主密钥或生产写入能力不可用。
+  /settings/heartbeat/test:
+    post:
+      tags: [settings]
+      operationId: testHeartbeat
+      summary: 排队测试已配置的心跳地址
+      description: >-
+        接受空 JSON 对象；允许测试已配置但 disabled 的目标。需要通过与定时心跳相同的健康条件，
+        不绕过健康检查发送假成功。相同配置的活动测试去重；结果经通用 jobs 查询。进程中断后的运行中测试失败，不重放。
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/EmptyObject"}
+      responses:
+        "202":
+          description: 已入队。
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [job_id]
+                properties:
+                  job_id: {type: string}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+        "415": {$ref: "#/components/responses/UnsupportedMediaType"}
+        "503":
+          description: 生产发送能力不可用。
 
   /system/info:
     get:
@@ -1903,7 +1989,7 @@ components:
 
     JobType:
       type: string
-      enum: [refresh, permission_check, telegram_test, instance_power]
+      enum: [refresh, permission_check, telegram_test, instance_power, heartbeat_test]
 
     JobStatus:
       type: string
@@ -1959,7 +2045,7 @@ components:
           nullable: true
           description: |
             成功时的结果，结构取决于 type：`permission_check` 为 PermissionCheck；
-            `refresh`、`telegram_test` 为 null。
+            `refresh`、`telegram_test`、`heartbeat_test` 为 null。
             `instance_power` 为 PowerJobResult（任务未完成时也保留请求与执行阶段）。
           additionalProperties: true
 
@@ -2704,6 +2790,25 @@ components:
               type: string
             message:
               type: string
+
+    HeartbeatSettings:
+      type: object
+      required: [enabled, url_configured, interval_seconds, revision, updated_at, last_attempt_at, last_success_at, last_error]
+      properties:
+        enabled: {type: boolean}
+        url_configured: {type: boolean}
+        interval_seconds: {type: integer, minimum: 15, maximum: 86400}
+        revision: {type: integer, format: int64}
+        updated_at: {type: string, format: date-time, nullable: true}
+        last_attempt_at: {type: string, format: date-time, nullable: true, description: 最近一次尝试的开始时刻，包含健康门槛检查，并不表示网络请求已发送。}
+        last_success_at: {type: string, format: date-time, nullable: true}
+        last_error:
+          type: object
+          nullable: true
+          properties:
+            code: {type: string}
+            message: {type: string}
+          description: 固定错误码；不包含 URL、提供方响应正文或原始网络错误。成功仅表示健康门槛通过且 HTTP 为 2xx，不证明外部告警已送达。
 
     AgentNetworkSample:
       type: object

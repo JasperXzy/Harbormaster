@@ -33,7 +33,7 @@ type JobFilter struct {
 
 func (f JobFilter) Validate() map[string]string {
 	fields := map[string]string{}
-	if f.Type != "" && f.Type != "refresh" && f.Type != "permission_check" && f.Type != "telegram_test" && f.Type != "instance_power" {
+	if f.Type != "" && f.Type != "refresh" && f.Type != "permission_check" && f.Type != "telegram_test" && f.Type != "instance_power" && f.Type != "heartbeat_test" {
 		fields["type"] = "invalid_format"
 	}
 	if f.Status != "" && f.Status != "queued" && f.Status != "running" && f.Status != "succeeded" && f.Status != "failed" {

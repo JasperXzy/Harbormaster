@@ -1,0 +1,48 @@
+{
+  "command_exit_code": 0,
+  "migrations_before": 23,
+  "migrations_after": 25,
+  "foreign_key_errors": 0,
+  "preserved_tables": {
+    "job": {
+      "rows": 53,
+      "exactly_preserved": true
+    },
+    "job_change": {
+      "rows": 163,
+      "exactly_preserved": true
+    },
+    "job_order": {
+      "rows": 53,
+      "exactly_preserved": true
+    },
+    "cdt_observation": {
+      "rows": 20,
+      "exactly_preserved": true
+    },
+    "notification": {
+      "rows": 4,
+      "exactly_preserved": true
+    },
+    "instance_power_job": {
+      "rows": 0,
+      "exactly_preserved": true
+    },
+    "instance_power_request": {
+      "rows": 0,
+      "exactly_preserved": true
+    },
+    "instance_intent": {
+      "rows": 0,
+      "exactly_preserved": true
+    },
+    "api_key_power_job": {
+      "rows": 0,
+      "exactly_preserved": true
+    },
+    "cloud_network_sample": {
+      "rows": 112,
+      "exactly_preserved": true
+    }
+  }
+}

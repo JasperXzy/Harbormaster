@@ -280,6 +280,7 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 		frontend = ui.Handler()
 	}
 	powerEngine := newPowerEngine(c, s, engine, log)
+	heartbeatRunner := newHeartbeatRunner(c, s, engine, listener, log)
 	c.InstancePowerEnabled = powerEngine != nil
 	var panel http.Handler
 	if c.Dev {
@@ -293,6 +294,10 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 		workers.Add(2)
 		go func() { defer workers.Done(); engine.Run(workerCtx) }()
 		go func() { defer workers.Done(); (notify.Evaluator{Store: s, Log: log}).Run(workerCtx) }()
+		if heartbeatRunner != nil {
+			workers.Add(1)
+			go func() { defer workers.Done(); heartbeatRunner.Run(workerCtx) }()
+		}
 		if powerEngine != nil {
 			workers.Add(1)
 			go func() { defer workers.Done(); powerEngine.Run(workerCtx) }()

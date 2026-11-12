@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/model"
@@ -32,6 +33,7 @@ type SystemEventScanner interface {
 }
 
 type Engine struct {
+	schedulerProgress   atomic.Int64
 	SystemEventInterval time.Duration
 	Store               *store.Store
 	Box                 *security.Box
@@ -195,7 +197,10 @@ func (e *Engine) Run(ctx context.Context) {
 	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
 	for {
-		if err := e.Schedule(ctx); err != nil && ctx.Err() == nil && e.Log != nil {
+		err := e.Schedule(ctx)
+		if err == nil {
+			e.schedulerProgress.Store(time.Now().UnixNano())
+		} else if ctx.Err() == nil && e.Log != nil {
 			e.Log.Warn("schedule_failed")
 		}
 		select {
@@ -455,4 +460,14 @@ func (e *Engine) scanAccount(ctx context.Context, j model.Job, a model.Account) 
 		return result, err
 	}
 	return result, e.Store.SaveScan(scanCtx, j, a, result, time.Now().UTC())
+}
+
+// SchedulerProgress is independent of individual cloud account outcomes. A
+// blocked/failed scheduler cannot keep renewing this liveness evidence.
+func (e *Engine) SchedulerProgress() time.Time {
+	n := e.schedulerProgress.Load()
+	if n == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, n).UTC()
 }

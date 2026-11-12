@@ -61,7 +61,7 @@ func readJob(row rowScanner) (model.Job, error) {
 	return j, nil
 }
 func enqueueJob(ctx context.Context, tx *sql.Tx, kind, scope string, ids []string, now time.Time) (model.Job, error) {
-	if kind != "refresh" && kind != "permission_check" && kind != "telegram_test" {
+	if kind != "refresh" && kind != "permission_check" && kind != "telegram_test" && kind != "heartbeat_test" {
 		return model.Job{}, errors.New("unsupported_job_type")
 	}
 	j, err := readJob(tx.QueryRowContext(ctx, "SELECT "+jobColumns+" FROM job WHERE type=? AND scope=? AND status IN ('queued','running')", kind, scope))
@@ -254,7 +254,7 @@ func (s *Store) FinishJob(ctx context.Context, j model.Job, result any, code str
 		}
 		raw = string(b)
 	}
-	res, err := s.DB.ExecContext(ctx, "UPDATE job SET status=?,finished_at=?,error_code=?,result_json=?,lease_owner=NULL,lease_until=0 WHERE id=? AND type<>'instance_power' AND status='running' AND lease_owner=? AND lease_until>?", status, timestamp(now), failure, raw, j.ID, j.Owner, now.Unix())
+	res, err := s.DB.ExecContext(ctx, "UPDATE job SET status=?,finished_at=?,error_code=?,result_json=?,lease_owner=NULL,lease_until=0 WHERE id=? AND type NOT IN ('instance_power','heartbeat_test') AND status='running' AND lease_owner=? AND lease_until>?", status, timestamp(now), failure, raw, j.ID, j.Owner, now.Unix())
 	if err != nil {
 		return err
 	}
@@ -269,7 +269,7 @@ func (s *Store) RetryJob(ctx context.Context, j model.Job, delay time.Duration, 
 	if busy {
 		decrement = 1
 	}
-	res, err := s.DB.ExecContext(ctx, "UPDATE job SET status='queued',available_at=?,lease_owner=NULL,lease_until=0,attempts=attempts-? WHERE id=? AND type<>'instance_power' AND status='running' AND lease_owner=? AND lease_until>?", now.Add(delay).Unix(), decrement, j.ID, j.Owner, now.Unix())
+	res, err := s.DB.ExecContext(ctx, "UPDATE job SET status='queued',available_at=?,lease_owner=NULL,lease_until=0,attempts=attempts-? WHERE id=? AND type NOT IN ('instance_power','heartbeat_test') AND status='running' AND lease_owner=? AND lease_until>?", now.Add(delay).Unix(), decrement, j.ID, j.Owner, now.Unix())
 	if err != nil {
 		return err
 	}
