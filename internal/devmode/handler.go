@@ -72,6 +72,10 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, object{"initialized": true, "password_min_length": 12})
 		return
 	}
+	if path == "/session/methods" && r.Method == "GET" {
+		respond(w, 200, map[string]bool{"password_enabled": true, "passkey_enabled": false})
+		return
+	}
 	if path == "/session" && r.Method == "POST" {
 		h.signIn(w, r)
 		return
@@ -139,6 +143,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, object{"items": f.Accounts})
 	case "/ram-policies":
 		respond(w, 200, object{"items": rampolicy.Catalog()})
+	case "/passkeys":
+		respond(w, 200, map[string]any{"items": []any{}})
 	case "/api-keys":
 		items, cursor, err := paginate([]object{{"id": "demo-key-widget", "name": "Widget (demo)", "scopes": []string{"summary:read"}, "created_at": now.Add(-time.Hour).Format(time.RFC3339), "last_used_at": nil, "revoked_at": nil}}, r)
 		if err != nil {

@@ -86,6 +86,8 @@ func (s *Store) PrepareRestoredCopy(ctx context.Context, now time.Time) (Restore
 	for _, query := range []string{
 		"DELETE FROM session",
 		"DELETE FROM setup_credential",
+		"DELETE FROM passkey_ceremony",
+		"UPDATE passkey_state SET epoch=epoch+1 WHERE id=1",
 		"DELETE FROM agent_registration",
 		"UPDATE job SET lease_owner=NULL,lease_until=0",
 		"UPDATE notification SET lease_owner=NULL,lease_until=0",

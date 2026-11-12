@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Passkey registration/login: add session methods, discoverable login options/finish, authenticated registration options/finish and list/delete. JSON uses WebAuthn base64url options/results; five-minute single-use ceremonies are browser/session-bound. UV is required; private keys never leave authenticators. Password disabling and recovery policy remain a separate phase.
 # 2026-11-12  System event records: GET /system-events adds cached provider events, stable first-seen pagination and source health. Independent read polling defaults to 60s. Complete empty scans only mark old records not seen; failures retain records and last success, never imply resolution. Provider lifecycle is preserved; no notification delivery or cloud action is added.
 # 2026-11-12  System event source preparation: RAM drafts add ecs:DescribeInstanceHistoryEvents and cms:DescribeSystemEventAttribute as read-only actions. Typed source readers preserve provider lifecycle semantics and distinguish ECS history from CMS interruption signals; no system-event panel route or notification dispatch is enabled by this change.
 # 2026-11-12  SWAS CPU: Instance.cpu also supports swas_describe_monitor_data / CPU_UTILIZATION with percent samples; namespace and credit_balance are null for SWAS. Preserve the same stale/unknown and timestamp behavior. RAM drafts add the read-only swas-open:DescribeMonitorData action, and runtime limitation text reflects explicit power enablement.
@@ -237,6 +238,208 @@ paths:
           description: 已退出
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /session/methods:
+    get:
+      tags: [session]
+      operationId: getLoginMethods
+      summary: 可用登录方式
+      security: []
+      responses:
+        "200":
+          description: 密码开关当前为 true；Passkey 需配置 HTTPS public_url 且已注册凭据。未初始化时两项均为 false。
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [password_enabled, passkey_enabled]
+                properties:
+                  password_enabled: {type: boolean}
+                  passkey_enabled: {type: boolean}
+
+  /passkeys:
+    get:
+      tags: [session]
+      operationId: listPasskeys
+      summary: 已注册 Passkey
+      responses:
+        "200":
+          description: 最多 20 个；不返回公钥、凭据原文或用户句柄。
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/Passkey"}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /passkeys/{passkey_id}:
+    parameters:
+      - name: passkey_id
+        in: path
+        required: true
+        schema: {type: string}
+    delete:
+      tags: [session]
+      operationId: deletePasskey
+      summary: 删除 Passkey
+      description: 立即阻止后续使用该凭据完成登录；不删除已建立的会话。密码登录本阶段仍启用。
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "204": {description: 已删除}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /passkeys/registration/options:
+    post:
+      tags: [session]
+      operationId: beginPasskeyRegistration
+      summary: 开始 Passkey 注册
+      description: >-
+        生产要求同源 HTTPS。挑战有效期五分钟、单次使用，验证失败也消耗挑战。
+        注册绑定当前管理员会话；登录绑定 Secure/HttpOnly/SameSite=Strict 的 hm_passkey cookie，
+        同一浏览器再次开始登录会替换绑定 cookie。登录开始与完成各计入已有登录限速。
+        注册要求 discoverable credential 和 userVerification=required；不允许跨源 iframe。
+        503 passkey_unavailable 表示 HTTPS public_url 未配置；401 invalid_passkey 表示挑战或凭据无效。
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PasskeyRegistrationBegin"}
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PasskeyOptions"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "415": {$ref: "#/components/responses/UnsupportedMediaType"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+        "429": {$ref: "#/components/responses/RateLimited"}
+        "503":
+          description: Passkey 不可用或数据库暂不可用。
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+
+  /passkeys/registration/finish:
+    post:
+      tags: [session]
+      operationId: finishPasskeyRegistration
+      summary: 完成 Passkey 注册
+      description: >-
+        生产要求同源 HTTPS。挑战有效期五分钟、单次使用，验证失败也消耗挑战。
+        注册绑定当前管理员会话；登录绑定 Secure/HttpOnly/SameSite=Strict 的 hm_passkey cookie，
+        同一浏览器再次开始登录会替换绑定 cookie。登录开始与完成各计入已有登录限速。
+        注册要求 discoverable credential 和 userVerification=required；不允许跨源 iframe。
+        503 passkey_unavailable 表示 HTTPS public_url 未配置；401 invalid_passkey 表示挑战或凭据无效。
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PasskeyFinish"}
+      responses:
+        "201":
+          description: 成功
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Passkey"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "415": {$ref: "#/components/responses/UnsupportedMediaType"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+        "429": {$ref: "#/components/responses/RateLimited"}
+        "503":
+          description: Passkey 不可用或数据库暂不可用。
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+
+  /session/passkey/options:
+    post:
+      tags: [session]
+      operationId: beginPasskeyLogin
+      summary: 开始 Passkey 登录
+      description: >-
+        生产要求同源 HTTPS。挑战有效期五分钟、单次使用，验证失败也消耗挑战。
+        注册绑定当前管理员会话；登录绑定 Secure/HttpOnly/SameSite=Strict 的 hm_passkey cookie，
+        同一浏览器再次开始登录会替换绑定 cookie。登录开始与完成各计入已有登录限速。
+        注册要求 discoverable credential 和 userVerification=required；不允许跨源 iframe。
+        503 passkey_unavailable 表示 HTTPS public_url 未配置；401 invalid_passkey 表示挑战或凭据无效。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/EmptyObject"}
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/PasskeyOptions"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "415": {$ref: "#/components/responses/UnsupportedMediaType"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+        "429": {$ref: "#/components/responses/RateLimited"}
+        "503":
+          description: Passkey 不可用或数据库暂不可用。
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+
+  /session/passkey/finish:
+    post:
+      tags: [session]
+      operationId: finishPasskeyLogin
+      summary: 完成 Passkey 登录
+      description: >-
+        生产要求同源 HTTPS。挑战有效期五分钟、单次使用，验证失败也消耗挑战。
+        注册绑定当前管理员会话；登录绑定 Secure/HttpOnly/SameSite=Strict 的 hm_passkey cookie，
+        同一浏览器再次开始登录会替换绑定 cookie。登录开始与完成各计入已有登录限速。
+        注册要求 discoverable credential 和 userVerification=required；不允许跨源 iframe。
+        503 passkey_unavailable 表示 HTTPS public_url 未配置；401 invalid_passkey 表示挑战或凭据无效。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PasskeyFinish"}
+      responses:
+        "200":
+          description: 成功
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Session"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "415": {$ref: "#/components/responses/UnsupportedMediaType"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+        "429": {$ref: "#/components/responses/RateLimited"}
+        "503":
+          description: Passkey 不可用或数据库暂不可用。
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
 
   /system/info:
     get:
@@ -1707,6 +1910,53 @@ components:
       properties:
         password:
           type: string
+
+    EmptyObject:
+      type: object
+      additionalProperties: false
+    PasskeyRegistrationBegin:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+          description: 去除首尾空白后为 1–80 UTF-8 字节。
+    PasskeyFinish:
+      type: object
+      additionalProperties: false
+      required: [ceremony_id, credential]
+      properties:
+        ceremony_id: {type: string, pattern: '^[a-f0-9]{64}$'}
+        credential:
+          type: object
+          additionalProperties: true
+          description: 浏览器 PublicKeyCredential.toJSON() 或等价序列化；二进制字段为无填充 base64url。注册含 attestationObject/clientDataJSON；登录含 authenticatorData/clientDataJSON/signature/userHandle。整个请求上限 16 KiB。
+    PasskeyOptions:
+      type: object
+      required: [ceremony_id, expires_at, options]
+      properties:
+        ceremony_id: {type: string}
+        expires_at: {type: string, format: date-time}
+        options:
+          type: object
+          additionalProperties: true
+          required: [publicKey]
+          properties:
+            publicKey:
+              type: object
+              additionalProperties: true
+              description: WebAuthn JSON options；用 parseCreationOptionsFromJSON 或 parseRequestOptionsFromJSON 转换后传入 navigator.credentials。旧浏览器须自行还原 ArrayBuffer。
+    Passkey:
+      type: object
+      required: [id, name, created_at, last_used_at]
+      properties:
+        id: {type: string}
+        name: {type: string}
+        created_at: {type: string, format: date-time}
+        last_used_at: {type: string, nullable: true, format: date-time}
 
     Session:
       type: object
