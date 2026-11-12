@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-13  Trace panel: add async POST /network/traces, bounded summary history, detail and text export. Submission snapshots point/target/request, checks source trace polling separately from ordinary probes and rechecks queued managed targets. GET reads stored data only; no synchronous DNS/cloud/probing. Per-hop absence is unknown, TCP reset means reached but closed. Demo reads are synthetic.
 # 2026-11-13  Trace queue: network_probe also covers fixed traceroute tasks. Private agent claim/result endpoints keep trace payloads separate from ordinary probes; old agents cannot claim traces. Shared point leases and expiry prevent overlap/replay. Job.result stays null; no panel trace submission/history route is introduced in this phase.
 # 2026-11-12  Network alerts: add network_latency, network_loss and network_unreachable. PRD defaults remain sampled latency > configured limit for 600s, failed probes >5%, and 3 consecutive completely failed runs. User confirmed recovery after 3 valid healthy runs; gaps/skips/local failures reset streaks without recovery. New results drive transitions once, with per-plan overrides and probe_plan_id on notifications. Delivery remains separate.
 # 2026-11-12  Network management: add cached points, editable public/custom or managed-instance targets, revisioned probe plans and run history. Follow the unique public IP of the selected family; incomplete/stale/ambiguous discovery skips a run. Missed periods are not replayed: schedule one current run and advance from now. Mutations perform no synchronous DNS/cloud/probes; demo remains read-only.
@@ -144,6 +145,89 @@ security:
   - sessionCookie: []
 
 paths:
+  /network/traces:
+    post:
+      tags: [network]
+      operationId: submitNetworkTrace
+      summary: Enqueue a fixed traceroute
+      description: Session and CSRF required. Checks local snapshots only; DNS and packets run in the background. Select exactly one saved target (with revision) or direct public host. Port is explicit, overriding the saved target TCP port. Same request_key and decoded input after defaults return the same job, including after completion; changed input conflicts. Unavailable point/target or unsupported method returns 409 without a job. Running tasks may finish after target edits; queued tasks are cancelled on target edits or changed/incomplete managed address evidence.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/TraceSubmission"}
+      responses:
+        "202":
+          description: Accepted without synchronous network work
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [job_id, trace_id]
+                properties:
+                  job_id: {type: string}
+                  trace_id: {type: string}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {description: "network_configuration_changed, request_conflict, probe_queue_full, trace_method_unavailable, or a fixed point/target unavailable reason"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+    get:
+      tags: [network]
+      operationId: listNetworkTraces
+      summary: List stored traceroute summaries
+      description: At most 31 days by submission time, inclusive from/exclusive to, no future to. Newest sequence first. Cursor bound to range and filters. Summary only; raw hops are read from detail. Missing results remain null. Deleted targets and disabled accounts retain history. No retention guarantee is implied by query bounds.
+      parameters:
+        - {name: from, in: query, required: true, schema: {type: string, format: date-time}}
+        - {name: to, in: query, required: true, schema: {type: string, format: date-time}}
+        - {name: point_id, in: query, schema: {type: string, maxLength: 128}, description: server or managed source instance ID}
+        - {name: target_id, in: query, schema: {type: string, maxLength: 128}, description: Saved target ID}
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Stored summaries, never performs network operations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/TraceRun"}}
+                  next_cursor: {type: string, nullable: true}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+  /network/traces/{id}:
+    get:
+      tags: [network]
+      operationId: getNetworkTrace
+      summary: Read a stored traceroute and raw hops
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: Current task status and accepted result; partial results remain incomplete
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/TraceDetail"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+  /network/traces/{id}/export:
+    get:
+      tags: [network]
+      operationId: exportNetworkTrace
+      summary: Export stored trace as plain text
+      description: Includes state, request and individual responses; no online enrichment or inferred route label. Pending traces export their current state with no fabricated hops.
+      parameters:
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        "200":
+          description: UTF-8 text attachment
+          content:
+            text/plain:
+              schema: {type: string}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
   /network/targets:
     get:
       tags: [network]
@@ -2367,7 +2451,7 @@ components:
                 - $ref: "#/components/schemas/ProbeRun"
     ProbePoint:
       type: object
-      required: [id, name, point_kind, instance_id, available, unavailable_reason, updated_at]
+      required: [id, name, point_kind, instance_id, available, unavailable_reason, updated_at, trace]
       properties:
         id: {type: string, description: server or managed instance ID.}
         name: {type: string}
@@ -2376,6 +2460,129 @@ components:
         available: {type: boolean}
         unavailable_reason: {type: string, nullable: true}
         updated_at: {type: string, format: date-time, nullable: true}
+        trace:
+          $ref: "#/components/schemas/TraceCapability"
+    TraceCapability:
+      type: object
+      required: [available, unavailable_reason, methods, last_poll_at]
+      description: Separate trace protocol evidence for the current token, requiring fresh agent traffic and trace polling. Methods describe implementation support, not verified raw socket permission or reachability. Server TCP tracing currently requires Linux. Server last_poll_at is null.
+      properties:
+        available: {type: boolean}
+        unavailable_reason: {type: string, nullable: true}
+        methods: {type: array, items: {type: string, enum: [icmp, tcp]}}
+        last_poll_at: {type: string, format: date-time, nullable: true}
+    TraceSubmission:
+      type: object
+      additionalProperties: false
+      required: [request_key, point_kind, instance_id, target_id, target_revision, host, family, method, port]
+      properties:
+        request_key: {type: string, pattern: '^[A-Za-z0-9_-]{16,128}$'}
+        point_kind: {type: string, enum: [server, agent]}
+        instance_id: {type: string, nullable: true, description: Required for agent; null for server.}
+        target_id: {type: string, nullable: true}
+        target_revision: {type: integer, format: int64, minimum: 1, nullable: true}
+        host: {type: string, nullable: true, maxLength: 253, description: Public IP or hostname only; null when using target_id.}
+        family: {type: string, enum: [ipv4, ipv6]}
+        method: {type: string, enum: [icmp, tcp]}
+        port: {type: integer, minimum: 0, maximum: 65535, description: Zero for ICMP; 1–65535 for TCP.}
+        max_hops: {type: integer, minimum: 1, maximum: 30, default: 30}
+        count: {type: integer, minimum: 1, maximum: 5, default: 3}
+        timeout_ms: {type: integer, minimum: 100, maximum: 2000, default: 1000}
+      description: Exactly one target_id+target_revision or host. Max_hops × count × timeout_ms plus fixed 100ms gaps must not exceed 120 seconds. DNS has a five-second budget and pins one checked public address. Demo submission remains read-only (501).
+    TraceRequest:
+      type: object
+      required: [host, family, method, port, max_hops, count, timeout_ms]
+      properties:
+        host: {type: string}
+        family: {type: string, enum: [ipv4, ipv6]}
+        method: {type: string, enum: [icmp, tcp]}
+        port: {type: integer}
+        max_hops: {type: integer}
+        count: {type: integer}
+        timeout_ms: {type: integer}
+    TraceOutcome:
+      type: object
+      required: [started_at, finished_at, address, reached, stop_reason, hop_count, sample_count]
+      properties:
+        started_at: {type: string, format: date-time}
+        finished_at: {type: string, format: date-time}
+        address: {type: string, description: Empty when failed before address selection.}
+        reached: {type: boolean, description: At least one matching target reply; TCP reset does not imply service availability.}
+        stop_reason: {type: string, enum: [reached, unreachable, max_hops, incomplete]}
+        hop_count: {type: integer}
+        sample_count: {type: integer}
+    TraceRun:
+      type: object
+      required: [id, job_id, point_id, point_name, point_kind, instance_id, target, request, created_at, updated_at, status, outcome, error]
+      properties:
+        id: {type: string}
+        job_id: {type: string}
+        point_id: {type: string}
+        point_name: {type: string, description: Source name at submission.}
+        point_kind: {type: string, enum: [server, agent]}
+        instance_id: {type: string, nullable: true}
+        target:
+          type: object
+          nullable: true
+          description: Saved target snapshot at submission; null for direct host.
+          allOf: [{$ref: "#/components/schemas/NetworkTarget"}]
+        request: {$ref: "#/components/schemas/TraceRequest"}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+        status: {type: string, enum: [queued, running, succeeded, failed], description: "succeeded means complete execution; connectivity is described by outcome."}
+        outcome:
+          type: object
+          nullable: true
+          allOf: [{$ref: "#/components/schemas/TraceOutcome"}]
+        error:
+          type: object
+          nullable: true
+          properties:
+            code: {type: string}
+            message: {type: string}
+    TraceDetail:
+      allOf:
+        - $ref: "#/components/schemas/TraceRun"
+        - type: object
+          required: [result]
+          properties:
+            result:
+              type: object
+              nullable: true
+              allOf: [{$ref: "#/components/schemas/TraceResult"}]
+    TraceResult:
+      type: object
+      required: [started_at, finished_at, address, resolved_addresses, hops, reached, stop_reason]
+      properties:
+        started_at: {type: string, format: date-time}
+        finished_at: {type: string, format: date-time}
+        address: {type: string}
+        resolved_addresses: {type: array, items: {type: string}}
+        reached: {type: boolean}
+        stop_reason: {type: string, enum: [reached, unreachable, max_hops, incomplete]}
+        hops:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            required: [ttl, samples]
+            properties:
+              ttl: {type: integer, minimum: 1, maximum: 30}
+              samples:
+                type: array
+                maxItems: 5
+                items:
+                  type: object
+                  required: [sequence, started_at, address, rtt_ms, reply, icmp_type, icmp_code, error_code]
+                  properties:
+                    sequence: {type: integer}
+                    started_at: {type: string, format: date-time}
+                    address: {type: string, nullable: true, description: Responding router; can be private. Not a new probe target.}
+                    rtt_ms: {type: number, nullable: true, minimum: 0}
+                    reply: {type: string, nullable: true, enum: [echo_reply, tcp_syn_ack, tcp_reset, time_exceeded, destination_unreachable, packet_too_big, parameter_problem, null]}
+                    icmp_type: {type: integer, nullable: true}
+                    icmp_code: {type: integer, nullable: true}
+                    error_code: {type: string, nullable: true, description: probe_timeout means no observed response; never assume intermediate forwarding loss.}
     ProbeRun:
       type: object
       required: [id, plan_id, plan_revision, target_id, target_revision, point_kind, instance_id, created_at, updated_at, status, skip_reason, job_id, request, result, error]
@@ -2489,7 +2696,7 @@ components:
 
     JobType:
       type: string
-      description: network_probe 包含固定测速及线路追踪任务；线路任务尚无面板提交入口。
+      description: network_probe 包含固定测速及线路追踪任务。
       enum: [refresh, permission_check, telegram_test, instance_power, heartbeat_test, network_probe]
 
     JobStatus:
@@ -2546,7 +2753,7 @@ components:
           nullable: true
           description: |
             成功时的结果，结构取决于 type：`permission_check` 为 PermissionCheck；
-            `refresh`、`telegram_test`、`heartbeat_test`、`network_probe` 为 null；测速结果见 `/network/plans/{id}/runs`，线路追踪历史接口尚未开放。
+            `refresh`、`telegram_test`、`heartbeat_test`、`network_probe` 为 null；测速结果见 `/network/plans/{id}/runs`，线路追踪详情见 `/network/traces/{id}`。
             `instance_power` 为 PowerJobResult（任务未完成时也保留请求与执行阶段）。
           additionalProperties: true
 

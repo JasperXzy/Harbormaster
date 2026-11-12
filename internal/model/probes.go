@@ -80,13 +80,14 @@ func (p ProbePlan) Request(host string, port int) netprobe.Request {
 }
 
 type ProbePoint struct {
-	ID                string     `json:"id"`
-	Name              string     `json:"name"`
-	PointKind         string     `json:"point_kind"`
-	InstanceID        *string    `json:"instance_id"`
-	Available         bool       `json:"available"`
-	UnavailableReason *string    `json:"unavailable_reason"`
-	UpdatedAt         *time.Time `json:"updated_at"`
+	Trace             TraceCapability `json:"trace"`
+	ID                string          `json:"id"`
+	Name              string          `json:"name"`
+	PointKind         string          `json:"point_kind"`
+	InstanceID        *string         `json:"instance_id"`
+	Available         bool            `json:"available"`
+	UnavailableReason *string         `json:"unavailable_reason"`
+	UpdatedAt         *time.Time      `json:"updated_at"`
 }
 type ProbeRun struct {
 	ID             string            `json:"id"`

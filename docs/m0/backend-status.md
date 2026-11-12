@@ -65,7 +65,8 @@
 | F9.3 | 自动续费读取和默认 7 天到期事件已实现；上海 ECS、sha-pro 真实续费状态通过，提醒只记录不发送。[续费](instance-renewal.md)、[提醒](expiration-alerts.md) |
 | F9.4 | 闲置资源费用估算未实现。 |
 | F9.5 | 按账号与币种配置可用余额阈值、精确比较、告警/恢复/去重记录已实现；实际送达未接通。[余额告警](balance-alerts.md) |
-| F10.1–F10.11 | ICMP/TCP 测速、server/agent 持久执行、加密恢复、目标/组合管理、默认五分钟调度和运行历史接口已实现。本机 TLS/SQLite/恢复/调度测试通过，真实发现地址取得 3 台新快照、1 台未知。网络告警/恢复/去重记录已实现，尚无实际发送。内置线路执行器、队列/私有协议、agent 加密恢复及 server 线路 worker 已接通并本地测试；线路面板提交/历史、前端矩阵/曲线、线路识别、双向与离线 IP 库仍未完成。TCP 线路原始执行目前仅 Linux；未真实部署或公网测速。[网络管理](network-management.md)、[线路协议](agent-trace-tasks.md)、[本机线路](server-trace-tasks.md) |
+| F10.1–F10.6 | ICMP/TCP 测速、server/agent 持久执行、加密恢复、目标/组合管理、默认五分钟调度和运行历史接口已实现。本机 TLS/SQLite/恢复/调度测试通过；真实发现地址取得 3 台新快照、1 台未知。网络告警/恢复/去重记录已实现，尚无实际发送。前端矩阵/曲线由 Claude 负责；未真实部署或公网测速。[网络管理](network-management.md)、[网络告警](network-alerts.md) |
+| F10.7–F10.11 | 内置线路执行器、队列/私有协议、agent 加密恢复、server 线路 worker，以及面板异步提交/摘要历史/逐跳详情/文本导出已实现并本地测试。独立认证轮询判断 agent 线路协议可用；TCP 原始线路目前仅 Linux。PTR、离线 ASN/地理库、线路识别、定时快照/变化与双向追踪仍未完成；没有填入猜测归属或执行真实公网验收。[线路面板](trace-panel-api.md)、[线路协议](agent-trace-tasks.md)、[本机线路](server-trace-tasks.md) |
 | F11.1 | 已实现出方向配置能力比较及告警记录；不宣称入方向所有产品限额或实测吞吐已验证。[检查](spec-bandwidth-check.md)、[告警](bandwidth-alerts.md) |
 | F11.2 | CPU 积分百分比告警未实现，PRD 20% 的分母未明确。 |
 | F11.3 | ECS/CMS 来源、独立默认 60 秒轮询、持久记录/来源健康及只读分页接口已实现；三地域只读验证通过。预警通知与提前送达验收仍未完成。[事件采集](system-events.md) |

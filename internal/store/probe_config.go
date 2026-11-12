@@ -72,6 +72,9 @@ func cancelQueuedProbeRuns(ctx context.Context, tx *sql.Tx, column, id string, n
 		return netprobe.ErrInvalid
 	}
 	_, err := tx.ExecContext(ctx, "UPDATE job SET status='failed',error_code='probe_configuration_changed',finished_at=?,lease_owner=NULL,lease_until=0 WHERE status='queued' AND id IN (SELECT job_id FROM probe_plan_run WHERE "+column+"=?)", timestamp(now), id)
+	if err == nil && column == "target_id" {
+		_, err = tx.ExecContext(ctx, "UPDATE job SET status='failed',error_code='probe_configuration_changed',finished_at=?,lease_owner=NULL,lease_until=0 WHERE status='queued' AND id IN (SELECT job_id FROM network_trace_run WHERE target_id=?)", timestamp(now), id)
+	}
 	return err
 }
 func (s *Store) SaveNetworkTarget(ctx context.Context, id string, in model.NetworkTarget, now time.Time) (model.NetworkTarget, error) {

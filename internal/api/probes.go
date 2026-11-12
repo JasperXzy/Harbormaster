@@ -37,7 +37,7 @@ func readProbeInput(w http.ResponseWriter, r *http.Request, out any, keys []stri
 				break
 			}
 		}
-		if !known || bytes.Equal(value, []byte("null")) && key != "host" && key != "instance_id" && key != "tcp_port" {
+		if !known || bytes.Equal(value, []byte("null")) && key != "host" && key != "instance_id" && key != "tcp_port" && key != "target_id" && key != "target_revision" {
 			fieldError(w, key, "invalid_format")
 			return false
 		}
@@ -107,6 +107,9 @@ func probeList[T any](w http.ResponseWriter, items []T, limit int, c probeCursor
 	writeJSON(w, 200, map[string]any{"items": items, "next_cursor": next})
 }
 func (p *productionPanel) networkProbes(w http.ResponseWriter, r *http.Request, path string) bool {
+	if p.networkTraces(w, r, path) {
+		return true
+	}
 	if !strings.HasPrefix(path, "/network/") {
 		return false
 	}

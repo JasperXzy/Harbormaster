@@ -76,6 +76,9 @@ func demoProbeRun(plan model.ProbePlan, at time.Time) model.ProbeRun {
 	return model.ProbeRun{ID: strconv.FormatInt(at.Unix(), 10), PlanID: plan.ID, PlanRevision: plan.Revision, TargetID: plan.TargetID, TargetRevision: 1, PointKind: plan.PointKind, InstanceID: plan.InstanceID, CreatedAt: at, UpdatedAt: at.Add(time.Second), Status: "succeeded", JobID: &job, Request: &q, Result: result}
 }
 func (h *handler) networkProbes(w http.ResponseWriter, r *http.Request, path string, instances []object, now time.Time) bool {
+	if demoTraces(w, r, path, now) {
+		return true
+	}
 	if !strings.HasPrefix(path, "/network/") {
 		return false
 	}
@@ -106,16 +109,18 @@ func (h *handler) networkProbes(w http.ResponseWriter, r *http.Request, path str
 		return true
 	}
 	if kind == "points" && len(parts) == 1 {
-		items := []model.ProbePoint{{ID: "server", Name: "hm-server (demo)", PointKind: "server", Available: true}}
+		items := []model.ProbePoint{{ID: "server", Name: "hm-server (demo)", PointKind: "server", Available: true, Trace: model.TraceCapability{Available: true, Methods: []string{"icmp", "tcp"}}}}
 		for _, instance := range instances {
 			id := instance["id"].(string)
-			point := model.ProbePoint{ID: id, Name: instance["name"].(string), PointKind: "agent", InstanceID: &id}
+			point := model.ProbePoint{ID: id, Name: instance["name"].(string), PointKind: "agent", InstanceID: &id, Trace: model.TraceCapability{Methods: []string{}}}
 			if instance["agent"].(object)["status"] == "online" {
 				point.Available = true
 				point.UpdatedAt = &now
+				point.Trace = model.TraceCapability{Available: true, Methods: []string{"icmp", "tcp"}, LastPollAt: &now}
 			} else {
 				reason := "agent_not_registered"
 				point.UnavailableReason = &reason
+				point.Trace.UnavailableReason = &reason
 			}
 			items = append(items, point)
 		}

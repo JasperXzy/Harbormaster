@@ -34,15 +34,15 @@ func saveProbeAddresses(ctx context.Context, tx *sql.Tx, a model.Account, snapsh
 }
 func probePoint(ctx context.Context, q queryRower, id string, now time.Time) (model.ProbePoint, error) {
 	if id == "server" {
-		return model.ProbePoint{ID: id, Name: "hm-server", PointKind: "server", Available: true}, nil
+		return model.ProbePoint{ID: id, Name: "hm-server", PointKind: "server", Available: true, Trace: model.TraceCapability{Available: true, Methods: netprobe.TraceMethods()}}, nil
 	}
-	v := model.ProbePoint{ID: id, PointKind: "agent", InstanceID: &id}
-	var agent, revoked, received, observed, polled sql.NullString
+	v := model.ProbePoint{ID: id, PointKind: "agent", InstanceID: &id, Trace: model.TraceCapability{Methods: []string{}}}
+	var agent, revoked, received, observed, polled, traced sql.NullString
 	var enabled, present bool
 	var version, current sql.NullInt64
 	var seconds int
-	err := q.QueryRowContext(ctx, `SELECT i.name,g.id,g.revoked_at,g.last_received_at,a.enabled,EXISTS(SELECT 1 FROM resource_snapshot r WHERE r.id=i.id AND r.account_id=i.account_id AND r.kind=i.kind AND r.present=1),c.credential_version,a.credential_version,c.observed_at,contact.last_poll_at,coalesce((SELECT json_extract(params_json,'$.offline_after_seconds') FROM alert_rule WHERE key='agent_offline'),30)
- FROM instance i JOIN account_settings a ON a.account_id=i.account_id LEFT JOIN agent g ON g.instance_id=i.id LEFT JOIN instance_probe_address c ON c.instance_id=i.id LEFT JOIN agent_probe_contact contact ON contact.agent_id=g.id AND contact.token_hash=g.token_hash WHERE i.id=?`, id).Scan(&v.Name, &agent, &revoked, &received, &enabled, &present, &version, &current, &observed, &polled, &seconds)
+	err := q.QueryRowContext(ctx, `SELECT i.name,g.id,g.revoked_at,g.last_received_at,a.enabled,EXISTS(SELECT 1 FROM resource_snapshot r WHERE r.id=i.id AND r.account_id=i.account_id AND r.kind=i.kind AND r.present=1),c.credential_version,a.credential_version,c.observed_at,contact.last_poll_at,trace.last_poll_at,coalesce((SELECT json_extract(params_json,'$.offline_after_seconds') FROM alert_rule WHERE key='agent_offline'),30)
+ FROM instance i JOIN account_settings a ON a.account_id=i.account_id LEFT JOIN agent g ON g.instance_id=i.id LEFT JOIN instance_probe_address c ON c.instance_id=i.id LEFT JOIN agent_probe_contact contact ON contact.agent_id=g.id AND contact.token_hash=g.token_hash LEFT JOIN agent_trace_contact trace ON trace.agent_id=g.id AND trace.token_hash=g.token_hash WHERE i.id=?`, id).Scan(&v.Name, &agent, &revoked, &received, &enabled, &present, &version, &current, &observed, &polled, &traced, &seconds)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, ErrNotFound
 	}
@@ -65,13 +65,27 @@ func probePoint(ctx context.Context, q queryRower, id string, now time.Time) (mo
 		reason = "point_discovery_unverified"
 	case v.UpdatedAt == nil || v.UpdatedAt.After(now.Add(30*time.Second)) || !now.Before(v.UpdatedAt.Add(time.Duration(seconds)*time.Second)):
 		reason = "agent_offline"
-	case probeAt == nil || probeAt.After(now.Add(30*time.Second)) || !now.Before(probeAt.Add(5*time.Minute)):
-		reason = "agent_probe_unavailable"
 	}
-	if reason != "" {
-		v.UnavailableReason = &reason
+	probeReason := reason
+	if probeReason == "" && (probeAt == nil || probeAt.After(now.Add(30*time.Second)) || !now.Before(probeAt.Add(5*time.Minute))) {
+		probeReason = "agent_probe_unavailable"
+	}
+	if probeReason != "" {
+		v.UnavailableReason = &probeReason
 	} else {
 		v.Available = true
+	}
+	v.Trace.LastPollAt = parseAgentTime(traced)
+	if v.Trace.LastPollAt != nil {
+		v.Trace.Methods = []string{"icmp", "tcp"}
+	}
+	if reason == "" && (v.Trace.LastPollAt == nil || v.Trace.LastPollAt.After(now.Add(30*time.Second)) || !now.Before(v.Trace.LastPollAt.Add(5*time.Minute))) {
+		reason = "agent_trace_unavailable"
+	}
+	if reason != "" {
+		v.Trace.UnavailableReason = &reason
+	} else {
+		v.Trace.Available = true
 	}
 	return v, nil
 }
@@ -221,5 +235,5 @@ func validateQueuedProbeTargets(ctx context.Context, tx *sql.Tx, now time.Time) 
 			}
 		}
 	}
-	return nil
+	return validateQueuedTraceTargets(ctx, tx, now)
 }

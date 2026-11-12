@@ -211,6 +211,11 @@ func (s *Store) finishServerNetwork(ctx context.Context, job model.Job, request 
 	if _, err = tx.ExecContext(ctx, "UPDATE network_probe_job SET result_json=? WHERE job_id=?", string(raw), job.ID); err != nil {
 		return err
 	}
+	if action == "trace" {
+		if err = saveTraceOutcome(ctx, tx, job.ID, string(raw)); err != nil {
+			return err
+		}
+	}
 	status := "succeeded"
 	if failure != nil {
 		status = "failed"

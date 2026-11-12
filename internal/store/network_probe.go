@@ -190,7 +190,11 @@ func (s *Store) claimAgentNetwork(ctx context.Context, token string, in agentpro
 		return out, err
 	}
 	hash := sha256.Sum256([]byte(token))
-	if _, err = tx.ExecContext(ctx, "INSERT INTO agent_probe_contact(agent_id,token_hash,last_poll_at) VALUES(?,?,?) ON CONFLICT(agent_id) DO UPDATE SET token_hash=excluded.token_hash,last_poll_at=excluded.last_poll_at", in.AgentID, hash[:], timestamp(now)); err != nil {
+	contactTable := "agent_probe_contact"
+	if action == "trace" {
+		contactTable = "agent_trace_contact"
+	}
+	if _, err = tx.ExecContext(ctx, "INSERT INTO "+contactTable+"(agent_id,token_hash,last_poll_at) VALUES(?,?,?) ON CONFLICT(agent_id) DO UPDATE SET token_hash=excluded.token_hash,last_poll_at=excluded.last_poll_at", in.AgentID, hash[:], timestamp(now)); err != nil {
 		return out, err
 	}
 	if err = expireNetworkProbes(ctx, tx, now); err != nil {
@@ -316,6 +320,11 @@ func (s *Store) acceptAgentNetwork(ctx context.Context, token string, in agentNe
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE network_probe_job SET result_json=? WHERE job_id=?", string(raw), in.TaskID); err != nil {
 		return ack, err
+	}
+	if in.Action == "trace" {
+		if err = saveTraceOutcome(ctx, tx, in.TaskID, raw); err != nil {
+			return ack, err
+		}
 	}
 	state := "succeeded"
 	var code any
