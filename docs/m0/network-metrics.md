@@ -72,3 +72,75 @@ ok github.com/JasperXzy/harbormaster/internal/m0 1.523s
 ```
 
 本阶段未修改面板接口契约，前端无需据此生成新类型。
+
+## 生产后台采集与缓存接入
+
+`Instance.cloud_network` 已加入契约，前端可以在未安装 agent 的实例上展示云监控速率；保持与 `realtime` 分离，不能把一分钟平均速率当成十秒实测速率。当前采集所有已发现实例的云源作为独立数据，页面请求不会触发云查询。
+
+ECS 由 DescribeInstances 的 `InstanceNetworkType` 选择 classic/vpc；未知类型不猜测。classic 查询实例维度 InternetInRate/InternetOutRate；vpc 仅在 IPv4 拓扑完整时，按当前公网 IP 构造 instanceId+ip 维度并读取 VPC_PublicIP_InternetInRate/VPC_PublicIP_InternetOutRate。不同 IP 保留独立序列，不与 EIP 指标叠加，不输出没有覆盖证明的总量。SWAS 使用自己的实例 ID 查询两项 VPC_PUBLICIP 速率。
+
+后台每批最多 50 个 ECS 维度、轻量每次 1 台、入出各一次查询，窗口 15 分钟、Period=60、每页 Length=1440、最多 4 页，每个指标批次最多 5 秒；分页期间继续检查任务/账号租约与修订。范围外时间、非法或负数、错误实例/IP、同一序列同一时间冲突、分页失败和游标循环均不发布部分成功数据。明确的 0 是有效样本；空序列/轻量空字符串是 unknown。
+
+每个方向保留 value、unit=bit/s、period_seconds=60、observed_at、checked_at、status 和 last_error。resource_snapshot 保存最新观测；同一来源和 IP 查询失败/空结果时保留旧值并改 stale，旧时间样本不能覆盖新值。拓扑不完整时保留旧序列并令 topology_complete=false，不能声称旧地址仍是当前地址。完整拓扑确认 IP 更换后，旧 IP 样本不会迁移给新 IP。接口将超过十分钟或未来时间的样本标 stale，不改写数据库。
+
+开发模式有各自来源的合成速率并沿用示例实例 IP。实现尚不含 24h/7d 曲线、历史聚合、字节积分、IPv6 公网速率、CDT 对齐或保护动作；F5.1 仍是部分完成。真实经典网络、多公网 IP 和解绑/重绑历史目前仅有模拟测试，不能把单 IP 验收扩大为这些场景都已真实通过。
+
+新增测试覆盖：按 IP 分开的样本/分页、零值、跨 IP 或跨实例响应拒绝、异常时间和值、冲突样本、第二页失败丢弃部分结果、空字符串保留未知、网络类型选择、未知拓扑不查询、旧样本保留/回退防护/IP 更换、以及 GET 仅老化缓存不发云请求。
+
+### 生产路径实测与发现的轻量参数差异
+
+从上次只读验证库再建离线副本，先确认无打开句柄、无 WAL，复制前后文件大小/修改时间一致；目录 0700、数据库 0600。只对副本执行 run-once，不启动电源 worker。
+
+第一次于 11:44:39Z 完成：上海、新加坡、香港三台 ECS 的按当前 IP 查询成功，轻量的生产 CPU/速率均为 aliyun_unreachable。该错误分类不能证明具体网络或提供方参数错误，因此没有从它猜测原始原因。
+
+核对轻量 [StartTime/EndTime 官方定义](https://api.aliyun.com/meta/v1/products/SWAS-OPEN/versions/2020-06-01/apis/DescribeMonitorData/api.json)：文档声明支持毫秒时间戳和 YYYY-MM-DDThh:mm:ssZ。生产原用毫秒字符串，先前成功的 M0 探测用 ISO 格式。此次将轻量 CPU/速率统一到已实测成功的 ISO 格式并增加请求测试；ECS CMS 参数不变。
+
+一次 run-once 因尚未到下次资源调度时间没有产生新的资源观测，不计作复测通过。随后仅在离线验证副本将 next_scan_at 设为 0，重新运行只读采集，于 **2026-11-12T11:48:21.886Z** 完成：四台实例的云公网速率均成功落库；sha-pro 的 11:47:00Z 入/出样本分别为 223288 / 243816 bit/s，CPU 最新样本为 0.125%。这是选用 ISO 格式后的实测成功，尚不能单凭两次采样断言所有环境均不支持毫秒格式。
+
+[生产路径证据](network-rate-runtime-evidence.json)保留首次和最后一次的脱敏摘录。最终 22 项迁移、0 个电源任务、foreign_key_check 无错误；未将 IP、账号 userId、实例 ID 或凭据写入证据文件。
+
+```text
+HM_MASTER_KEY= \
+HM_MASTER_KEY_FILE=/Users/jasperxzy/.config/harbormaster/keys/production-discovery-q8fh4ddr.key \
+go run ./cmd/hm-server run-once \
+  --data-dir /Users/jasperxzy/.local/share/harbormaster-m0/network-rates-offline-aqnc6ndj
+{"time":"2026-11-12T11:48:21.886Z","level":"INFO","msg":"run_once_complete","cloud_writes":0}
+```
+
+本阶段工程检查均通过：
+
+```text
+go test ./internal/cloud/aliyun ./internal/store ./internal/api ./internal/devmode
+ok internal/cloud/aliyun 3.443s
+ok internal/store 2.026s
+ok internal/api 14.482s
+ok internal/devmode 0.816s
+
+go build ./... && go vet ./... && git diff --check
+exit 0，无输出
+
+go test -race ./...
+ok internal/api 59.045s
+ok internal/backup 38.232s
+ok internal/cli 9.380s
+ok internal/cloud/aliyun 4.453s
+ok internal/collect 5.576s
+ok internal/devmode 6.508s
+ok internal/m0 1.508s
+ok internal/model 1.403s
+ok internal/notify 1.795s
+ok internal/power 9.460s
+ok internal/store 35.208s
+其余包 cached 或 [no test files]；exit 0。
+
+npm --prefix web run lint:api
+../docs/api/openapi.yaml: validated in 37ms
+Your API description is valid.
+
+# 轻量时间参数修正后的针对性复验
+go test -race ./internal/cloud/aliyun ./internal/collect
+ok internal/cloud/aliyun 4.472s
+ok internal/collect (cached)
+go build ./... && go vet ./...
+exit 0，无输出
+```

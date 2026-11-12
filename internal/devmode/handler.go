@@ -168,6 +168,24 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			cpu.Usage.Status = "ok"
 			cpu.Usage.LastError = nil
 			item["cpu"] = cpu
+			networkKind, networkSource := "vpc", "cms"
+			if item["kind"] == "swas" {
+				networkKind, networkSource = "swas", "swas_describe_monitor_data"
+			}
+			inName, outName := model.NetworkMetricNames(networkKind)
+			stream := model.CloudNetworkStream{Ingress: model.EmptyNetworkRate(inName, now), Egress: model.EmptyNetworkRate(outName, now)}
+			if networkKind == "vpc" {
+				ip := item["public_ips"].([]object)[0]["address"].(string)
+				stream.IP = &ip
+			}
+			for direction, rate := range []*model.CloudNetworkRate{&stream.Ingress, &stream.Egress} {
+				v := float64(64000 * (direction + 1))
+				rate.Value = &v
+				rate.Status = "ok"
+				rate.ObservedAt = &sampled
+				rate.LastError = nil
+			}
+			item["cloud_network"] = &model.CloudNetwork{Source: networkSource, NetworkType: networkKind, TopologyComplete: true, CheckedAt: now, Streams: []model.CloudNetworkStream{stream}}
 
 		}
 		items := filter(f.Instances, "account_id", r.URL.Query().Get("account_id"))

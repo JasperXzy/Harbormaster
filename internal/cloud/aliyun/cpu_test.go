@@ -147,6 +147,9 @@ func TestSWASCPUUsesFixedSignedEndpointAndOwnInstanceID(t *testing.T) {
 	client := NewClient(roundTrip(func(r *http.Request) (*http.Response, error) {
 		calls++
 		q := r.URL.Query()
+		if _, err := time.Parse(time.RFC3339, q.Get("StartTime")); err != nil {
+			t.Fatal("SWAS time must use verified ISO format")
+		}
 		if r.Method != "GET" || r.URL.Host != "swas.cn-shanghai.aliyuncs.com" || header(r.Header, "x-acs-action") != "DescribeMonitorData" || header(r.Header, "Authorization") == "" || q.Get("RegionId") != "cn-shanghai" || q.Get("InstanceId") != "swas-test" || q.Get("MetricName") != "CPU_UTILIZATION" || q.Get("Namespace") != "" || q.Get("Dimensions") != "" || q.Get("Period") != "60" {
 			t.Fatal("wrong signed SWAS query")
 		}

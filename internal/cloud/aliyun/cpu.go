@@ -86,7 +86,7 @@ func (c Inventory) cpuMetric(ctx context.Context, cred Credentials, region strin
 	action := "DescribeMetricList"
 	if name == "CPU_UTILIZATION" {
 		action = "DescribeMonitorData"
-		query = map[string]string{"RegionId": region, "InstanceId": ids[0], "MetricName": name, "Period": "60", "Length": "1440", "StartTime": strconv.FormatInt(start.UnixMilli(), 10), "EndTime": strconv.FormatInt(now.UnixMilli(), 10)}
+		query = map[string]string{"RegionId": region, "InstanceId": ids[0], "MetricName": name, "Period": "60", "Length": "1440", "StartTime": start.Format(time.RFC3339), "EndTime": now.Format(time.RFC3339)}
 	}
 	readCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()

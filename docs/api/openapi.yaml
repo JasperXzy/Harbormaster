@@ -5,6 +5,8 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  SWAS runtime validation: use the ISO StartTime/EndTime format already verified by M0 for CPU and network reads; live production-path samples now succeed. No CPU schema change or claim that all timestamp formats fail.
+# 2026-11-12  Cloud public network rates: Instance.cloud_network exposes cached 60s Average ingress/egress bit/s streams, distinguishing classic ECS, VPC per-IP and SWAS sources. Topology or query failures preserve stale observations; no instance total, byte integral, agent replacement or CDT protection is inferred.
 # 2026-11-12  Passkey registration/login: add session methods, discoverable login options/finish, authenticated registration options/finish and list/delete. JSON uses WebAuthn base64url options/results; five-minute single-use ceremonies are browser/session-bound. UV is required; private keys never leave authenticators. Password disabling and recovery policy remain a separate phase.
 # 2026-11-12  System event records: GET /system-events adds cached provider events, stable first-seen pagination and source health. Independent read polling defaults to 60s. Complete empty scans only mark old records not seen; failures retain records and last success, never imply resolution. Provider lifecycle is preserved; no notification delivery or cloud action is added.
 # 2026-11-12  System event source preparation: RAM drafts add ecs:DescribeInstanceHistoryEvents and cms:DescribeSystemEventAttribute as read-only actions. Typed source readers preserve provider lifecycle semantics and distinguish ECS history from CMS interruption signals; no system-event panel route or notification dispatch is enabled by this change.
@@ -2570,6 +2572,51 @@ components:
             message:
               type: string
 
+    CloudNetwork:
+      type: object
+      required: [source, network_type, topology_complete, checked_at, streams]
+      properties:
+        source:
+          type: string
+          enum: [cms, swas_describe_monitor_data]
+        network_type:
+          type: string
+          enum: [classic, vpc, swas, unknown]
+          description: Last verified network type; may be retained when current topology is incomplete.
+        topology_complete:
+          type: boolean
+          description: False means streams may be retained from earlier topology and must not be presented as current coverage.
+        checked_at: {type: string, format: date-time}
+        streams:
+          type: array
+          description: VPC uses distinct public IPv4 streams; classic/SWAS use one instance stream with ip=null. Empty does not imply zero traffic. Never sum asynchronous samples or duplicate these with EIP metrics.
+          items:
+            type: object
+            required: [ip, ingress, egress]
+            properties:
+              ip: {type: string, nullable: true, format: ipv4}
+              ingress: {$ref: "#/components/schemas/CloudNetworkRate"}
+              egress: {$ref: "#/components/schemas/CloudNetworkRate"}
+    CloudNetworkRate:
+      type: object
+      required: [metric_name, unit, period_seconds, value, status, observed_at, checked_at, last_error]
+      properties:
+        metric_name:
+          type: string
+          enum: [InternetInRate, InternetOutRate, VPC_PublicIP_InternetInRate, VPC_PublicIP_InternetOutRate, VPC_PUBLICIP_INTERNETIN_RATE, VPC_PUBLICIP_INTERNETOUT_RATE]
+        unit: {type: string, enum: [bit/s]}
+        period_seconds: {type: integer, enum: [60]}
+        value: {type: number, nullable: true, minimum: 0, description: "Latest provider Average; one-minute bandwidth, not a byte counter or link capacity."}
+        status: {type: string, enum: [ok, stale, unknown]}
+        observed_at: {type: string, nullable: true, format: date-time}
+        checked_at: {type: string, format: date-time}
+        last_error:
+          type: object
+          nullable: true
+          properties:
+            code: {type: string}
+            message: {type: string}
+
     InstanceCPU:
       type: object
       required: [source, namespace, usage, credit_balance]
@@ -2687,6 +2734,12 @@ components:
           format: date-time
           nullable: true
           description: Time the latest distinct intent was enqueued. Replaying an event key does not change this time or overwrite newer intent.
+        cloud_network:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/CloudNetwork"
+          description: Cloud rate fallback for instances without agent; separate from realtime agent values. Collected in background, aged stale after ten minutes; GET never queries clouds. No history or byte aggregation yet.
         cpu:
           type: object
           nullable: true

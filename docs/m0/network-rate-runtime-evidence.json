@@ -1,0 +1,314 @@
+{
+  "attempts": [
+    {
+      "cloud_writes": 0,
+      "resources": [
+        {
+          "alias": "sg-server-nano",
+          "kind": "ecs",
+          "region": "ap-southeast-1",
+          "cloud_network": {
+            "source": "cms",
+            "network_type": "vpc",
+            "topology_complete": true,
+            "checked_at": "2026-11-12T11:44:34.145118Z",
+            "streams": [
+              {
+                "has_ip_dimension": true,
+                "ingress": {
+                  "metric_name": "VPC_PublicIP_InternetInRate",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 96736,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:44:00Z",
+                  "checked_at": "2026-11-12T11:44:34.391475Z",
+                  "last_error": null
+                },
+                "egress": {
+                  "metric_name": "VPC_PublicIP_InternetOutRate",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 81748,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:44:00Z",
+                  "checked_at": "2026-11-12T11:44:34.668806Z",
+                  "last_error": null
+                }
+              }
+            ]
+          }
+        },
+        {
+          "alias": "hk-server-nano",
+          "kind": "ecs",
+          "region": "cn-hongkong",
+          "cloud_network": {
+            "source": "cms",
+            "network_type": "vpc",
+            "topology_complete": true,
+            "checked_at": "2026-11-12T11:44:36.627901Z",
+            "streams": [
+              {
+                "has_ip_dimension": true,
+                "ingress": {
+                  "metric_name": "VPC_PublicIP_InternetInRate",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 30660,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:44:00Z",
+                  "checked_at": "2026-11-12T11:44:36.861156Z",
+                  "last_error": null
+                },
+                "egress": {
+                  "metric_name": "VPC_PublicIP_InternetOutRate",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 25456,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:44:00Z",
+                  "checked_at": "2026-11-12T11:44:37.091929Z",
+                  "last_error": null
+                }
+              }
+            ]
+          }
+        },
+        {
+          "alias": "Ali_ShangHai",
+          "kind": "ecs",
+          "region": "cn-shanghai",
+          "cloud_network": {
+            "source": "cms",
+            "network_type": "vpc",
+            "topology_complete": true,
+            "checked_at": "2026-11-12T11:44:31.262458Z",
+            "streams": [
+              {
+                "has_ip_dimension": true,
+                "ingress": {
+                  "metric_name": "VPC_PublicIP_InternetInRate",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 1120,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:44:00Z",
+                  "checked_at": "2026-11-12T11:44:31.439098Z",
+                  "last_error": null
+                },
+                "egress": {
+                  "metric_name": "VPC_PublicIP_InternetOutRate",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 3256,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:44:00Z",
+                  "checked_at": "2026-11-12T11:44:31.645134Z",
+                  "last_error": null
+                }
+              }
+            ]
+          }
+        },
+        {
+          "alias": "sha-pro",
+          "kind": "swas",
+          "region": "cn-shanghai",
+          "cloud_network": {
+            "source": "swas_describe_monitor_data",
+            "network_type": "swas",
+            "topology_complete": true,
+            "checked_at": "2026-11-12T11:44:28.060963Z",
+            "streams": [
+              {
+                "has_ip_dimension": false,
+                "ingress": {
+                  "metric_name": "VPC_PUBLICIP_INTERNETIN_RATE",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": null,
+                  "status": "unknown",
+                  "observed_at": null,
+                  "checked_at": "2026-11-12T11:44:28.278415Z",
+                  "last_error": {
+                    "code": "aliyun_unreachable",
+                    "message": "aliyun_unreachable"
+                  }
+                },
+                "egress": {
+                  "metric_name": "VPC_PUBLICIP_INTERNETOUT_RATE",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": null,
+                  "status": "unknown",
+                  "observed_at": null,
+                  "checked_at": "2026-11-12T11:44:28.468718Z",
+                  "last_error": {
+                    "code": "aliyun_unreachable",
+                    "message": "aliyun_unreachable"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "schema_migrations": 22,
+      "power_jobs": 0,
+      "foreign_key_errors": 0
+    },
+    {
+      "cloud_writes": 0,
+      "resources": [
+        {
+          "alias": "sg-server-nano",
+          "kind": "ecs",
+          "region": "ap-southeast-1",
+          "cloud_network": {
+            "source": "cms",
+            "network_type": "vpc",
+            "topology_complete": true,
+            "checked_at": "2026-11-12T11:48:16.653616Z",
+            "streams": [
+              {
+                "has_ip_dimension": true,
+                "ingress": {
+                  "metric_name": "VPC_PublicIP_InternetInRate",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 248696,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:47:00Z",
+                  "checked_at": "2026-11-12T11:48:16.954064Z",
+                  "last_error": null
+                },
+                "egress": {
+                  "metric_name": "VPC_PublicIP_InternetOutRate",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 231420,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:47:00Z",
+                  "checked_at": "2026-11-12T11:48:17.204005Z",
+                  "last_error": null
+                }
+              }
+            ]
+          }
+        },
+        {
+          "alias": "hk-server-nano",
+          "kind": "ecs",
+          "region": "cn-hongkong",
+          "cloud_network": {
+            "source": "cms",
+            "network_type": "vpc",
+            "topology_complete": true,
+            "checked_at": "2026-11-12T11:48:19.153402Z",
+            "streams": [
+              {
+                "has_ip_dimension": true,
+                "ingress": {
+                  "metric_name": "VPC_PublicIP_InternetInRate",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 24484,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:47:00Z",
+                  "checked_at": "2026-11-12T11:48:19.434904Z",
+                  "last_error": null
+                },
+                "egress": {
+                  "metric_name": "VPC_PublicIP_InternetOutRate",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 20620,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:47:00Z",
+                  "checked_at": "2026-11-12T11:48:19.77386Z",
+                  "last_error": null
+                }
+              }
+            ]
+          }
+        },
+        {
+          "alias": "Ali_ShangHai",
+          "kind": "ecs",
+          "region": "cn-shanghai",
+          "cloud_network": {
+            "source": "cms",
+            "network_type": "vpc",
+            "topology_complete": true,
+            "checked_at": "2026-11-12T11:48:13.701863Z",
+            "streams": [
+              {
+                "has_ip_dimension": true,
+                "ingress": {
+                  "metric_name": "VPC_PublicIP_InternetInRate",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 1004,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:47:00Z",
+                  "checked_at": "2026-11-12T11:48:13.900012Z",
+                  "last_error": null
+                },
+                "egress": {
+                  "metric_name": "VPC_PublicIP_InternetOutRate",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 11184,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:47:00Z",
+                  "checked_at": "2026-11-12T11:48:14.094982Z",
+                  "last_error": null
+                }
+              }
+            ]
+          }
+        },
+        {
+          "alias": "sha-pro",
+          "kind": "swas",
+          "region": "cn-shanghai",
+          "cloud_network": {
+            "source": "swas_describe_monitor_data",
+            "network_type": "swas",
+            "topology_complete": true,
+            "checked_at": "2026-11-12T11:48:10.570244Z",
+            "streams": [
+              {
+                "has_ip_dimension": false,
+                "ingress": {
+                  "metric_name": "VPC_PUBLICIP_INTERNETIN_RATE",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 223288,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:47:00Z",
+                  "checked_at": "2026-11-12T11:48:11.069874Z",
+                  "last_error": null
+                },
+                "egress": {
+                  "metric_name": "VPC_PUBLICIP_INTERNETOUT_RATE",
+                  "unit": "bit/s",
+                  "period_seconds": 60,
+                  "value": 243816,
+                  "status": "ok",
+                  "observed_at": "2026-11-12T11:47:00Z",
+                  "checked_at": "2026-11-12T11:48:11.347976Z",
+                  "last_error": null
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "schema_migrations": 22,
+      "power_jobs": 0,
+      "foreign_key_errors": 0
+    }
+  ]
+}
