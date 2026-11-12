@@ -5,16 +5,19 @@ import "time"
 const TelegramCredentialOwner = "notify/telegram/credentials/v1"
 
 type Notification struct {
-	ID             string    `json:"id"`
-	CreatedAt      time.Time `json:"created_at"`
-	Kind           string    `json:"kind"`
-	Severity       string    `json:"severity"`
-	RuleKey        *string   `json:"rule_key"`
-	Title          string    `json:"title"`
-	Body           string    `json:"body"`
-	AccountID      *string   `json:"account_id"`
-	InstanceID     *string   `json:"instance_id"`
-	DeliveryStatus string    `json:"delivery_status"`
+	Urgent            bool       `json:"urgent"`
+	SuppressionReason *string    `json:"suppression_reason"`
+	SuppressedAt      *time.Time `json:"suppressed_at"`
+	ID                string     `json:"id"`
+	CreatedAt         time.Time  `json:"created_at"`
+	Kind              string     `json:"kind"`
+	Severity          string     `json:"severity"`
+	RuleKey           *string    `json:"rule_key"`
+	Title             string     `json:"title"`
+	Body              string     `json:"body"`
+	AccountID         *string    `json:"account_id"`
+	InstanceID        *string    `json:"instance_id"`
+	DeliveryStatus    string     `json:"delivery_status"`
 	// Lease, event, job and provider identifiers remain private. Safe delivery
 	// diagnostics below are included in the panel history contract.
 	Sequence        int64      `json:"-"`

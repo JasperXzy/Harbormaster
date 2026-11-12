@@ -10,14 +10,14 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/model"
 )
 
-const notificationColumns = `seq,id,event_key,coalesce(job_id,''),created_at,kind,severity,rule_key,title,body,account_id,instance_id,delivery_status,channel_revision,attempts,coalesce(lease_owner,''),last_error_code,uncertain,delivered_at,message_id`
+const notificationColumns = `seq,id,event_key,coalesce(job_id,''),created_at,kind,severity,rule_key,title,body,account_id,instance_id,delivery_status,channel_revision,attempts,coalesce(lease_owner,''),last_error_code,uncertain,delivered_at,message_id,urgent,suppression_reason,suppressed_at`
 
 func readNotification(row rowScanner) (model.Notification, error) {
 	var n model.Notification
 	var created string
-	var rule, account, instance, code, delivered sql.NullString
+	var rule, account, instance, code, delivered, suppression, suppressedAt sql.NullString
 	var message sql.NullInt64
-	err := row.Scan(&n.Sequence, &n.ID, &n.EventKey, &n.JobID, &created, &n.Kind, &n.Severity, &rule, &n.Title, &n.Body, &account, &instance, &n.DeliveryStatus, &n.ChannelRevision, &n.Attempts, &n.Owner, &code, &n.Uncertain, &delivered, &message)
+	err := row.Scan(&n.Sequence, &n.ID, &n.EventKey, &n.JobID, &created, &n.Kind, &n.Severity, &rule, &n.Title, &n.Body, &account, &instance, &n.DeliveryStatus, &n.ChannelRevision, &n.Attempts, &n.Owner, &code, &n.Uncertain, &delivered, &message, &n.Urgent, &suppression, &suppressedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return n, ErrNotFound
 	}
@@ -41,6 +41,10 @@ func readNotification(row rowScanner) (model.Notification, error) {
 		n.LastError = model.Error(code.String)
 	}
 	n.DeliveredAt = parseAgentTime(delivered)
+	if suppression.Valid {
+		n.SuppressionReason = &suppression.String
+	}
+	n.SuppressedAt = parseAgentTime(suppressedAt)
 	if message.Valid {
 		n.MessageID = &message.Int64
 	}
@@ -66,9 +70,26 @@ func enqueueNotification(ctx context.Context, tx *sql.Tx, in model.Notification,
 	if revision == 0 {
 		status = "not_sent"
 	}
+	urgent, err := notificationUrgent(ctx, tx, in)
+	if err != nil {
+		return in, err
+	}
+	var reason, suppressed, quietRevision any
+	if !urgent {
+		quiet, err := readQuietHours(ctx, tx, now)
+		if err != nil {
+			return in, err
+		}
+		if quiet.Active {
+			status = "not_sent"
+			reason = quiet.ActiveReason
+			suppressed = timestamp(now)
+			quietRevision = quiet.Revision
+		}
+	}
 	id := model.NewID("notice_")
-	_, err = tx.ExecContext(ctx, `INSERT INTO notification(id,event_key,job_id,created_at,kind,severity,rule_key,title,body,account_id,instance_id,delivery_status,channel_revision,available_at)
- VALUES(?,?,nullif(?,''),?,?,?,?,?,?,?,?,?,?,?)`, id, in.EventKey, in.JobID, timestamp(now), in.Kind, in.Severity, in.RuleKey, in.Title, in.Body, in.AccountID, in.InstanceID, status, revision, now.Unix())
+	_, err = tx.ExecContext(ctx, `INSERT INTO notification(id,event_key,job_id,created_at,kind,severity,rule_key,title,body,account_id,instance_id,delivery_status,channel_revision,available_at,urgent,suppression_reason,suppressed_at,suppression_revision)
+ VALUES(?,?,nullif(?,''),?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, id, in.EventKey, in.JobID, timestamp(now), in.Kind, in.Severity, in.RuleKey, in.Title, in.Body, in.AccountID, in.InstanceID, status, revision, now.Unix(), urgent, reason, suppressed, quietRevision)
 	if err != nil {
 		return in, err
 	}
@@ -168,6 +189,13 @@ func (s *Store) ClaimNotification(ctx context.Context, now time.Time, maxAttempt
 		if _, err = tx.ExecContext(ctx, "UPDATE notification SET delivery_status='failed',last_error_code=?,uncertain=(? OR uncertain OR lease_owner IS NOT NULL),lease_owner=NULL,lease_until=0 WHERE "+rule.where, args...); err != nil {
 			return model.Notification{}, err
 		}
+	}
+	quiet, err := readQuietHours(ctx, tx, now)
+	if err != nil {
+		return model.Notification{}, err
+	}
+	if err = suppressDueNotifications(ctx, tx, quiet, now, true); err != nil {
+		return model.Notification{}, err
 	}
 	n, err := readNotification(tx.QueryRowContext(ctx, "SELECT "+notificationColumns+" FROM notification WHERE delivery_status='pending' AND available_at<=? AND (lease_owner IS NULL OR lease_until<=?) ORDER BY seq LIMIT 1", now.Unix(), now.Unix()))
 	if errors.Is(err, ErrNotFound) {

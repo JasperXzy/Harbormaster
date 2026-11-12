@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-12  Quiet hours/maintenance: user confirmed record-only, no catch-up for non-urgent alerts. Add business-timezone daily settings and UTC maintenance window, persistent notification urgency/suppression metadata, enqueue/claim/pre-send gates. Urgent quota/agent events and explicit tests bypass; already authorized requests cannot be recalled.
 # 2026-11-12  External heartbeat: add encrypted write-only URL settings and async heartbeat_test jobs. User-approved success gate requires local HTTP readiness/SQLite and recent collection scheduler progress. No old pings are replayed; settings reads omit URL because its path/query may contain credentials.
 # 2026-11-12  Password login policy: PATCH /session/password changes future password authentication only, with session+CSRF. Disabling requires a registered Passkey for the current RP; deleting its last eligible key is refused while disabled. User-approved CLI reset enables password login, clears sessions/challenges and retains Passkeys.
 # 2026-11-12  Agent quality correction: delayed reports no longer overwrite a detected backward clock jump with stale. History independently checks current and previous sample order, including legacy records.
@@ -661,6 +662,61 @@ paths:
         "415": {$ref: "#/components/responses/UnsupportedMediaType"}
         "503":
           description: 生产发送能力不可用。
+
+  /notify/quiet-hours:
+    get:
+      tags: [notify]
+      operationId: getQuietHours
+      summary: 每日静默与临时维护期
+      responses:
+        "200":
+          description: 业务时区来自全局设置；active 按查询时刻计算。
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/QuietHours"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+    put:
+      tags: [notify]
+      operationId: putQuietHours
+      summary: 保存静默策略
+      description: >-
+        enabled 只控制每日时段，maintenance 非空时独立生效。
+        每日 start 包含、end 不包含，允许跨午夜，二者不得相同；每日按业务时区的墙钟时间判断。
+        maintenance 为 UTC/RFC3339 起止时刻（含起点不含终点），null 表示清除。
+        用户确认非紧急告警仅记录，不在静默结束后补发。紧急告警、额度类、保护执行、agent 掉线及显式测试不静默。
+        保存时处理当前到期且尚未领取的非紧急通知，发送前也会重查；已经授权或开始的网络请求无法撤回。
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision, enabled, start, end, maintenance]
+              properties:
+                revision: {type: integer, format: int64, minimum: 0}
+                enabled: {type: boolean}
+                start: {type: string, pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$'}
+                end: {type: string, pattern: '^(?:[01][0-9]|2[0-3]):[0-5][0-9]$'}
+                maintenance:
+                  type: object
+                  nullable: true
+                  allOf:
+                    - $ref: "#/components/schemas/MaintenanceWindow"
+      responses:
+        "200":
+          description: 已保存；旧的静默记录不会重新入队。
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/QuietHours"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+        "415": {$ref: "#/components/responses/UnsupportedMediaType"}
 
   /system/info:
     get:
@@ -2791,6 +2847,31 @@ components:
             message:
               type: string
 
+    MaintenanceWindow:
+      type: object
+      additionalProperties: false
+      required: [start_at, end_at]
+      properties:
+        start_at: {type: string, format: date-time}
+        end_at: {type: string, format: date-time, description: 必须晚于 start_at。}
+    QuietHours:
+      type: object
+      required: [revision, enabled, start, end, maintenance, timezone, updated_at, active, active_reason]
+      properties:
+        revision: {type: integer, format: int64}
+        enabled: {type: boolean, description: 每日时段开关。}
+        start: {type: string, example: '23:00'}
+        end: {type: string, example: '08:00'}
+        timezone: {type: string, description: 当前业务 IANA 时区，非本接口可写字段。}
+        updated_at: {type: string, format: date-time, nullable: true}
+        active: {type: boolean}
+        active_reason: {type: string, nullable: true, enum: [daily, maintenance, null]}
+        maintenance:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/MaintenanceWindow"
+
     HeartbeatSettings:
       type: object
       required: [enabled, url_configured, interval_seconds, revision, updated_at, last_attempt_at, last_success_at, last_error]
@@ -3840,7 +3921,7 @@ components:
           $ref: "#/components/schemas/AlertRuleParams"
         urgent:
           type: boolean
-          description: 紧急告警不受静默时段影响（静默时段在 M2 提供）。
+          description: 紧急告警不受每日静默或临时维护期影响。
 
     AlertRuleUpdate:
       type: object
@@ -3857,7 +3938,7 @@ components:
     DeliveryStatus:
       type: string
       enum: [pending, sent, failed, not_sent]
-      description: not_sent = 没有配置渠道，只记录不发送。
+      description: not_sent = 只记录不发送（未配置渠道、静默或规则取消等）；不会自动补发，结合 suppression_reason 与 last_error 判断。
 
     Notification:
       type: object
@@ -3890,6 +3971,9 @@ components:
           nullable: true
         delivery_status:
           $ref: "#/components/schemas/DeliveryStatus"
+        urgent: {type: boolean, description: 服务端判定并持久保存，前端不能编辑单条通知的紧急性。}
+        suppression_reason: {type: string, nullable: true, enum: [daily, maintenance, null]}
+        suppressed_at: {type: string, format: date-time, nullable: true}
         attempts:
           type: integer
           minimum: 0
