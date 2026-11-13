@@ -28,23 +28,28 @@ import (
 )
 
 type productionPanel struct {
-	ipdb            *ipinfo.Manager
-	powerEnabled    bool
-	s               *store.Store
-	access          panelAccess
-	timezone        string
-	ttl             time.Duration
-	hashing         sync.Mutex
-	backups         sync.Mutex
-	now             func() time.Time
-	engine          *collect.Engine
-	publicURL       string
-	agentReleaseDir string
-	releaseVersions agentrelease.VersionCache
+	probeRetentionDays int
+	ipdb               *ipinfo.Manager
+	powerEnabled       bool
+	s                  *store.Store
+	access             panelAccess
+	timezone           string
+	ttl                time.Duration
+	hashing            sync.Mutex
+	backups            sync.Mutex
+	now                func() time.Time
+	engine             *collect.Engine
+	publicURL          string
+	agentReleaseDir    string
+	releaseVersions    agentrelease.VersionCache
 }
 
 func NewProductionPanel(s *store.Store, c config.Config, engine *collect.Engine, databases ...*ipinfo.Manager) http.Handler {
 	p := &productionPanel{powerEnabled: !c.Dev && c.InstancePowerEnabled && engine != nil && engine.Box != nil, s: s, access: newPanelAccess(c), timezone: c.Timezone, ttl: time.Duration(c.SessionTTLSeconds) * time.Second, now: time.Now, engine: engine, publicURL: c.PublicURL, agentReleaseDir: c.AgentReleaseDir}
+	p.probeRetentionDays = c.ProbeHistoryRetentionDays
+	if p.probeRetentionDays == 0 {
+		p.probeRetentionDays = 30
+	}
 	if len(databases) > 0 {
 		p.ipdb = databases[0]
 	}
@@ -149,7 +154,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			businessError(w, err)
 			return
 		}
-		writeJSON(w, 200, map[string]any{"business_timezone": zone, "collection": map[string]int{"cdt_poll_interval_seconds": cdtSeconds, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": int(offline.Seconds()), "resource_scan_interval_seconds": scanSeconds, "system_event_poll_interval_seconds": eventSeconds}})
+		writeJSON(w, 200, map[string]any{"business_timezone": zone, "retention": map[string]int{"latency_probe_days": p.probeRetentionDays}, "collection": map[string]int{"cdt_poll_interval_seconds": cdtSeconds, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": int(offline.Seconds()), "resource_scan_interval_seconds": scanSeconds, "system_event_poll_interval_seconds": eventSeconds}})
 	case "/events":
 		p.events(w, r)
 	case "/accounts", "/instances", "/traffic/quotas", "/traffic/daily", "/traffic/billing-subjects", "/bandwidth-packages", "/regions", "/notify/telegram", "/alert-rules", "/notifications":

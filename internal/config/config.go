@@ -16,6 +16,7 @@ import (
 )
 
 type Config struct {
+	ProbeHistoryRetentionDays      int      `json:"probe_history_retention_days"`
 	IPDBCityEnabled                bool     `json:"ipdb_city_enabled"`
 	IPDBAutoUpdate                 bool     `json:"ipdb_auto_update"`
 	SystemEventPollIntervalSeconds int      `json:"system_event_poll_interval_seconds"`
@@ -38,7 +39,7 @@ type Config struct {
 
 // Load applies defaults, an optional JSON file, then environment overrides.
 func Load(path string) (Config, error) {
-	c := Config{IPDBAutoUpdate: true, Listen: "127.0.0.1:8080", DataDir: "data", LogLevel: "info", Timezone: "Asia/Shanghai", Frontend: "api", SessionTTLSeconds: 43200, WorkerCount: 2, ResourceScanIntervalSeconds: 300, CDTPollIntervalSeconds: 300, SystemEventPollIntervalSeconds: 60}
+	c := Config{ProbeHistoryRetentionDays: 30, IPDBAutoUpdate: true, Listen: "127.0.0.1:8080", DataDir: "data", LogLevel: "info", Timezone: "Asia/Shanghai", Frontend: "api", SessionTTLSeconds: 43200, WorkerCount: 2, ResourceScanIntervalSeconds: 300, CDTPollIntervalSeconds: 300, SystemEventPollIntervalSeconds: 60}
 	if path != "" {
 		f, err := os.Open(path)
 		if err != nil {
@@ -108,10 +109,20 @@ func Load(path string) (Config, error) {
 			*p = n
 		}
 	}
+	if raw, ok := os.LookupEnv("HM_PROBE_HISTORY_RETENTION_DAYS"); ok {
+		days, err := strconv.Atoi(raw)
+		if err != nil {
+			return c, errors.New("invalid probe history retention")
+		}
+		c.ProbeHistoryRetentionDays = days
+	}
 	return c, c.Validate()
 }
 
 func (c Config) Validate() error {
+	if c.ProbeHistoryRetentionDays < 1 || c.ProbeHistoryRetentionDays > 3650 {
+		return errors.New("probe history retention must be between 1 and 3650 days")
+	}
 	if c.SystemEventPollIntervalSeconds < 15 || c.SystemEventPollIntervalSeconds > 3600 {
 		return errors.New("invalid system event poll interval")
 	}

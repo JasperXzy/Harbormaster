@@ -288,8 +288,9 @@ func (s *Store) acceptAgentNetwork(ctx context.Context, token string, in agentNe
 	var existing, started sql.NullString
 	var until int64
 	var binding []byte
+	var existingDigest []byte
 	var version, currentVersion int64
-	err = tx.QueryRowContext(ctx, `SELECT p.request_json,p.agent_id,coalesce(p.claimed_by,''),p.token_hash,p.credential_version,a.credential_version,j.status,j.started_at,j.lease_until,p.result_json FROM network_probe_job p JOIN job j ON j.id=p.job_id JOIN instance i ON i.id=p.instance_id JOIN account_settings a ON a.account_id=i.account_id WHERE p.job_id=? AND p.action=?`, in.TaskID, in.Action).Scan(&requestRaw, &agentID, &owner, &binding, &version, &currentVersion, &status, &started, &until, &existing)
+	err = tx.QueryRowContext(ctx, `SELECT p.request_json,p.agent_id,coalesce(p.claimed_by,''),p.token_hash,p.credential_version,a.credential_version,j.status,j.started_at,j.lease_until,p.result_json,p.result_digest FROM network_probe_job p JOIN job j ON j.id=p.job_id JOIN instance i ON i.id=p.instance_id JOIN account_settings a ON a.account_id=i.account_id WHERE p.job_id=? AND p.action=?`, in.TaskID, in.Action).Scan(&requestRaw, &agentID, &owner, &binding, &version, &currentVersion, &status, &started, &until, &existing, &existingDigest)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ack, ErrNotFound
 	}
@@ -310,6 +311,14 @@ func (s *Store) acceptAgentNetwork(ctx context.Context, token string, in agentNe
 	}
 	if existing.Valid {
 		if existing.String != string(raw) {
+			return ack, ErrConflict
+		}
+		ack.Duplicate = true
+		return ack, tx.Commit()
+	}
+	if len(existingDigest) > 0 {
+		digest := sha256.Sum256([]byte(raw))
+		if !bytes.Equal(existingDigest, digest[:]) {
 			return ack, ErrConflict
 		}
 		ack.Duplicate = true

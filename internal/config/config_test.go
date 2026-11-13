@@ -116,3 +116,29 @@ func TestSystemEventPollingConfiguration(t *testing.T) {
 		}
 	}
 }
+
+func TestProbeHistoryRetentionDefaultsAndOverrides(t *testing.T) {
+	c, err := Load("")
+	if err != nil || c.ProbeHistoryRetentionDays != 30 {
+		t.Fatal(c, err)
+	}
+	path := filepath.Join(t.TempDir(), "config.json")
+	if err = os.WriteFile(path, []byte(`{"probe_history_retention_days":14}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c, err = Load(path)
+	if err != nil || c.ProbeHistoryRetentionDays != 14 {
+		t.Fatal(c, err)
+	}
+	t.Setenv("HM_PROBE_HISTORY_RETENTION_DAYS", "7")
+	c, err = Load(path)
+	if err != nil || c.ProbeHistoryRetentionDays != 7 {
+		t.Fatal(c, err)
+	}
+	for _, raw := range []string{"0", "-1", "3651", "invalid"} {
+		t.Setenv("HM_PROBE_HISTORY_RETENTION_DAYS", raw)
+		if _, err = Load(""); err == nil {
+			t.Fatal("invalid retention accepted", raw)
+		}
+	}
+}

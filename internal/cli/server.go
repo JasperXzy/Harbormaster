@@ -28,6 +28,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/notify"
 	"github.com/JasperXzy/harbormaster/internal/probes"
+	"github.com/JasperXzy/harbormaster/internal/retention"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
 	"github.com/JasperXzy/harbormaster/internal/traceinfo"
@@ -301,10 +302,14 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 	if engine != nil {
 		workerCtx, cancel := context.WithCancel(ctx)
 		var workers sync.WaitGroup
-		workers.Add(3)
+		workers.Add(4)
 		go func() { defer workers.Done(); engine.Run(workerCtx) }()
 		go func() { defer workers.Done(); (probes.Runner{Store: s, Log: log}).Run(workerCtx) }()
 		go func() { defer workers.Done(); (notify.Evaluator{Store: s, Log: log}).Run(workerCtx) }()
+		go func() {
+			defer workers.Done()
+			(retention.Runner{Store: s, Days: c.ProbeHistoryRetentionDays, Log: log}).Run(workerCtx)
+		}()
 		var enrichment traceinfo.Enricher
 		if ipdb != nil {
 			enrichment.Database = ipdb

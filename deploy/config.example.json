@@ -12,6 +12,7 @@
   "session_ttl_seconds": 43200,
   "worker_count": 2,
   "instance_power_enabled": false,
+  "probe_history_retention_days": 30,
   "ipdb_city_enabled": false,
   "ipdb_auto_update": true,
   "resource_scan_interval_seconds": 300,

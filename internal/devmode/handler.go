@@ -146,7 +146,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/settings/heartbeat":
 		respond(w, 200, model.HeartbeatSettings{IntervalSeconds: 60})
 	case "/settings":
-		respond(w, 200, object{"business_timezone": h.loc.String(), "collection": object{"cdt_poll_interval_seconds": 300, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": 300, "system_event_poll_interval_seconds": 60}})
+		respond(w, 200, object{"business_timezone": h.loc.String(), "retention": object{"latency_probe_days": 30}, "collection": object{"cdt_poll_interval_seconds": 300, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": 300, "system_event_poll_interval_seconds": 60}})
 	case "/regions":
 		respond(w, 200, object{"items": []object{{"id": "ap-southeast-1", "mainland": false}, {"id": "cn-hongkong", "mainland": false}, {"id": "cn-shanghai", "mainland": true}}})
 	case "/accounts":
