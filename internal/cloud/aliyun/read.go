@@ -1,5 +1,5 @@
 // Package aliyun implements fixed Alibaba Cloud operations. Client remains
-// read-only; power operations use a separate PowerClient with typed inputs.
+// read-only; write operations use separate clients with typed inputs.
 package aliyun
 
 import (

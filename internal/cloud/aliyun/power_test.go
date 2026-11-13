@@ -171,16 +171,16 @@ func TestPowerOutcomesNeverReplayOrLeak(t *testing.T) {
 	}
 }
 
-func TestPowerGateRejectsSecondAttempt(t *testing.T) {
+func TestWriteGateRejectsSecondAttempt(t *testing.T) {
 	calls := 0
 	client := NewClient(roundTrip(func(*http.Request) (*http.Response, error) { calls++; return nil, errors.New("lost response") }), 0)
-	gate := powerHTTP{gate: readHTTP{client: client.http, endpoint: "ecs.cn-shanghai.aliyuncs.com", action: "RebootInstance", version: "2014-05-26", method: "POST"}}
+	gate := writeHTTP{gate: readHTTP{client: client.http, endpoint: "ecs.cn-shanghai.aliyuncs.com", action: "RebootInstance", version: "2014-05-26", method: "POST"}}
 	req, _ := http.NewRequest("POST", "https://ecs.cn-shanghai.aliyuncs.com/", nil)
 	req.Header.Set("x-acs-action", "RebootInstance")
 	req.Header.Set("x-acs-version", "2014-05-26")
 	_, _ = gate.Call(req, nil)
 	_, err := gate.Call(req, nil)
-	if err == nil || err.Error() != "power_retry_not_allowed" || calls != 1 {
+	if err == nil || err.Error() != "write_retry_not_allowed" || calls != 1 {
 		t.Fatal(err, calls)
 	}
 }

@@ -112,7 +112,7 @@ func (c *PowerClient) Execute(ctx context.Context, cred Credentials, req PowerRe
 		return result, failure("cancelled")
 	}
 	endpoint := Endpoint(d.product, req.Region, cred.Site)
-	gate := &powerHTTP{gate: readHTTP{client: c.client.http, endpoint: endpoint, action: action, version: d.version, method: "POST"}}
+	gate := &writeHTTP{gate: readHTTP{client: c.client.http, endpoint: endpoint, action: action, version: d.version, method: "POST"}}
 	sdk, err := openapi.NewClient(&openapi.Config{AccessKeyId: dara.String(cred.AccessKeyID), AccessKeySecret: dara.String(cred.AccessKeySecret), Endpoint: dara.String(endpoint), RegionId: dara.String(req.Region), Protocol: dara.String("https"), UserAgent: dara.String("harbormaster"), HttpClient: gate, RetryOptions: &dara.RetryOptions{Retryable: false, MaxAttempts: 1}})
 	if err != nil {
 		return result, failure("sdk_initialization_failed")
@@ -156,25 +156,4 @@ func powerErrorCode(code string) string {
 		return category
 	}
 	return "power_request_rejected"
-}
-
-type powerHTTP struct {
-	gate      readHTTP
-	attempted bool
-	status    int
-}
-
-func (g *powerHTTP) Call(r *http.Request, transport *http.Transport) (*http.Response, error) {
-	if g.attempted {
-		return nil, errors.New("power_retry_not_allowed")
-	}
-	if err := r.Context().Err(); err != nil {
-		return nil, errors.New("power_request_cancelled")
-	}
-	g.attempted = true
-	response, err := g.gate.Call(r, transport)
-	if response != nil {
-		g.status = response.StatusCode
-	}
-	return response, err
 }
