@@ -49,6 +49,10 @@ func (p *productionPanel) integrations(w http.ResponseWriter, r *http.Request, p
 	ctx := model.WithJobTrigger(model.WithAPIKeyPrincipal(r.Context(), key.ID), "api")
 	r = r.WithContext(ctx)
 	target := strings.TrimPrefix(path, "/integrations")
+	if target == "/instances/refresh" {
+		p.integrationRefresh(w, r, key.ID)
+		return
+	}
 	if strings.HasPrefix(target, "/instances/") && p.instancePower(w, r, target) {
 		return
 	}
@@ -62,7 +66,7 @@ func (p *productionPanel) integrations(w http.ResponseWriter, r *http.Request, p
 			writeError(w, 405, "method_not_allowed")
 			return
 		}
-		j, err := p.s.APIKeyPowerJob(ctx, key.ID, id)
+		j, err := p.s.APIKeyControlJob(ctx, key.ID, id)
 		if err != nil {
 			apiKeyError(w, err)
 		} else {

@@ -7,7 +7,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/model"
 )
 
-func requirePowerAPIKey(ctx context.Context, q queryRower, id string) error {
+func requireControlAPIKey(ctx context.Context, q queryRower, id string) error {
 	key, err := readAPIKey(q.QueryRowContext(ctx, "SELECT "+keyColumns+" FROM api_key WHERE id=? AND revoked_at IS NULL", id))
 	if errors.Is(err, ErrNotFound) {
 		return ErrUnauthorized
@@ -29,7 +29,7 @@ func (s *Store) APIKeyPowerJob(ctx context.Context, keyID, id string) (model.Job
 		return model.Job{}, err
 	}
 	defer tx.Rollback()
-	if err = requirePowerAPIKey(ctx, tx, keyID); err != nil {
+	if err = requireControlAPIKey(ctx, tx, keyID); err != nil {
 		return model.Job{}, err
 	}
 	j, err := readJob(tx.QueryRowContext(ctx, "SELECT "+jobColumns+" FROM job WHERE id=? AND type='instance_power' AND EXISTS (SELECT 1 FROM api_key_power_job k WHERE k.job_id=job.id AND k.key_id=?)", id, keyID))

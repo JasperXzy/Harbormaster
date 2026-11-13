@@ -79,8 +79,8 @@
 | F12.6 | 内置测速与线路执行器、持久队列、独立私有领取/回报、结果校验、agent 加密待办及串行执行恢复已实现。长任务期间流量上传独立；本机 TLS/重启/取消测试通过。真实原始套接字、机器安装与公网测量尚未验收。[测速器](network-probes.md)、[测速协议](agent-probe-tasks.md)、[线路协议](agent-trace-tasks.md) |
 | F12.7 | 当前固定动作、独立 token、哈希与撤销已实现；systemd 最小能力仍待真实安装验证。没有任意命令接口或云助手。 |
 | F12.8 | 后端版本、最后上报时间、校验过的本地发布版本与升级判断已实现；前端应使用 update_available，不用字符串不等比较。[版本](agent-version-hints.md) |
-| F13.1 | 管理接口、精确 scope 鉴权及独立实例控制/自有任务查询入口已实现；撤销会取消发送前任务并保留意图。摘要/cron 消费入口未接入。[API Key](api-key-management.md) |
-| F13.2 | 刷新/权限查询、管理员及 API Key 电源控制异步接口已实现；真实云写操作未验收。 |
+| F13.1 | 管理接口、精确 scope 鉴权及独立实例控制/刷新/已授权任务查询入口已实现；撤销会取消发送前电源任务并保留意图，共享只读采集独立运行。摘要/cron 消费入口未接入。[API Key](api-key-management.md)、[只读刷新](api-key-refresh.md) |
+| F13.2 | 管理员刷新/权限查询、电源控制以及 API Key 电源/只读刷新异步接口已实现；返回任务 ID，Key 只能读取自己的电源任务及明确加入的刷新。真实云写操作未验收。[刷新](api-key-refresh.md) |
 | F13.3、F13.4 | 小组件摘要、URL Cron 未实现；摘要字段问题已提出待答。 |
 | F14.1 | SQLite 持久队列、可配置 worker、重启租约恢复已实现。 |
 | F14.2 | 采集租约、电源任务租约/调用方事件键、发送前标记和未知结果不重放已实现；Telegram 网络意义上的防重复及真实动作验收未完成。 |
@@ -134,9 +134,9 @@
 
 ## 尚缺的阶段验收证据
 
-- M1：真实 agent 安装、连续 24 小时计量/对账 ≤5%、可靠实时估算、阈值 Telegram 送达、掉线 30 秒送达，均未证明。不能因当前七类告警有本地记录就标为通过。
+- M1：真实 agent 安装、连续 24 小时计量/对账 ≤5%、可靠实时估算、阈值 Telegram 送达、掉线 30 秒送达，均未证明。不能因当前告警有本地记录就标为通过。
 - M2：自动化/电源动作模拟演练、最坏情况与状态确认、Telegram 远控、外部心跳未完成；CDT-Monitor 不应据此下线。
 - M3/M4：核心功能及验收均未完成。
 - 非功能：macOS 空库设置/密码登录后测到 RSS 约 210.2MB，显式 GOMEMLIMIT=80MiB 时约 146.8MB，该本地 RSS 场景未达 100MB；未据此设置默认内存限制或修改 PRD。[内存实测与修订建议](server-memory-baseline.md)。生产 Linux/10 实例常驻内存、agent 资源占用、长期数据库 ≤1GB、保留期、保护响应 ≤30 秒、真实发送可靠性与跨平台运行仍缺对应实测。
 
-最近构建、race、vet 与契约检查见 [系统事件采集验证](system-events.md)；此前见 [CPU 采集验证](cpu-metrics.md)；此前接口契约及完整功能检查见 [API Key 控制验证](api-key-management.md)；此前见 [电源调用验证](instance-power.md)；契约已有管理员电源提交、能力开关、期望状态和状态确认观测；默认关闭真实电源执行。之前契约检查见 [任务列表验证](job-history.md)。之前检查见 [余额告警验证](balance-alerts.md)、[备份恢复验证](backup-format.md)、[RAM 草稿验证](ram-policy.md)、[公网 IP 告警验证](public-ip-alerts.md)、[实例事件验证](instance-events.md)、[IPv6 验证](ipv6-discovery.md)、[规格带宽告警验证](bandwidth-alerts.md)，初始跨平台命令见 [M0 原始输出](validation.txt)。当前未实现项仍需推进，不能据此将持续目标标记完成。
+最近构建、全量 race、vet 与契约检查见 [API Key 只读刷新验证](api-key-refresh.md)；此前阶段见 [审计验证](audit-log.md)、[CPU 规格只读验证](cpu-credit-specs.md)及各需求行所列文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。

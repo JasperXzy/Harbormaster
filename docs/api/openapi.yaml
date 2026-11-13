@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-13  API Key refresh: add bearer-only /integrations/instances/refresh using instance:control and the existing read-only collector queue. Accept an optional account_id in a required JSON object, or {} for a snapshot of enabled accounts. Equal active read scopes may be shared with explicit per-key visibility; changed all-account membership returns refresh_scope_changed rather than silently omitting accounts. Integration job detail now includes refresh jobs explicitly joined by that key, while power ownership remains isolated. Revocation blocks API access and power dispatch as before; shared account collection remains independently authorized by enabled monitoring. No cloud writes, desired-state changes or synchronous cloud queries.
 # 2026-11-13  Audit journal: add cached admin-only /audit-log with bounded keyset pagination and filter-bound cursors. Record account configuration/credential-change markers, implemented rule settings, API key management, agent grants/binding/revocation and instance power lifecycle in the same SQLite transaction as each change. Actors derive from trusted session/API-key/CLI/system context. Details contain fixed metadata and changed field names only; storing configuration before/after values remains a pending user decision. Never store credential/token/hash/ciphertext or raw provider error payloads; no historical audit backfill is fabricated.
 # 2026-11-13  Duplex traces: add atomic paired agent trace submissions, saved endpoint/address evidence, detail and text export. User confirmed both-or-neither enqueue with independent execution and actual timestamps thereafter. Both managed instances need fresh unique public addresses and authenticated trace capability at submission; queued legs recheck endpoint address evidence, running legs retain their original measurements. Trace history adds nullable duplex_id/direction backlinks. Reads never probe or refresh cloud data; no claim of synchronized packets or a symmetric path.
 # 2026-11-13  Trace snapshots: add per-probe-plan daily trace schedules and bounded snapshot history/comparisons. User chose business-timezone 03:00 default, no historical backfill, one current catch-up; compare only complete reached paths with unchanged target IP and unique complete per-TTL ASN evidence, coalescing adjacent ASNs. Different ASN database versions establish a new starting point without an alert. Add optional non-urgent network_route_change event records; Telegram delivery remains separate.
@@ -1890,6 +1891,57 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /integrations/instances/refresh:
+    post:
+      security:
+        - integrationBearer: []
+      tags: [instances]
+      operationId: refreshInstancesWithAPIKey
+      summary: API Key 异步刷新资源与官方数据
+      description: |
+        Requires instance:control and a single Authorization Bearer header; cookies and URL/body tokens are not accepted.
+        Local enqueue only. The existing collector performs read-only queries in the background, independently of the power execution switch.
+        A required JSON object may select one enabled account; {} captures all currently enabled accounts. Unknown/disabled explicit accounts are rejected.
+        Requests may join an equal active refresh scope, including work created by the panel or another key. Its original trigger is retained.
+        Each joining key gains access only to that refresh task through /integrations/jobs/{job_id}; this does not grant visibility into other jobs.
+        If an existing all-account task captured a different membership, return 409 refresh_scope_changed; retry after it finishes or select one account.
+        After a task completes, a new request schedules a new refresh. This endpoint does not accept Idempotency-Key as a durable operation identity.
+        Revocation prevents further API access but does not cancel independently authorized account collection, which may serve other requests or monitoring.
+        Development mode has no bearer integration consumer. No desired-state or cloud-resource writes occur.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                account_id:
+                  type: string
+                  maxLength: 128
+                  description: Omit or use an empty string to refresh all enabled accounts.
+      responses:
+        "202": {$ref: "#/components/responses/JobAccepted"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409":
+          description: account_disabled or refresh_scope_changed; no new task membership is granted on failure.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+        "415":
+          description: unsupported_media_type; request body must be application/json.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+        "503":
+          description: collector_unavailable or internal_error; no synchronous cloud call.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ErrorResponse"}
+
   /integrations/instances/{instance_id}/power:
     parameters:
       - $ref: "#/components/parameters/InstanceId"
@@ -1962,10 +2014,10 @@ paths:
     get:
       tags: [jobs]
       operationId: getIntegrationPowerJob
-      summary: 查询该 API Key 创建的电源任务
+      summary: 查询该 API Key 的控制或刷新任务
       security:
         - integrationBearer: []
-      description: Requires instance:control. Only power jobs created by this key are visible; other keys' jobs and panel jobs return 404. No cloud calls. Key revocation also blocks history access; administrators retain full history.
+      description: Requires instance:control. Power jobs must be created by this key. Refresh jobs must have an explicit membership established by this key's accepted refresh request, including shared tasks originally created by another caller. Other jobs return 404. No cloud calls or membership changes on GET. Key revocation also blocks history access; administrators retain full history. The existing operationId is retained for generated-client compatibility.
       parameters:
         - name: job_id
           in: path
@@ -1974,7 +2026,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Persisted power task.
+          description: Persisted power or authorized refresh task.
           content:
             application/json:
               schema:

@@ -68,7 +68,7 @@ func (s *Store) EnqueuePowerJob(ctx context.Context, instanceID, action, stopMod
 	keyID := model.APIKeyPrincipal(ctx)
 	principal := "panel"
 	if keyID != "" {
-		if err = requirePowerAPIKey(ctx, tx, keyID); err != nil {
+		if err = requireControlAPIKey(ctx, tx, keyID); err != nil {
 			return model.Job{}, err
 		}
 		principal = "api:" + keyID
@@ -259,7 +259,7 @@ func (s *Store) BeginPowerDispatch(ctx context.Context, j model.Job, now time.Ti
 		return p, err
 	}
 	if keyID != "" {
-		if err = requirePowerAPIKey(ctx, tx, keyID); err != nil {
+		if err = requireControlAPIKey(ctx, tx, keyID); err != nil {
 			return p, err
 		}
 	}
