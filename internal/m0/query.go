@@ -35,6 +35,7 @@ type definition struct{ product, version, params string }
 // Exact allowlist, deliberately no arbitrary RPC command or endpoint flags.
 var allowed = map[string]definition{
 	"DescribeInstanceTypes":         {"ecs", "2014-05-26", "MaxResults NextToken InstanceTypes.1 InstanceTypes.2 InstanceTypes.3 InstanceTypes.4"},
+	"DescribeDisks":                 {"ecs", "2014-05-26", "RegionId MaxResults NextToken"},
 	"DescribeInstanceHistoryEvents": {"ecs", "2014-05-26", "RegionId ResourceType PageNumber PageSize InstanceEventCycleStatus.1 InstanceEventCycleStatus.2 InstanceEventCycleStatus.3 InstanceEventCycleStatus.4 InstanceEventCycleStatus.5 InstanceEventCycleStatus.6 InstanceEventCycleStatus.7"},
 	"DescribeSystemEventAttribute":  {"cms", "2019-01-01", "Product Name StartTime EndTime PageNumber PageSize"},
 	"DescribeSystemEventMetaList":   {"cms", "2019-01-01", ""},
@@ -120,6 +121,16 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 	}
 	ops := []operation{}
 	switch options.Check {
+	case "idle-resources":
+		// Capture state/billing evidence only. No pricing, detach or release call
+		// is implied by this probe, and regions remain the imported read scope.
+		for _, region := range p.Regions {
+			ops = append(ops,
+				newOperation(p, "DescribeInstances", region, map[string]string{"RegionId": region, "PageNumber": "1", "PageSize": "100"}, "PageNumber", "Instances.Instance"),
+				newOperation(p, "DescribeDisks", region, map[string]string{"RegionId": region, "MaxResults": "100"}, "NextToken", "Disks.Disk"),
+				newOperation(p, "DescribeEipAddresses", region, map[string]string{"RegionId": region, "PageNumber": "1", "PageSize": "100"}, "PageNumber", "EipAddresses.EipAddress"),
+			)
+		}
 	case "ecs-credit-specs":
 		if len(p.Regions) != 1 {
 			return nil, errors.New("credit_specs_require_one_selected_region")
@@ -446,7 +457,7 @@ func execute(ctx context.Context, p profile, ops []operation, call callFunc, int
 			if o.PageKey == "NextToken" {
 				seen += len(list)
 				tokenPath := "Data.NextToken" // BSS places its cursor inside Data.
-				if o.Action == "DescribeInstanceTypes" {
+				if o.Action == "DescribeInstanceTypes" || o.Action == "DescribeDisks" {
 					tokenPath = "NextToken"
 				}
 				raw, exists := atPath(body, tokenPath)
@@ -456,7 +467,9 @@ func execute(ctx context.Context, p profile, ops []operation, call callFunc, int
 					break
 				}
 				if token == "" {
-					if total, hasTotal := totalCount(body); hasTotal && seen != total {
+					// DescribeDisks explicitly declares TotalCount invalid when
+					// MaxResults/NextToken are used, including the final page.
+					if total, hasTotal := totalCount(body); o.Action != "DescribeDisks" && hasTotal && seen != total {
 						r.ErrorCode = "pagination_incomplete"
 						break
 					}

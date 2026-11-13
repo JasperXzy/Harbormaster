@@ -12,6 +12,8 @@
 
 2026-11-12 补充：ECS 指标目录在 jasperxzy/cn-shanghai 真实只读查询完成（11 页、307 项）。已确认 CPUUtilization（%）与 TotalCredit（count），尚未查询实例时间序列或启用积分告警。见 [CPU 来源验证](cpu-metrics.md)。
 
+2026-11-13 补充：闲置资源固定探测在两个账号四个地域范围共 12 项只读查询通过，包含 DescribeDisks（RAM Action `ecs:DescribeDisks`）。该接口游标分页下 TotalCount 无效，不能将返回 0 解释成空列表。当前仅确认来源和字段，没有闲置正例、生产磁盘采集或月费用估算；见[来源与实际输出](idle-resource-sources.md)。
+
 ## 验证方法
 
 2026-11-11 下载阿里云官方 Go SDK，逐项查找 Client 方法；读取官方 OpenAPI 元数据的 parameters、operationType、ramActions。没有向真实账号发送请求。31 项结果、官方链接和固定 SDK commit 见 [接口矩阵](api-table.md)；全部顶层参数名、类型、必选标志及 RAM 资源范围见 [机器可读记录](api-evidence.json)。required=true 不是场景全部必选条件。
