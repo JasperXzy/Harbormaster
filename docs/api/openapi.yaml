@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-13  Branding settings: add authenticated name/Logo configuration and same-origin PNG reads. Name and image changes use the shared revision to reject stale edits; PNG/JPEG uploads up to 2 MiB and 512×512 are decoded and normalized to a static 8-bit PNG before local storage. No remote URL fetching or filesystem paths. Default name is Harbormaster with no custom Logo; no-op writes keep the revision. Changes and fixed-field audit markers commit together and encrypted database backups retain the configuration. Demo exposes default read fixtures and rejects writes. Pre-login branding visibility is a pending user decision; these endpoints retain session, HTTPS/host/CIDR and CSRF boundaries.
 # 2026-11-13  Latency result retention: expose configured retention.latency_probe_days (default 30) in settings. Production serve removes expired terminal ICMP/TCP probe payloads and plan-run history in bounded background transactions; active work and traceroute data are outside this cleanup. Keep task/idempotency metadata and authenticated canonical-result fingerprints for duplicate ACKs. A formerly retained network_probe latency result may become {action: probe, result_expired: true, result_expired_at}; this does not alter its status/error or claim current connectivity. Agent raw/hourly and other history policies remain separate and incomplete. GETs never prune data.
 # 2026-11-13  API Key refresh: add bearer-only /integrations/instances/refresh using instance:control and the existing read-only collector queue. Accept an optional account_id in a required JSON object, or {} for a snapshot of enabled accounts. Equal active read scopes may be shared with explicit per-key visibility; changed all-account membership returns refresh_scope_changed rather than silently omitting accounts. Integration job detail now includes refresh jobs explicitly joined by that key, while power ownership remains isolated. Revocation blocks API access and power dispatch as before; shared account collection remains independently authorized by enabled monitoring. No cloud writes, desired-state changes or synchronous cloud queries.
 # 2026-11-13  Audit journal: add cached admin-only /audit-log with bounded keyset pagination and filter-bound cursors. Record account configuration/credential-change markers, implemented rule settings, API key management, agent grants/binding/revocation and instance power lifecycle in the same SQLite transaction as each change. Actors derive from trusted session/API-key/CLI/system context. Details contain fixed metadata and changed field names only; storing configuration before/after values remains a pending user decision. Never store credential/token/hash/ciphertext or raw provider error payloads; no historical audit backfill is fabricated.
@@ -1074,6 +1075,130 @@ paths:
         "401": {$ref: "#/components/responses/Unauthorized"}
         "404": {$ref: "#/components/responses/NotFound"}
         "422": {$ref: "#/components/responses/ValidationFailed"}
+
+  /settings/branding:
+    get:
+      tags: [system]
+      operationId: getBranding
+      summary: Read the configured panel name and Logo metadata
+      description: Local read only; session and the panel access restrictions apply. The default is Harbormaster with logo=null. No cloud requests or external image downloads.
+      responses:
+        "200":
+          description: Current configuration
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Branding"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+    put:
+      tags: [system]
+      operationId: putBrandingName
+      summary: Update the panel name
+      description: Trims surrounding whitespace. Preserves the current Logo. Send the latest revision; stale edits return branding_changed. Saving the same normalized name is a no-op. Use Harbormaster to restore the default name. Demo writes return 501.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [revision, name]
+              properties:
+                revision: {type: integer, format: int64, minimum: 0}
+                name: {type: string, minLength: 1, maxLength: 100, description: Plain Unicode text without control characters.}
+      responses:
+        "200":
+          description: Current configuration after the update
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Branding"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "415": {$ref: "#/components/responses/UnsupportedMediaType"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+        "501": {description: Development fixtures do not persist configuration writes.}
+
+  /settings/branding/logo:
+    get:
+      tags: [system]
+      operationId: getBrandingLogo
+      summary: Read the current custom Logo
+      description: Session-protected current normalized PNG, or 404 when no custom Logo exists. The returned metadata URL contains the current revision to refresh the image after a change; this endpoint does not retain historical image versions. Responses use no-store.
+      parameters:
+        - name: revision
+          in: query
+          schema: {type: integer, format: int64, minimum: 0}
+          description: Optional image refresh hint; the current image is returned.
+      responses:
+        "200":
+          description: Normalized custom image
+          content:
+            image/png:
+              schema: {type: string, format: binary}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+    put:
+      tags: [system]
+      operationId: putBrandingLogo
+      summary: Upload a custom Logo
+      description: Send raw PNG or JPEG bytes with its matching Content-Type and the latest shared revision query value. Maximum input 2 MiB, width and height each 1–512 pixels. Decodes locally, strips source metadata/trailing data, converts to 8-bit and stores static PNG. No external URL fetch. Invalid content/dimensions return validation_failed with fields.logo; oversized bodies return branding_logo_too_large. Identical normalized images are a no-op. Demo writes return 501.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - name: revision
+          in: query
+          required: true
+          schema: {type: integer, format: int64, minimum: 0}
+      requestBody:
+        required: true
+        content:
+          image/png:
+            schema: {type: string, format: binary, maxLength: 2097152}
+          image/jpeg:
+            schema: {type: string, format: binary, maxLength: 2097152}
+      responses:
+        "200":
+          description: Current configuration including normalized image dimensions and size
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Branding"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "413": {description: branding_logo_too_large; the configuration is unchanged.}
+        "415": {$ref: "#/components/responses/UnsupportedMediaType"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+        "501": {description: Development fixtures do not persist configuration writes.}
+    delete:
+      tags: [system]
+      operationId: deleteBrandingLogo
+      summary: Remove the custom Logo
+      description: Preserves the configured name. Requires the latest shared revision; already absent is a no-op. Demo writes return 501.
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - name: revision
+          in: query
+          required: true
+          schema: {type: integer, format: int64, minimum: 0}
+      responses:
+        "200":
+          description: Current configuration with logo=null
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Branding"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409": {$ref: "#/components/responses/Conflict"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+        "501": {description: Development fixtures do not persist configuration writes.}
 
   /settings/heartbeat:
     get:
@@ -2738,8 +2863,8 @@ components:
           properties:
             kind: {type: string, enum: [admin, api_key, cli, telegram, system]}
             id: {type: string, nullable: true, description: Validated internal API-key ID when applicable; never the token. Null for the single administrator and system/CLI sources.}
-        action: {type: string, description: "Stable codes include account_created/account_updated/account_disabled; alert_rule_updated; quiet_hours_updated; probe_target_created/updated/deleted; probe_plan_created/updated/deleted; trace_schedule_updated; api_key_created/revoked; agent_registration_issued/agent_registered/agent_revoked; instance_power_requested/started/dispatch_started/dispatch_recorded/finished."}
-        target_type: {type: string, description: account / alert_rule / quiet_hours / probe_target / probe_plan / trace_schedule / api_key / instance}
+        action: {type: string, description: "Stable codes include account_created/account_updated/account_disabled; alert_rule_updated; quiet_hours_updated; branding_updated; probe_target_created/updated/deleted; probe_plan_created/updated/deleted; trace_schedule_updated; api_key_created/revoked; agent_registration_issued/agent_registered/agent_revoked; instance_power_requested/started/dispatch_started/dispatch_recorded/finished."}
+        target_type: {type: string, description: account / alert_rule / quiet_hours / branding / probe_target / probe_plan / trace_schedule / api_key / instance}
         target_id: {type: string}
         account_id: {type: string, nullable: true}
         job_id: {type: string, nullable: true, description: Links operation evidence to its persistent task; not proof of cloud success.}
@@ -3458,6 +3583,24 @@ components:
           type: string
           nullable: true
           description: Verified local agent release version, using the same cache as Agent.available_version. Null when unavailable. Use Agent.update_available for upgrade decisions, not string inequality against this field.
+
+    Branding:
+      type: object
+      required: [revision, name, logo, updated_at]
+      properties:
+        revision: {type: integer, format: int64, minimum: 0}
+        name: {type: string, minLength: 1, maxLength: 100, default: Harbormaster}
+        updated_at: {type: string, format: date-time, nullable: true, description: Last effective change; null for the untouched default.}
+        logo:
+          type: object
+          nullable: true
+          required: [url, media_type, width, height, bytes]
+          properties:
+            url: {type: string, description: Same-origin authenticated API path including the current shared revision.}
+            media_type: {type: string, enum: [image/png]}
+            width: {type: integer, minimum: 1, maximum: 512}
+            height: {type: integer, minimum: 1, maximum: 512}
+            bytes: {type: integer, minimum: 1, maximum: 2097152, description: Stored normalized PNG size in bytes.}
 
     Settings:
       type: object

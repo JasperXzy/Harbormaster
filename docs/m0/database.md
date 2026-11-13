@@ -39,3 +39,5 @@ AccessKey Secret、Telegram Token 等需要可逆使用的值放 credential；ag
 - M3：probe/route 相关表，测速样本默认 30 天。
 
 不在 M0 预建全部后续表或宣称已实现持久任务/自动停机。2026-11-12 用户确认账号停用并保留历史；外键不自动级联删除历史，生产账号写 API 尚未开放。SQLite ≤1GB 和常驻内存目标尚未做长期负载验收。
+
+2026-11-13 增量：迁移 040 增加 panel_branding 单行配置，保存名称、共享修订、规范化 PNG BLOB/尺寸与 UTC 更新时间；名称/图片和固定字段审计同事务提交，加密备份保留本表。[设计与验证](branding.md)。上文是最初 M0 结构，完整功能现状以[后端状态记录](backend-status.md)和各后续迁移为准。

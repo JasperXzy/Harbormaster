@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
@@ -82,6 +84,21 @@ func TestRestoreWithNewMasterCancelsOldWorkAndPreservesHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.UpdateBrandingName(ctx, 0, "Restored panel fixture", now); err != nil {
+		t.Fatal(err)
+	}
+	var logoSource bytes.Buffer
+	if err := png.Encode(&logoSource, image.NewNRGBA(image.Rect(0, 0, 4, 3))); err != nil {
+		t.Fatal(err)
+	}
+	branding, err := s.ReplaceBrandingLogo(ctx, 1, "image/png", logoSource.Bytes(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logoBefore, err := s.BrandingLogo(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var archive bytes.Buffer
 	if err := Export(ctx, s, old, testPassword, &archive); err != nil {
 		t.Fatal(err)
@@ -99,6 +116,11 @@ func TestRestoreWithNewMasterCancelsOldWorkAndPreservesHistory(t *testing.T) {
 	defer restored.Close()
 	if err := restored.BindMasterKey(ctx, newKey); err != nil {
 		t.Fatal(err)
+	}
+	restoredBranding, err := restored.Branding(ctx)
+	restoredLogo, imageErr := restored.BrandingLogo(ctx)
+	if err != nil || imageErr != nil || restoredBranding.Name != branding.Name || restoredBranding.Revision != branding.Revision || restoredBranding.Logo == nil || !bytes.Equal(restoredLogo, logoBefore) {
+		t.Fatal("branding lost during cross-master restore", err, imageErr)
 	}
 	if err := restored.BindMasterKey(ctx, old); !errors.Is(err, store.ErrMasterKey) {
 		t.Fatal("old master accepted", err)

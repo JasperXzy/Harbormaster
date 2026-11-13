@@ -46,11 +46,17 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 	}
 	var session map[string]string
 	_ = json.Unmarshal(w.Body.Bytes(), &session)
-	for _, path := range []string{"/system/info", "/network/ipdb", "/network/targets", "/network/points", "/network/plans", "/network/plans/demo-plan-agent", "/network/targets/target_cloudflare_dns", "/notify/quiet-hours", "/settings/heartbeat", "/passkeys", "/session/methods", "/settings", "/system-events", "/accounts", "/ram-policies", "/api-keys", "/audit-log", "/accounts/demo-account-1/finance", "/accounts/demo-account-2/finance", "/instances/demo-sin/finance", "/instances/demo-sha/finance", "/instances?limit=1", "/traffic/quotas", "/traffic/daily?account_id=demo-account-1", "/traffic/billing-subjects", "/bandwidth-packages", "/bandwidth-packages/demo-package/hourly", "/notify/telegram", "/alert-rules", "/notifications"} {
+	for _, path := range []string{"/system/info", "/network/ipdb", "/network/targets", "/network/points", "/network/plans", "/network/plans/demo-plan-agent", "/network/targets/target_cloudflare_dns", "/notify/quiet-hours", "/settings/heartbeat", "/settings/branding", "/passkeys", "/session/methods", "/settings", "/system-events", "/accounts", "/ram-policies", "/api-keys", "/audit-log", "/accounts/demo-account-1/finance", "/accounts/demo-account-2/finance", "/instances/demo-sin/finance", "/instances/demo-sha/finance", "/instances?limit=1", "/traffic/quotas", "/traffic/daily?account_id=demo-account-1", "/traffic/billing-subjects", "/bandwidth-packages", "/bandwidth-packages/demo-package/hourly", "/notify/telegram", "/alert-rules", "/notifications"} {
 		w = call("GET", path, "", cookie, "")
 		if w.Code != 200 || !json.Valid(w.Body.Bytes()) {
 			t.Errorf("%s: %d %s", path, w.Code, w.Body.String())
 		}
+	}
+	if w := call("PUT", "/settings/branding", `{"revision":0,"name":"not persisted"}`, cookie, session["csrf_token"]); w.Code != 501 {
+		t.Fatal("demo accepted a branding mutation", w.Code)
+	}
+	if w := call("GET", "/settings/branding/logo", "", cookie, ""); w.Code != 404 {
+		t.Fatal("demo fabricated a custom image", w.Code)
 	}
 	powerResponse := call("POST", "/instances/demo-sin/power", `{"action":"stop","stop_mode":"keep_charging"}`, cookie, session["csrf_token"])
 	if powerResponse.Code != 503 || !strings.Contains(powerResponse.Body.String(), "instance_power_disabled") {
