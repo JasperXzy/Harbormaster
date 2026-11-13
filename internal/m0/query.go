@@ -34,6 +34,7 @@ type definition struct{ product, version, params string }
 
 // Exact allowlist, deliberately no arbitrary RPC command or endpoint flags.
 var allowed = map[string]definition{
+	"DescribeInstanceTypes":         {"ecs", "2014-05-26", "MaxResults NextToken InstanceTypes.1 InstanceTypes.2 InstanceTypes.3 InstanceTypes.4"},
 	"DescribeInstanceHistoryEvents": {"ecs", "2014-05-26", "RegionId ResourceType PageNumber PageSize InstanceEventCycleStatus.1 InstanceEventCycleStatus.2 InstanceEventCycleStatus.3 InstanceEventCycleStatus.4 InstanceEventCycleStatus.5 InstanceEventCycleStatus.6 InstanceEventCycleStatus.7"},
 	"DescribeSystemEventAttribute":  {"cms", "2019-01-01", "Product Name StartTime EndTime PageNumber PageSize"},
 	"DescribeSystemEventMetaList":   {"cms", "2019-01-01", ""},
@@ -119,6 +120,16 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 	}
 	ops := []operation{}
 	switch options.Check {
+	case "ecs-credit-specs":
+		if len(p.Regions) != 1 {
+			return nil, errors.New("credit_specs_require_one_selected_region")
+		}
+		// Public catalog reads only. No burstable instance is created to test credits.
+		q := map[string]string{"MaxResults": "100"}
+		for i, id := range []string{"ecs.t5-lc2m1.nano", "ecs.t5-c1m1.large", "ecs.t6-c2m1.large", "ecs.t6-c1m1.large"} {
+			q["InstanceTypes."+strconv.Itoa(i+1)] = id
+		}
+		ops = append(ops, newOperation(p, "DescribeInstanceTypes", p.Regions[0], q, "NextToken", "InstanceTypes.InstanceType"))
 	case "system-events":
 		end := time.Now().UTC()
 		for _, region := range p.Regions {
@@ -211,7 +222,7 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			ops = append(ops, newOperation(p, "DescribeMetricList", p.Regions[0], map[string]string{"Namespace": ns, "MetricName": name, "Dimensions": string(dim), "StartTime": end.Add(-time.Hour).Format(time.RFC3339), "EndTime": end.Format(time.RFC3339), "Period": "60"}, "", ""))
 		}
 	default:
-		return nil, errors.New("check_must_be_inventory_billing_instance_billing_metrics_metric_schema_ecs_metric_schema_swas_cpu_swas_network_event_schema_system_events_or_cdt")
+		return nil, errors.New("check_must_be_inventory_billing_instance_billing_metrics_metric_schema_ecs_metric_schema_ecs_credit_specs_swas_cpu_swas_network_event_schema_system_events_or_cdt")
 	}
 	return ops, nil
 }
@@ -434,7 +445,11 @@ func execute(ctx context.Context, p profile, ops []operation, call callFunc, int
 			}
 			if o.PageKey == "NextToken" {
 				seen += len(list)
-				raw, exists := atPath(body, "Data.NextToken")
+				tokenPath := "Data.NextToken" // BSS places its cursor inside Data.
+				if o.Action == "DescribeInstanceTypes" {
+					tokenPath = "NextToken"
+				}
+				raw, exists := atPath(body, tokenPath)
 				token, valid := raw.(string)
 				if exists && !valid && raw != nil || len(token) > 8192 {
 					r.ErrorCode = "pagination_shape_unknown"

@@ -1,0 +1,63 @@
+{
+  "checked_at": "2026-11-13T01:07:29Z",
+  "check": "ecs-credit-specs",
+  "kind": "read_only_instance_type_catalog_not_instance_credit_measurements",
+  "api": "Ecs/2014-05-26/DescribeInstanceTypes",
+  "region": "cn-shanghai",
+  "status": "passed",
+  "pagination_complete": true,
+  "page_count": 1,
+  "requested_type_count": 4,
+  "returned_type_count": 4,
+  "cloud_writes": 0,
+  "documentation": [
+    "https://help.aliyun.com/zh/ecs/user-guide/burst-performance-instance-overview",
+    "https://help.aliyun.com/zh/ecs/user-guide/cpu-credit-change-examples",
+    "https://api.aliyun.com/meta/v1/products/Ecs/versions/2014-05-26/apis/DescribeInstanceTypes/api.json",
+    "https://github.com/aliyun/alibaba-cloud-sdk-go/blob/master/services/ecs/struct_instance_type.go"
+  ],
+  "rows": [
+    {
+      "instance_type": "ecs.t5-c1m1.large",
+      "family": "ecs.t5",
+      "vcpu_count": 2,
+      "baseline_credit_raw": 50,
+      "initial_credit": 60,
+      "documented_average_baseline_percent": 25,
+      "documented_credits_per_hour": 30,
+      "documented_max_credit_balance": 720
+    },
+    {
+      "instance_type": "ecs.t5-lc2m1.nano",
+      "family": "ecs.t5",
+      "vcpu_count": 1,
+      "baseline_credit_raw": 20,
+      "initial_credit": 30,
+      "documented_average_baseline_percent": 20,
+      "documented_credits_per_hour": 12,
+      "documented_max_credit_balance": 288
+    },
+    {
+      "instance_type": "ecs.t6-c2m1.large",
+      "family": "ecs.t6",
+      "vcpu_count": 2,
+      "baseline_credit_raw": 20,
+      "initial_credit": 60,
+      "documented_average_baseline_percent": 10,
+      "documented_credits_per_hour": 12,
+      "documented_max_credit_balance": 288
+    },
+    {
+      "instance_type": "ecs.t6-c1m1.large",
+      "family": "ecs.t6",
+      "vcpu_count": 2,
+      "baseline_credit_raw": 40,
+      "initial_credit": 60,
+      "documented_average_baseline_percent": 20,
+      "documented_credits_per_hour": 24,
+      "documented_max_credit_balance": 576
+    }
+  ],
+  "inference": "For the four checked t5/t6 types, raw BaselineCredit equals the sum of baseline percentage points across all vCPUs. raw * 60 * 24 / 100 matches each documented maximum. This is a cross-checked inference, not an API-provided maximum or an observation of TotalCredit/initial-credit composition.",
+  "percentage_alert_policy": "pending_user_decision_not_enabled"
+}

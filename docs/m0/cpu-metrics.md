@@ -2,6 +2,8 @@
 
 2026-11-12，PRD F5.2 / F11.2。状态：ECS CMS 指标、ECS 与轻量 CPU 时间序列已真实只读确认；两类实例的 CPU 后台采集、缓存与只读字段已实现。真实突发积分余额及积分百分比告警尚未验证/实现。
 
+2026-11-13 补充：[四个 t5/t6 规格的只读目录与最大余额核对](cpu-credit-specs.md)已完成；百分比分母方案已提问待答，不改变下文的真实余额验证边界。
+
 ## 方法与实际结果
 
 先核对 CMS 2019-01-01 [DescribeMetricMetaList 官方元数据](https://api.aliyun.com/meta/v1/products/Cms/versions/2019-01-01/apis/DescribeMetricMetaList/api.json)，确认 Namespace / MetricName 都是可选查询条件，结果路径为 Resources.Resource，支持 PageNumber / PageSize。
