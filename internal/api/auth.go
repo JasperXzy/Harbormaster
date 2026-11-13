@@ -104,6 +104,9 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if p.branding(w, r, path) {
 		return
 	}
+	if p.releasePreview(w, r, path) {
+		return
+	}
 	if path == "/session" {
 		switch r.Method {
 		case "GET":

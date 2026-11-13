@@ -20,6 +20,8 @@ func inventoryFixture(_ context.Context, _ Credentials, action, region string, q
 	switch action {
 	case "DescribeRegions":
 		return map[string]any{"Regions": map[string]any{"Region": []any{map[string]any{"RegionId": region}}}}, nil
+	case "DescribeDisks":
+		return map[string]any{"Disks": map[string]any{"Disk": []any{}}, "NextToken": ""}, nil
 	case "DescribeInstanceAutoRenewAttribute":
 		return map[string]any{"TotalCount": 1, "InstanceRenewAttributes": map[string]any{"InstanceRenewAttribute": []any{map[string]any{"InstanceId": "i-two", "RenewalStatus": "Normal", "AutoRenewEnabled": false}}}}, nil
 	case "QueryAvailableInstances":

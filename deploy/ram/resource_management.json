@@ -5,6 +5,7 @@
       "Effect": "Allow",
       "Action": [
         "ecs:DescribeInstances",
+        "ecs:DescribeDisks",
         "ecs:DescribeNetworkInterfaces",
         "ecs:DescribeInstanceAutoRenewAttribute",
         "ecs:DescribeInstanceHistoryEvents",

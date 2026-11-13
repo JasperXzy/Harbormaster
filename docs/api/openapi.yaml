@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-13  ECS release preview: authenticated GET /instances/{instance_id}/release-preview reads credential-fenced, background-collected instance/disk facts only. The first release scope is user-confirmed stopped PostPaid ECS (including spot), with existing disk/auto-snapshot deletion attributes preserved; EIP/manual snapshots are retained. Missing attachment/lock/protection/deletion information blocks eligibility. Previews expire after five minutes, failures retain dated prior facts, and only an eligible current preview receives a content token. execution_enabled remains false in this phase; no release submission/worker is added. RAM drafts add ecs:DescribeDisks to support impact discovery. A preview cannot guarantee that another cloud actor will not change attributes afterward.
 # 2026-11-13  SWAS traffic package display: Instance.swas_traffic_package adds cached official Byte values for total/used/remaining/overflow and outbound direction. entry_present records whether a successful list query included this instance; an omitted row never becomes four zero values. Cache identity includes account credential version and the plan ID observed during discovery. Failed refreshes retain timestamped prior values for the same identity; disabled/stale sources stay explicit. Reads are batched per instance page and never query clouds. The provider exposes no cutoff/reset timestamp; official_as_of and next_reset_at remain null, with reset_day=1 from documented calendar-month policy. No forecasts, thresholds or protective actions are enabled by this display.
 # 2026-11-13  Branding settings: add authenticated name/Logo configuration and same-origin PNG reads. Name and image changes use the shared revision to reject stale edits; PNG/JPEG uploads up to 2 MiB and 512×512 are decoded and normalized to a static 8-bit PNG before local storage. No remote URL fetching or filesystem paths. Default name is Harbormaster with no custom Logo; no-op writes keep the revision. Changes and fixed-field audit markers commit together and encrypted database backups retain the configuration. Demo exposes default read fixtures and rejects writes. Pre-login branding visibility is a pending user decision; these endpoints retain session, HTTPS/host/CIDR and CSRF boundaries.
 # 2026-11-13  Latency result retention: expose configured retention.latency_probe_days (default 30) in settings. Production serve removes expired terminal ICMP/TCP probe payloads and plan-run history in bounded background transactions; active work and traceroute data are outside this cleanup. Keep task/idempotency metadata and authenticated canonical-result fingerprints for duplicate ACKs. A formerly retained network_probe latency result may become {action: probe, result_expired: true, result_expired_at}; this does not alter its status/error or claim current connectivity. Agent raw/hourly and other history policies remain separate and incomplete. GETs never prune data.
@@ -2342,6 +2343,29 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /instances/{instance_id}/release-preview:
+    parameters:
+      - name: instance_id
+        in: path
+        required: true
+        schema: {type: string}
+    get:
+      tags: [instances]
+      operationId: getECSReleasePreview
+      summary: Read cached ECS release eligibility and resource impact
+      description: No cloud queries or writes on GET. Background discovery reads complete regional ECS and disk lists, including multi-attach ownership. Only stopped PostPaid ECS is eligible; locks, deletion protection, incomplete facts, disabled accounts/regions, absent resources and stale observations block eligibility. No automatic attribute edits, stopping, snapshot deletion or EIP release. The token binds the displayed impact, source time and current account configuration; it is not an Alibaba Cloud idempotency token or permission grant. Refresh through the existing asynchronous instance refresh API. Execution is unavailable in this phase.
+      responses:
+        "200":
+          description: Cached impact or an explicit unavailable/blocked state; a successful response does not authorize or perform release.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ECSReleasePreview"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /instances/{instance_id}/finance:
     parameters:
       - name: instance_id
@@ -4644,6 +4668,71 @@ components:
           nullable: true
           description: Last successful payload; remains present with its original fetched_at on later failure.
 
+    ECSReleasePreview:
+      type: object
+      required: [instance_id, account_id, status, block_reasons, fetched_at, last_attempt_at, last_error, expires_at, preview_token, execution_enabled, impact]
+      properties:
+        instance_id: {type: string}
+        account_id: {type: string}
+        status: {type: string, enum: [never_fetched, unavailable, stale, blocked, eligible]}
+        block_reasons:
+          type: array
+          items:
+            type: string
+            enum: [unsupported_instance_kind, account_disabled, region_not_enabled, instance_not_present, release_information_unavailable, release_information_stale, instance_name_unavailable, instance_not_stopped, instance_charge_type_unsupported, instance_deletion_protected, instance_locked, release_information_incomplete, release_disk_information_incomplete]
+        fetched_at: {type: string, format: date-time, nullable: true, description: 'Successful local query time, not a provider atomic snapshot timestamp.'}
+        last_attempt_at: {type: string, format: date-time, nullable: true}
+        last_error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code: {type: string}
+            message: {type: string}
+        expires_at: {type: string, format: date-time, nullable: true}
+        preview_token: {type: string, nullable: true, pattern: '^[a-f0-9]{64}$', description: 'Present only for an eligible preview. This is a content fingerprint, not a secret or cloud ClientToken.'}
+        execution_enabled: {type: boolean, description: False in this phase. Eligibility alone does not enable release.}
+        impact:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ECSReleaseImpact"
+    ECSReleaseImpact:
+      type: object
+      required: [cloud_instance_id, instance_name, cloud_status, instance_charge_type, spot_strategy, deletion_protection, locked, instance_data_action, fixed_public_ip_action, manual_snapshots_action, eips_action, disks]
+      properties:
+        cloud_instance_id: {type: string}
+        instance_name: {type: string, description: Exact provider name; never synthesized from the instance ID for confirmation.}
+        cloud_status: {type: string}
+        instance_charge_type: {type: string, description: Provider InstanceChargeType; only PostPaid is eligible.}
+        spot_strategy: {type: string}
+        deletion_protection: {type: boolean, nullable: true}
+        locked: {type: boolean, nullable: true, description: Any provider operation lock blocks release; missing lock information is unknown.}
+        instance_data_action: {type: string, enum: [delete]}
+        fixed_public_ip_action: {type: string, enum: [release_if_present]}
+        manual_snapshots_action: {type: string, enum: [retain]}
+        eips_action: {type: string, enum: [retain]}
+        disks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ECSReleaseDisk"
+    ECSReleaseDisk:
+      type: object
+      required: [cloud_disk_id, name, category, disk_type, storage_kind, attached_instance_ids, attachments_known, delete_with_instance, delete_auto_snapshot, action, auto_snapshot_action]
+      properties:
+        cloud_disk_id: {type: string}
+        name: {type: string}
+        category: {type: string}
+        disk_type: {type: string}
+        storage_kind: {type: string, enum: [cloud, local, ephemeral, unknown]}
+        attached_instance_ids:
+          type: array
+          items: {type: string}
+        attachments_known: {type: boolean}
+        delete_with_instance: {type: boolean, nullable: true}
+        delete_auto_snapshot: {type: boolean, nullable: true}
+        action: {type: string, enum: [delete, retain, unknown]}
+        auto_snapshot_action: {type: string, enum: [delete, retain, unknown, not_applicable], description: Applies to automatic snapshots of a disk that is deleted; retained disks retain their snapshots. Snapshot IDs are not enumerated.}
     InstanceFinance:
       type: object
       required: [instance_id, account_id, enabled, billing_cycle, updated_at, bill]

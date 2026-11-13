@@ -46,7 +46,7 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 	}
 	var session map[string]string
 	_ = json.Unmarshal(w.Body.Bytes(), &session)
-	for _, path := range []string{"/system/info", "/network/ipdb", "/network/targets", "/network/points", "/network/plans", "/network/plans/demo-plan-agent", "/network/targets/target_cloudflare_dns", "/notify/quiet-hours", "/settings/heartbeat", "/settings/branding", "/passkeys", "/session/methods", "/settings", "/system-events", "/accounts", "/ram-policies", "/api-keys", "/audit-log", "/accounts/demo-account-1/finance", "/accounts/demo-account-2/finance", "/instances/demo-sin/finance", "/instances/demo-sha/finance", "/instances?limit=1", "/traffic/quotas", "/traffic/daily?account_id=demo-account-1", "/traffic/billing-subjects", "/bandwidth-packages", "/bandwidth-packages/demo-package/hourly", "/notify/telegram", "/alert-rules", "/notifications"} {
+	for _, path := range []string{"/system/info", "/network/ipdb", "/network/targets", "/network/points", "/network/plans", "/network/plans/demo-plan-agent", "/network/targets/target_cloudflare_dns", "/notify/quiet-hours", "/settings/heartbeat", "/settings/branding", "/passkeys", "/session/methods", "/settings", "/system-events", "/accounts", "/ram-policies", "/api-keys", "/audit-log", "/accounts/demo-account-1/finance", "/accounts/demo-account-2/finance", "/instances/demo-sin/finance", "/instances/demo-sin/release-preview", "/instances/demo-sha/release-preview", "/instances/demo-sha/finance", "/instances?limit=1", "/traffic/quotas", "/traffic/daily?account_id=demo-account-1", "/traffic/billing-subjects", "/bandwidth-packages", "/bandwidth-packages/demo-package/hourly", "/notify/telegram", "/alert-rules", "/notifications"} {
 		w = call("GET", path, "", cookie, "")
 		if w.Code != 200 || !json.Valid(w.Body.Bytes()) {
 			t.Errorf("%s: %d %s", path, w.Code, w.Body.String())
@@ -57,6 +57,10 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 	}
 	if w := call("GET", "/settings/branding/logo", "", cookie, ""); w.Code != 404 {
 		t.Fatal("demo fabricated a custom image", w.Code)
+	}
+	releaseFixture := call("GET", "/instances/demo-sin/release-preview", "", cookie, "")
+	if releaseFixture.Code != 200 || !strings.Contains(releaseFixture.Body.String(), `"status":"blocked"`) || !strings.Contains(releaseFixture.Body.String(), `"instance_not_stopped"`) || !strings.Contains(releaseFixture.Body.String(), `"preview_token":null`) || !strings.Contains(releaseFixture.Body.String(), `"execution_enabled":false`) {
+		t.Fatal("demo preview fabricated an executable release", releaseFixture.Code, releaseFixture.Body)
 	}
 	trafficFixture := call("GET", "/instances?kind=swas", "", cookie, "")
 	if trafficFixture.Code != 200 || !strings.Contains(trafficFixture.Body.String(), `"entry_present":false`) || !strings.Contains(trafficFixture.Body.String(), `"usage":null`) || !strings.Contains(trafficFixture.Body.String(), `"official_as_of":null`) {

@@ -26,6 +26,16 @@ func (s *Store) SaveScan(ctx context.Context, j model.Job, a model.Account, resu
 	if n != 1 {
 		return ErrAccountChanged
 	}
+	seenReleaseRegions := map[string]bool{}
+	for _, observation := range result.ReleaseInventory {
+		if seenReleaseRegions[observation.Region] {
+			return ErrReleaseInventory
+		}
+		seenReleaseRegions[observation.Region] = true
+		if err = saveReleaseInventory(ctx, tx, a, observation); err != nil {
+			return err
+		}
+	}
 	for _, observation := range result.Finance {
 		if err = saveFinance(ctx, tx, a, observation); err != nil {
 			return err

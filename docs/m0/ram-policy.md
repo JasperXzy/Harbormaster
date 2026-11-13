@@ -1,5 +1,7 @@
 # RAM 策略草稿
 
+2026-11-13 增量：三档草稿的共用只读集合增加 ecs:DescribeDisks，用于后台释放影响预览；公开元数据声明该真实 RAM Action，支持磁盘资源类型。本次仍使用现有草稿的 Resource="*"，没有向实际身份附加权限，也没有新增写权限。[实现与边界](ecs-release-preview.md)。
+
 2026-11-12。当前后端公开可核对的只读权限草稿位于 [deploy/ram/readonly.json](../../deploy/ram/readonly.json)。它没有开关机、续费、创建/释放资源、云助手或 RAM 管理权限。本轮只生成仓库文件，未向任何真实 RAM 身份授予权限。
 
 原 m0-readonly.json 保留为初始 M0 范围的记录。新草稿在其基础上补充两个当前实际读取所需的动作：

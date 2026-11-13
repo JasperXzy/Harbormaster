@@ -172,6 +172,9 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 		}
 		ecs := requiredID(c.pages(ctx, cred, "DescribeInstances", region, "Instances.Instance", 100, before), "InstanceId")
 		observe("ecs_read", ecs.err)
+		disks := c.releaseDisks(ctx, cred, region, before)
+		observe("ecs_read", disks.err)
+		result.ReleaseInventory = append(result.ReleaseInventory, releaseInventory(region, ecs, disks, time.Now().UTC()))
 		eni := requiredID(c.pages(ctx, cred, "DescribeNetworkInterfaces", region, "NetworkInterfaceSets.NetworkInterfaceSet", 100, before), "NetworkInterfaceId")
 		observe("ecs_read", eni.err)
 		eips := requiredID(c.pages(ctx, cred, "DescribeEipAddresses", region, "EipAddresses.EipAddress", 100, before), "AllocationId")
