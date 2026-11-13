@@ -46,7 +46,8 @@
 | F3.9 | 历史计费对象归因未实现。 |
 | F3.10 | 带宽配置、计费方式和成员列表已实现；真实按周期入出聚合、主方向历史未实现。 |
 | F4.1 | 实例及无流量包状态已实现，sha-pro 空包结果已真实确认。 |
-| F4.2、F4.3 | 轻量电源调用、持久任务、执行与状态确认及管理员提交已模拟测试；默认关闭，真实操作未验收，带流量包套餐保护未实现。 |
+| F4.2 | 轻量电源调用、持久任务、执行与状态确认及管理员提交已模拟测试；默认关闭，真实操作未验收。 |
+| F4.3 | 四项官方字节值的采集、身份隔离缓存及只读展示已实现，sha-pro 真实空响应落库通过；固定额度/超额正例、准确重置时刻、阈值告警及套餐保护仍未验收或实现。[流量包缓存](swas-traffic-package.md) |
 | F4.4 | 轻量预绑定注册与流量上报代码已实现，并排除 CDT 保护；真实安装和延迟测速未完成。 |
 | F5.1 | 部分：agent 原始样本/区间历史和云监控分钟历史接口已实现，支持 24h/7d 范围；云源真实已验证 112 条样本，agent 历史仅本地模拟验收。小时聚合、前端曲线及完整长期覆盖仍待完成。[Agent 历史](agent-network-history.md)、[云历史](cloud-network-history.md) |
 | F5.2 | ECS CPU/绝对积分与 SWAS CPU 的后台采集、缓存、过期状态和只读字段已实现；上海 ECS 与 sha-pro CPU 序列真实通过。真实突发积分余额仍未验证。[指标来源](cpu-metrics.md) |
@@ -145,4 +146,4 @@
 - M3/M4：核心功能及验收均未完成。
 - 非功能：macOS 空库设置/密码登录后测到 RSS 约 210.2MB，显式 GOMEMLIMIT=80MiB 时约 146.8MB，该本地 RSS 场景未达 100MB；未据此设置默认内存限制或修改 PRD。[内存实测与修订建议](server-memory-baseline.md)。生产 Linux/10 实例常驻内存、agent 资源占用、长期数据库 ≤1GB、保留期、保护响应 ≤30 秒、真实发送可靠性与跨平台运行仍缺对应实测。
 
-最近构建、vet、全量 race 与契约检查见[名称与 Logo 验证](branding.md)，此前来源验证见 [CDT 服务](cdt-service-reads.md)、[闲置资源](idle-resource-sources.md)；另见 [延迟结果清理](latency-retention.md)、[API Key 只读刷新](api-key-refresh.md)、[审计](audit-log.md)、[CPU 规格只读验证](cpu-credit-specs.md)及各需求行所列文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。
+最近构建、vet、全量 race、契约检查和真实只读运行见[轻量流量包缓存验证](swas-traffic-package.md)，此前实现见[名称与 Logo](branding.md)，来源验证见 [CDT 服务](cdt-service-reads.md)、[闲置资源](idle-resource-sources.md)；另见 [延迟结果清理](latency-retention.md)、[API Key 只读刷新](api-key-refresh.md)、[审计](audit-log.md)、[CPU 规格只读验证](cpu-credit-specs.md)及各需求行所列文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。

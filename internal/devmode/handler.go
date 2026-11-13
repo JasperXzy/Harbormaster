@@ -166,6 +166,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, object{"items": items, "next_cursor": cursor})
 	case "/instances":
 		for _, item := range f.Instances {
+			item["swas_traffic_package"] = nil
+			if item["kind"] == "swas" {
+				view := model.EmptySWASTrafficPackage()
+				present := false
+				view.Status, view.EntryPresent = "ok", &present
+				view.FetchedAt, view.LastAttemptAt, view.UpdatedAt = &now, &now, &now
+				item["swas_traffic_package"] = view
+			}
 			item["desired_state"] = nil
 			item["desired_state_updated_at"] = nil
 			cpu := &model.InstanceCPU{Source: "swas_describe_monitor_data", Usage: model.EmptyCPUMetric("CPU_UTILIZATION", now)}

@@ -187,6 +187,10 @@ func (p *productionPanel) instances(w http.ResponseWriter, r *http.Request) {
 	}
 	ageCPU(filtered, p.now().UTC())
 	ageNetworkRates(filtered, p.now().UTC())
+	if err = p.overlaySWASTraffic(r.Context(), filtered); err != nil {
+		businessError(w, err)
+		return
+	}
 	if err = p.overlayIntent(r.Context(), filtered); err != nil {
 		businessError(w, err)
 		return

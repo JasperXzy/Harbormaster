@@ -184,32 +184,8 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 			metricID = text(eips.rows[0], "AllocationId")
 			metricRegion = region
 		}
-		traffic := map[string]bool{}
-		trafficKnown := swas.err == nil
-		if swas.err == nil {
-			for start := 0; start < len(swas.rows); start += 50 {
-				ids := []string{}
-				for _, r := range swas.rows[start:min(start+50, len(swas.rows))] {
-					ids = append(ids, text(r, "InstanceId"))
-				}
-				b, _ := json.Marshal(ids)
-				body, err := call("ListInstancesTrafficPackages", region, map[string]string{"RegionId": region, "InstanceIds": string(b)})
-				if err == nil {
-					rows, ok := objects(body["InstanceTrafficPackageUsages"])
-					if !ok {
-						err = failure("invalid_response")
-					} else {
-						for _, r := range rows {
-							traffic[text(r, "InstanceId")] = true
-						}
-					}
-				}
-				if err != nil {
-					trafficKnown = false
-				}
-				observe("swas_read", err)
-			}
-		}
+		trafficObservations, traffic, trafficKnown := c.swasTraffic(ctx, a, cred, region, swas, before, observe)
+		result.SWASTraffic = append(result.SWASTraffic, trafficObservations...)
 		types := c.instanceTypes(ctx, cred, region, ecs, before)
 		observe("ecs_read", types.err)
 		ecsRenewal := c.renewals(ctx, cred, region, "ecs", ecs, before)

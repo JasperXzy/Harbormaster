@@ -81,6 +81,11 @@ func (s *Store) SaveScan(ctx context.Context, j model.Job, a model.Account, resu
 			}
 		}
 	}
+	for _, observation := range result.SWASTraffic {
+		if err = saveSWASTraffic(ctx, tx, a, observation); err != nil {
+			return err
+		}
+	}
 	if err = checkExpirationSnapshots(ctx, tx, a.ID, result.Snapshots, now); err != nil {
 		return err
 	}

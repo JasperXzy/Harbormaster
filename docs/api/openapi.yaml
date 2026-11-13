@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-13  SWAS traffic package display: Instance.swas_traffic_package adds cached official Byte values for total/used/remaining/overflow and outbound direction. entry_present records whether a successful list query included this instance; an omitted row never becomes four zero values. Cache identity includes account credential version and the plan ID observed during discovery. Failed refreshes retain timestamped prior values for the same identity; disabled/stale sources stay explicit. Reads are batched per instance page and never query clouds. The provider exposes no cutoff/reset timestamp; official_as_of and next_reset_at remain null, with reset_day=1 from documented calendar-month policy. No forecasts, thresholds or protective actions are enabled by this display.
 # 2026-11-13  Branding settings: add authenticated name/Logo configuration and same-origin PNG reads. Name and image changes use the shared revision to reject stale edits; PNG/JPEG uploads up to 2 MiB and 512×512 are decoded and normalized to a static 8-bit PNG before local storage. No remote URL fetching or filesystem paths. Default name is Harbormaster with no custom Logo; no-op writes keep the revision. Changes and fixed-field audit markers commit together and encrypted database backups retain the configuration. Demo exposes default read fixtures and rejects writes. Pre-login branding visibility is a pending user decision; these endpoints retain session, HTTPS/host/CIDR and CSRF boundaries.
 # 2026-11-13  Latency result retention: expose configured retention.latency_probe_days (default 30) in settings. Production serve removes expired terminal ICMP/TCP probe payloads and plan-run history in bounded background transactions; active work and traceroute data are outside this cleanup. Keep task/idempotency metadata and authenticated canonical-result fingerprints for duplicate ACKs. A formerly retained network_probe latency result may become {action: probe, result_expired: true, result_expired_at}; this does not alter its status/error or claim current connectivity. Agent raw/hourly and other history policies remain separate and incomplete. GETs never prune data.
 # 2026-11-13  API Key refresh: add bearer-only /integrations/instances/refresh using instance:control and the existing read-only collector queue. Accept an optional account_id in a required JSON object, or {} for a snapshot of enabled accounts. Equal active read scopes may be shared with explicit per-key visibility; changed all-account membership returns refresh_scope_changed rather than silently omitting accounts. Integration job detail now includes refresh jobs explicitly joined by that key, while power ownership remains isolated. Revocation blocks API access and power dispatch as before; shared account collection remains independently authorized by enabled monitoring. No cloud writes, desired-state changes or synchronous cloud queries.
@@ -4457,6 +4458,12 @@ components:
           allOf:
             - $ref: "#/components/schemas/InstanceCPU"
           description: Cached CPU samples from ECS CMS or SWAS DescribeMonitorData. GET performs no cloud calls.
+        swas_traffic_package:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/SWASTrafficPackage"
+          description: Null for ECS. SWAS source state is overlaid from a credential/plan-scoped cache; older instances start with never_fetched until a background scan completes.
         public_ips:
           type: array
           description: 公网 IPv4。
@@ -5087,6 +5094,44 @@ components:
           type: string
           format: date-time
           nullable: true
+
+    SWASTrafficPackage:
+      type: object
+      required: [source, status, entry_present, usage, fetched_at, last_attempt_at, updated_at, last_error, direction, reset_day, official_as_of, next_reset_at]
+      properties:
+        source: {type: string, enum: [swas_list_instances_traffic_packages]}
+        status:
+          type: string
+          enum: [never_fetched, ok, unavailable, stale, disabled]
+          description: ok requires a successful fetch at most ten minutes old. A failed latest attempt is unavailable and can retain older values with their original fetched_at. Account disable or region removal is disabled. No data from a different credential version or known plan ID is reused.
+        entry_present:
+          type: boolean
+          nullable: true
+          description: Whether the last successful response included a usage row for this instance. Null before success; false preserves an empty result without manufacturing usage. Package classification remains in billing_subject_kind.
+        usage:
+          type: object
+          nullable: true
+          required: [total_bytes, used_bytes, remaining_bytes, overflow_bytes]
+          description: Literal provider fields from the current month at query time. No recomputation or addition of overflow to another field; no percentage or forecast is inferred.
+          properties:
+            total_bytes: {type: integer, format: int64, minimum: 0, maximum: 9007199254740991}
+            used_bytes: {type: integer, format: int64, minimum: 0, maximum: 9007199254740991}
+            remaining_bytes: {type: integer, format: int64, minimum: -9007199254740991, maximum: 9007199254740991, description: Preserve the signed provider value; its behavior after overage has not been verified on a real fixed-quota plan.}
+            overflow_bytes: {type: integer, format: int64, minimum: 0, maximum: 9007199254740991}
+        fetched_at: {type: string, format: date-time, nullable: true, description: Last successful retrieval time.}
+        last_attempt_at: {type: string, format: date-time, nullable: true}
+        updated_at: {type: string, format: date-time, nullable: true, description: Most recent source attempt time.}
+        last_error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code: {type: string}
+            message: {type: string}
+        direction: {type: string, enum: [outbound]}
+        reset_day: {type: integer, enum: [1], description: Documented first day of each calendar month; exact reset timezone is unverified.}
+        official_as_of: {type: string, format: date-time, nullable: true, description: Currently null; retrieval time is not a provider cutoff.}
+        next_reset_at: {type: string, format: date-time, nullable: true, description: Currently null; no reset timestamp is provided and the billing timezone has not been verified.}
 
     TrafficDirection:
       type: string

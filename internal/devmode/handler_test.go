@@ -58,6 +58,10 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 	if w := call("GET", "/settings/branding/logo", "", cookie, ""); w.Code != 404 {
 		t.Fatal("demo fabricated a custom image", w.Code)
 	}
+	trafficFixture := call("GET", "/instances?kind=swas", "", cookie, "")
+	if trafficFixture.Code != 200 || !strings.Contains(trafficFixture.Body.String(), `"entry_present":false`) || !strings.Contains(trafficFixture.Body.String(), `"usage":null`) || !strings.Contains(trafficFixture.Body.String(), `"official_as_of":null`) {
+		t.Fatal("empty traffic fixture became zero usage", trafficFixture.Code, trafficFixture.Body)
+	}
 	powerResponse := call("POST", "/instances/demo-sin/power", `{"action":"stop","stop_mode":"keep_charging"}`, cookie, session["csrf_token"])
 	if powerResponse.Code != 503 || !strings.Contains(powerResponse.Body.String(), "instance_power_disabled") {
 		t.Fatal("demo accepted cloud write", powerResponse.Code, powerResponse.Body)

@@ -183,8 +183,9 @@ type Snapshot struct {
 	IPv4Complete bool
 }
 type ScanResult struct {
-	Snapshots []Snapshot
-	Finance   []FinanceObservation
+	Snapshots   []Snapshot
+	Finance     []FinanceObservation
+	SWASTraffic []SWASTrafficObservation
 	// Only completely read scopes may hide old, now-absent resources.
 	CompleteScopes map[string]bool
 	Permissions    *PermissionCheck

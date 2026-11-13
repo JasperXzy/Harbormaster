@@ -99,6 +99,17 @@ func TestRestoreWithNewMasterCancelsOldWorkAndPreservesHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for _, query := range []string{
+		"INSERT INTO instance VALUES('light-cache','a','swas-fixture','swas','light fixture','cn-shanghai','running','stopped','now')",
+		`INSERT INTO resource_snapshot VALUES('a','swas','light-cache','cn-shanghai','{"spec":"plan-fixture"}',1,'now')`,
+	} {
+		if _, err := s.DB.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.DB.Exec(`INSERT INTO swas_traffic_cache(instance_id,credential_version,plan_id,fetched_at,last_attempt_at,entry_present,usage_json) VALUES('light-cache',1,'plan-fixture',?,?,1,'{"total_bytes":100,"used_bytes":30,"remaining_bytes":70,"overflow_bytes":0}')`, now.Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)); err != nil {
+		t.Fatal(err)
+	}
 	var archive bytes.Buffer
 	if err := Export(ctx, s, old, testPassword, &archive); err != nil {
 		t.Fatal(err)
@@ -121,6 +132,11 @@ func TestRestoreWithNewMasterCancelsOldWorkAndPreservesHistory(t *testing.T) {
 	restoredLogo, imageErr := restored.BrandingLogo(ctx)
 	if err != nil || imageErr != nil || restoredBranding.Name != branding.Name || restoredBranding.Revision != branding.Revision || restoredBranding.Logo == nil || !bytes.Equal(restoredLogo, logoBefore) {
 		t.Fatal("branding lost during cross-master restore", err, imageErr)
+	}
+	packages, err := restored.SWASTrafficPackages(ctx, []model.SWASTrafficTarget{{InstanceID: "light-cache", PlanID: "plan-fixture"}}, now.Add(time.Hour))
+	packageView := packages["light-cache"]
+	if err != nil || packageView.Status != "stale" || packageView.Usage == nil || packageView.Usage.Used != 30 || packageView.FetchedAt == nil || !packageView.FetchedAt.Equal(now) {
+		t.Fatal("restore lost or refreshed traffic cache", packageView, err)
 	}
 	if err := restored.BindMasterKey(ctx, old); !errors.Is(err, store.ErrMasterKey) {
 		t.Fatal("old master accepted", err)

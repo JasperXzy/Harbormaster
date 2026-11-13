@@ -8,6 +8,8 @@
 
 用户已明确同意：一次性注册码预绑定已纳管 SWAS 实例 ID，元数据 ID 仅作辅助信息。本轮不安装 agent、不实现注册。见[实测记录](live-verification-2026-11-11.md)。下文保留初始资料核对；机器登录与 API 权限已确认，无需再次提供。
 
+2026-11-13 补充：已接入流量包四项原始字节字段的持久缓存和只读展示，在新的隔离生产库中用真实 sha-pro 空响应完成落库验证。固定配额/超额正例仍缺真实环境；没有据字段说明推测重置时区或启用保护。[缓存、边界与命令输出](swas-traffic-package.md)。
+
 ## 方法与实际结果
 
 [ListInstancesTrafficPackages 文档](https://help.aliyun.com/zh/simple-application-server/developer-reference/api-swas-open-2020-06-01-listinstancestrafficpackages)明确只计算公网出方向；入方向不计费。SDK 响应有 Byte 单位的累计值，没有“方向”字段。[计费项说明](https://www.alibabacloud.com/help/zh/simple-application-server/product-overview/billable-items)说明自然月 1 日重置，且有无固定流量配额套餐。
