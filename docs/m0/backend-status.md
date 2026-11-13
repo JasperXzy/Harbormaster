@@ -11,7 +11,7 @@
 | 项目 | 状态和证据 |
 |---|---|
 | V1 | 部分接口真实只读通过；写权限和部分完整权限集合未验证。[V1](V1-api.md)、[发现](production-discovery.md)、[费用](account-finance.md)、[续费](instance-renewal.md) |
-| V2 | 与 PRD 假设不完全一致：额度 20/200GB、自然月重置已确认；资格/站点差异仍需逐项核实。[V2](V2-quota.md) |
+| V2 | 与 PRD 假设不完全一致：额度 20/200GB、自然月重置已确认；两个账号实际服务查询返回 Enabled=true，仍不能据空产品列表确定资源资格，站点差异待核实。[V2](V2-quota.md)、[服务读取](cdt-service-reads.md) |
 | V3 | 实际响应没有 cutoff，不能按 PRD 公式精确对齐；实际延迟、补账仍缺长期观察。[V3](V3-cdt-watermark.md) |
 | V4 | 每小时按整个共享带宽包合并方向后取较大值已确认；CDT 资格不能只看实例创建日期。[V4](V4-dominant-traffic.md) |
 | V5 | 文档确认增强型 95 的方向/峰值口径；没有将文档结论冒充实际账单对账。[V5](V5-enhanced95.md) |
@@ -143,4 +143,4 @@
 - M3/M4：核心功能及验收均未完成。
 - 非功能：macOS 空库设置/密码登录后测到 RSS 约 210.2MB，显式 GOMEMLIMIT=80MiB 时约 146.8MB，该本地 RSS 场景未达 100MB；未据此设置默认内存限制或修改 PRD。[内存实测与修订建议](server-memory-baseline.md)。生产 Linux/10 实例常驻内存、agent 资源占用、长期数据库 ≤1GB、保留期、保护响应 ≤30 秒、真实发送可靠性与跨平台运行仍缺对应实测。
 
-最近构建、vet 及 M0/CLI race 见 [闲置资源来源验证](idle-resource-sources.md)；此前全量 race 与契约检查见 [延迟结果清理验证](latency-retention.md)，另见 [API Key 只读刷新验证](api-key-refresh.md)、[审计验证](audit-log.md)、[CPU 规格只读验证](cpu-credit-specs.md)及各需求行所列文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。
+最近构建、vet 及 M0/CLI race 见 [CDT 服务读取验证](cdt-service-reads.md)，此前来源验证见[闲置资源](idle-resource-sources.md)；全量 race 与契约检查见 [延迟结果清理验证](latency-retention.md)，另见 [API Key 只读刷新验证](api-key-refresh.md)、[审计验证](audit-log.md)、[CPU 规格只读验证](cpu-credit-specs.md)及各需求行所列文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。

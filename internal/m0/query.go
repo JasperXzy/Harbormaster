@@ -41,7 +41,12 @@ var allowed = map[string]definition{
 	"DescribeSystemEventMetaList":   {"cms", "2019-01-01", ""},
 	"DescribeMonitorData":           {"swas", "2020-06-01", "RegionId InstanceId MetricName Period StartTime EndTime Length"},
 	// ActionTrail documents this read; the request shape comes from the PRD reference project.
-	"ListCdtInternetTraffic":          {"cdt", "2021-08-13", "RegionId"},
+	"ListCdtInternetTraffic": {"cdt", "2021-08-13", "RegionId"},
+	// These additional reads are listed in the official CDT ActionTrail catalog.
+	// Keep them isolated from production until their response semantics are verified.
+	"ListCdtTrafficTiers":             {"cdt", "2021-08-13", "RegionId BusinessRegionId"},
+	"GetCdtInternetServiceStatus":     {"cdt", "2021-08-13", "RegionId"},
+	"ListSwitchedCdtProducts":         {"cdt", "2021-08-13", "RegionId BusinessRegionId"},
 	"DescribeRegions":                 {"ecs", "2014-05-26", ""},
 	"DescribeInstances":               {"ecs", "2014-05-26", "RegionId PageNumber PageSize"},
 	"DescribeNetworkInterfaces":       {"ecs", "2014-05-26", "RegionId PageNumber PageSize"},
@@ -110,6 +115,15 @@ func (o operation) validate(p profile) error {
 	if r, ok := o.Query["RegionId"]; ok && r != o.Region {
 		return errors.New("region_mismatch")
 	}
+	if region, exists := o.Query["BusinessRegionId"]; exists {
+		found := false
+		for _, enabled := range p.Regions {
+			found = found || region == enabled
+		}
+		if !found {
+			return errors.New("business_region_not_enabled")
+		}
+	}
 	return nil
 }
 
@@ -121,6 +135,16 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 	}
 	ops := []operation{}
 	switch options.Check {
+	case "cdt-service":
+		if p.Site != "china" {
+			return nil, errors.New("cdt_international_endpoint_unverified")
+		}
+		ops = append(ops, newOperation(p, "GetCdtInternetServiceStatus", "cn-hongkong", map[string]string{"RegionId": "cn-hongkong"}, "", ""))
+		for _, region := range p.Regions {
+			for _, action := range []string{"ListCdtTrafficTiers", "ListSwitchedCdtProducts"} {
+				ops = append(ops, newOperation(p, action, "cn-hongkong", map[string]string{"RegionId": "cn-hongkong", "BusinessRegionId": region}, "", ""))
+			}
+		}
 	case "idle-resources":
 		// Capture state/billing evidence only. No pricing, detach or release call
 		// is implied by this probe, and regions remain the imported read scope.
@@ -349,10 +373,25 @@ func (s sdkCaller) call(ctx context.Context, p profile, o operation) (map[string
 			}
 			return nil, "api_reported_failure"
 		}
-		_, direct := body["TrafficDetails"]
-		_, nested := atPath(body, "Data.TrafficDetails")
-		if !direct && !nested {
-			return nil, "cdt_response_shape_unknown"
+		switch o.Action {
+		case "ListCdtInternetTraffic":
+			_, direct := body["TrafficDetails"]
+			_, nested := atPath(body, "Data.TrafficDetails")
+			if !direct && !nested {
+				return nil, "cdt_response_shape_unknown"
+			}
+		case "GetCdtInternetServiceStatus":
+			if _, ok := body["Enabled"].(bool); !ok {
+				return nil, "cdt_service_response_shape_unknown"
+			}
+		case "ListCdtTrafficTiers", "ListSwitchedCdtProducts":
+			key := "TrafficTiers"
+			if o.Action == "ListSwitchedCdtProducts" {
+				key = "CdtProducts"
+			}
+			if _, ok := body[key].([]any); !ok {
+				return nil, "cdt_service_response_shape_unknown"
+			}
 		}
 	}
 	return body, ""
@@ -361,14 +400,15 @@ func (s sdkCaller) call(ctx context.Context, p profile, o operation) (map[string
 var safeCode = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 
 type queryResult struct {
-	Action     string `json:"action"`
-	MetricName string `json:"metric_name,omitempty"`
-	Region     string `json:"region"`
-	Status     string `json:"status"`
-	ErrorCode  string `json:"error_code,omitempty"`
-	Complete   bool   `json:"complete"`
-	FetchedAt  string `json:"fetched_at"`
-	Pages      []any  `json:"pages"`
+	Action         string `json:"action"`
+	MetricName     string `json:"metric_name,omitempty"`
+	Region         string `json:"region"`
+	BusinessRegion string `json:"business_region,omitempty"`
+	Status         string `json:"status"`
+	ErrorCode      string `json:"error_code,omitempty"`
+	Complete       bool   `json:"complete"`
+	FetchedAt      string `json:"fetched_at"`
+	Pages          []any  `json:"pages"`
 }
 type report struct {
 	Account           string        `json:"account"`
@@ -398,7 +438,7 @@ func execute(ctx context.Context, p profile, ops []operation, call callFunc, int
 	results := []queryResult{}
 	for index := 0; index < len(ops); index++ {
 		o := ops[index]
-		r := queryResult{Action: o.Action, MetricName: o.Query["MetricName"], Region: o.Region, Status: "passed", Complete: false, Pages: []any{}}
+		r := queryResult{Action: o.Action, MetricName: o.Query["MetricName"], Region: o.Region, BusinessRegion: o.Query["BusinessRegionId"], Status: "passed", Complete: false, Pages: []any{}}
 		seen := 0
 		tokens := map[string]bool{}
 		for page := 1; page <= 50; page++ {
