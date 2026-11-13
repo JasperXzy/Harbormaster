@@ -187,6 +187,7 @@ type ScanResult struct {
 	Finance          []FinanceObservation
 	SWASTraffic      []SWASTrafficObservation
 	ReleaseInventory []ReleaseInventoryObservation
+	Idle             []IdleObservation
 	// Only completely read scopes may hide old, now-absent resources.
 	CompleteScopes map[string]bool
 	Permissions    *PermissionCheck

@@ -143,6 +143,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f := makeFixtures(now, h.loc)
+	if demoIdle(w, r, path, f, now) {
+		return
+	}
 	if demoReleasePreview(w, path, f.Instances, now) {
 		return
 	}

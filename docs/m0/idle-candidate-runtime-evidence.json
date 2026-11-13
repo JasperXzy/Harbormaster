@@ -1,0 +1,57 @@
+{
+  "scope": {
+    "enabled_accounts": 1,
+    "regions": [
+      "cn-shanghai"
+    ]
+  },
+  "cloud_writes": 0,
+  "sources": [
+    {
+      "kind": "disk",
+      "fetched_at": "2026-11-13T21:17:57.494198000Z",
+      "last_attempt_at": "2026-11-13T21:17:57.494198000Z",
+      "scanned_count": 0,
+      "unclassified_count": 0,
+      "candidate_count": 0,
+      "error_code": null
+    },
+    {
+      "kind": "ecs",
+      "fetched_at": "2026-11-13T21:17:57.494198000Z",
+      "last_attempt_at": "2026-11-13T21:17:57.494198000Z",
+      "scanned_count": 0,
+      "unclassified_count": 0,
+      "candidate_count": 0,
+      "error_code": null
+    },
+    {
+      "kind": "eip",
+      "fetched_at": "2026-11-13T21:17:57.494198000Z",
+      "last_attempt_at": "2026-11-13T21:17:57.494198000Z",
+      "scanned_count": 0,
+      "unclassified_count": 0,
+      "candidate_count": 0,
+      "error_code": null
+    },
+    {
+      "kind": "swas",
+      "fetched_at": "2026-11-13T21:17:57.494198000Z",
+      "last_attempt_at": "2026-11-13T21:17:57.494198000Z",
+      "scanned_count": 1,
+      "unclassified_count": 0,
+      "candidate_count": 0,
+      "error_code": null
+    }
+  ],
+  "candidate_rows": 0,
+  "foreign_key_errors": 0,
+  "completed_at": "2026-11-13T21:18:03.250Z",
+  "capture": {
+    "initial_summary_wrapper_exit_code": 1,
+    "initial_error": "sqlite_readonly_open_failed_after_collection",
+    "recovery": "read_checkpointed_database_with_immutable_readonly_connection",
+    "cloud_collection_repeated": false,
+    "child_exit_code_retained": false
+  }
+}

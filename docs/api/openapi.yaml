@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-14  Idle resource candidates: GET /idle-resources reads credential-fenced background evidence for unbound EIP, stopped subscription ECS/SWAS, stopped PostPaid ECS in KeepCharging or explicitly unsupported charge exemption, and unattached/cloud disks whose known attachments are all stopped. Reuse existing complete inventory calls; no new cloud action or GET-triggered query. Each source exposes last successful counts, unclassified rows, failures, age and disabled scope; unknown classification retains prior evidence with its original time. Candidate presence does not establish actual billed waste. monthly_cost/currency stay null pending the separately requested estimation policy and verified prices. No idle alerts, deletion or resource mutation is enabled in this phase.
 # 2026-11-14  Manual ECS release API: POST /instances/{instance_id}/release requires session+CSRF, one durable Idempotency-Key, exact confirmation_name and the current eligible preview_token. Local enqueue returns 202 only; the separate serve worker runs only with explicit instance_release_enabled=true, independently of the power flag. Default/development mode return 503 instance_release_disabled. SystemInfo.instance_release_enabled and preview.execution_enabled reflect the configured production capability; eligible is still separately required. API Key instance:control does not grant release. run-once/M0 remain read-only and demo refuses submission. No runtime flag was enabled or real cloud write performed during implementation.
 # 2026-11-14  Release worker: add an isolated, opt-in internal worker with fresh targeted ECS/disk preflight, one dispatch attempt and post-acceptance targeted presence observations. Only a complete zero-row response after acceptance completes the job with not_found_after_accept and marks the cached instance absent; this is visibility evidence, not proof of physical cleanup. Reads/errors/timeouts never become absence. Acceptance, transport uncertainty and shutdown do not cause replay. No production startup/submission binding is added in this phase; release preview execution_enabled remains false.
 # 2026-11-13  Release task storage: reserve instance_release and ECSReleaseJobResult for durable stopped PostPaid ECS release requests. Enqueue validates the current cached preview token and exact provider name atomically, persists the reviewed impact and deduplicates event keys beyond completion/restore. Active release/power requests exclude each other; release does not rewrite power intent. A separate claim/dispatch protocol requires matching fresh read evidence and a committed send marker; uncertain or accepted dispatches are never resent. Restore cancels unfinished release tasks. This storage phase adds no submission route or production execution worker; execution_enabled remains false.
@@ -2451,6 +2452,43 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /idle-resources:
+    get:
+      tags: [instances]
+      operationId: listIdleResourceCandidates
+      summary: Read cached idle resource candidates and source coverage
+      description: Background inventory only. Sources with unknown classification fields expose unclassified_count; an empty candidate page alone cannot establish that every resource is non-idle. Failed refreshes retain dated evidence, while complete successful reads replace it. Credential rotation hides predecessor cache; disabled accounts/removed regions retain clearly disabled history. Results use live keyset pagination ordered by candidate ID; cursors bind account/region/kind filters. No costs are calculated or summed, and no alerts or cloud operations are triggered by this endpoint.
+      parameters:
+        - name: account_id
+          in: query
+          schema: {type: string}
+        - name: region_id
+          in: query
+          schema: {type: string}
+        - name: kind
+          in: query
+          schema: {type: string, enum: [ecs, swas, disk, eip]}
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Last successful candidates with original observation times and explicit current source health; financial estimates remain unknown.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, sources, next_cursor]
+                properties:
+                  items:
+                    type: array
+                    items: {$ref: "#/components/schemas/IdleResourceCandidate"}
+                  sources:
+                    type: array
+                    items: {$ref: "#/components/schemas/IdleResourceSource"}
+                  next_cursor: {type: string, nullable: true}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
+
   /accounts/{account_id}/finance:
     parameters:
       - name: account_id
@@ -4749,6 +4787,53 @@ components:
           type: object
           nullable: true
           description: Last successful payload; remains present with its original fetched_at on later failure.
+
+    IdleResourceCandidate:
+      type: object
+      required: [id, account_id, region_id, kind, cloud_id, name, reason, charge_type, cloud_status, instance_ids, public_ip, size_gib, observed_at, source_status, evidence_status, monthly_cost, currency]
+      properties:
+        id: {type: string}
+        account_id: {type: string}
+        region_id: {type: string}
+        kind: {type: string, enum: [ecs, swas, disk, eip]}
+        cloud_id: {type: string}
+        name: {type: string}
+        reason: {type: string, enum: [unbound_eip, stopped_subscription, stopped_keep_charging, stopped_not_charge_exempt, unattached_cloud_disk, disk_on_stopped_instances]}
+        charge_type: {type: string, enum: [subscription, pay_as_you_go, spot, unknown]}
+        cloud_status: {type: string, description: Provider status observed during the source read.}
+        instance_ids:
+          type: array
+          items: {type: string}
+          description: Local instance links supported by the same complete source read. Empty for an unbound EIP or unattached disk.
+        public_ip: {type: string, nullable: true}
+        size_gib: {type: integer, format: int64, nullable: true, minimum: 0, description: Cloud disk size in provider GiB; null for other resource types or an unknown size.}
+        observed_at: {type: string, format: date-time, description: Conservative local regional query start time; no provider atomic snapshot or billing cutoff is claimed.}
+        source_status: {type: string, enum: [ok, partial, failing, stale, disabled]}
+        evidence_status: {type: string, enum: [current, retained], description: Retained evidence keeps its original time when classification becomes unknown or the source is failed/stale/disabled.}
+        monthly_cost: {type: string, nullable: true, enum: [null], description: Always null until estimation policy and reliable pricing are implemented.}
+        currency: {type: string, nullable: true, enum: [null], description: Unknown currency is preserved; no site-based currency inference.}
+    IdleResourceSource:
+      type: object
+      required: [account_id, region_id, kind, source, enabled, status, fetched_at, last_attempt_at, last_error, scanned_count, unclassified_count, candidate_count]
+      properties:
+        account_id: {type: string}
+        region_id: {type: string}
+        kind: {type: string, enum: [ecs, swas, disk, eip]}
+        source: {type: string, enum: [ecs_describe_instances, swas_list_instances, ecs_describe_disks, vpc_describe_eip_addresses]}
+        enabled: {type: boolean}
+        status: {type: string, enum: [never_fetched, ok, partial, failing, stale, disabled]}
+        fetched_at: {type: string, format: date-time, nullable: true}
+        last_attempt_at: {type: string, format: date-time, nullable: true}
+        last_error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code: {type: string}
+            message: {type: string}
+        scanned_count: {type: integer, nullable: true, minimum: 0, description: Count from the last complete successful resource list.}
+        unclassified_count: {type: integer, nullable: true, minimum: 0, description: Rows missing evidence required to decide candidacy; unknown rows are not silently treated as non-idle.}
+        candidate_count: {type: integer, nullable: true, minimum: 0, description: Cached candidate count after the last successful list; includes explicitly retained evidence for unclassified rows.}
 
     ECSReleasePreview:
       type: object

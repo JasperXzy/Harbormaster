@@ -47,3 +47,5 @@ AccessKey Secret、Telegram Token 等需要可逆使用的值放 credential；ag
 2026-11-13 增量：迁移 042 增加 release_inventory，按账号/凭据版本/地域保存完整 ECS 和磁盘影响字段、成功/尝试时间及稳定错误。账号/任务租约与实例快照同事务校验；失败保留原内容和成功时间，旧尝试不覆盖新结果；换凭据后隐藏旧缓存。管理员预览只读取本表，没有释放任务或执行入口。[边界与验证](ecs-release-preview.md)。
 
 2026-11-13 增量：迁移 043 扩展固定任务类型，保持外键开启、验证全部关联后恢复立即检查；旧任务/SSE/审计/清理触发器及公开序号保留。新增 instance_release_job / instance_release_request 保存确认影响、一次发送边界、结果与长期事件键；恢复取消旧任务而不重放。[设计与迁移验证](ecs-release-queue.md)。
+
+2026-11-14 增量：迁移 044 增加 idle_resource_source / idle_resource_candidate，按账号/凭据版本/地域/资源类型保存闲置状态候选、来源数量/时间/错误及逐条保留标记；未知字段保留原证据，完整已知变化才移除。与发现同事务、GET 为一致只读事务、换凭据隐藏旧缓存。[数据边界与验证](idle-resource-candidates.md)。

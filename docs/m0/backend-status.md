@@ -65,7 +65,7 @@
 | F9.1 | 余额与月账单缓存已实现；CNY 两账号真实通过，USD/国际站仅模拟验证。保留提供方条目，不猜退款净额。[费用](account-finance.md) |
 | F9.2 | 已实现按账号完整读取当月实例账单、凭据版本隔离缓存及实例费用只读 API；保留币种/账单类型/原始金额，无匹配不补零。两账号真实成功，2 台 ECS 与 sha-pro 共匹配 4 行；国际站及最终对账仍待验证。[实例费用](instance-billing.md) |
 | F9.3 | 自动续费读取和默认 7 天到期事件已实现；上海 ECS、sha-pro 真实续费状态通过，提醒只记录不发送。[续费](instance-renewal.md)、[提醒](expiration-alerts.md) |
-| F9.4 | 实例、磁盘与 EIP 的只读字段/权限通路已真实核实；固定 M0 检查已交付，生产磁盘影响字段现用于释放预览。当前没有闲置正例；闲置候选判定/告警、月度费用估算仍未实现，参考费用口径待答。[来源验证](idle-resource-sources.md) |
+| F9.4 | ECS/SWAS 停机、未绑定 EIP、未挂载/挂载目标均停止云盘的后台候选、身份隔离缓存、来源覆盖/未知保留与分页只读 API/开发示例已实现并本地测试。月费用/币种均 null；闲置告警、报价与月估算尚未实现，口径待答。真实来源曾只读通过，当前样本缺闲置正例。[来源验证](idle-resource-sources.md)、[候选与缓存](idle-resource-candidates.md) |
 | F9.5 | 按账号与币种配置可用余额阈值、精确比较、告警/恢复/去重记录已实现；实际送达未接通。[余额告警](balance-alerts.md) |
 | F10.1–F10.6 | ICMP/TCP 测速、server/agent 持久执行、加密恢复、目标/组合管理、默认五分钟调度和运行历史接口已实现。本机 TLS/SQLite/恢复/调度测试通过；真实发现地址取得 3 台新快照、1 台未知。网络告警/恢复/去重记录已实现，尚无实际发送。前端矩阵/曲线由 Claude 负责；未真实部署或公网测速。[网络管理](network-management.md)、[网络告警](network-alerts.md) |
 | F10.7–F10.11 | 线路执行器、队列/私有协议、agent 恢复、server worker、面板异步提交/历史/详情/导出已实现并本地测试。离线 ASN＋国家库、可选 City、月度更新和状态/资源接口已实现；真实库读取与下载通过。归属、限时公网 PTR、逐跳统计、证据标签、版本冻结和署名已接入。每日快照/完整路径变化事件、双向原子提交/独立执行/导出及 API 已实现并本地测试；未验收真实每日执行、两端公网路径或消息送达。TCP 原始线路仅 Linux。[线路面板](trace-panel-api.md)、[离线库](offline-ip-database.md)、[归属接入](trace-enrichment.md)、[每日快照](trace-snapshots.md)、[双向追踪](duplex-traces.md) |
@@ -149,4 +149,4 @@
 - M3/M4：核心功能及验收均未完成。
 - 非功能：macOS 空库设置/密码登录后测到 RSS 约 210.2MB，显式 GOMEMLIMIT=80MiB 时约 146.8MB，该本地 RSS 场景未达 100MB；未据此设置默认内存限制或修改 PRD。[内存实测与修订建议](server-memory-baseline.md)。生产 Linux/10 实例常驻内存、agent 资源占用、长期数据库 ≤1GB、保留期、保护响应 ≤30 秒、真实发送可靠性与跨平台运行仍缺对应实测。
 
-最近构建、vet、全量 race 和契约检查见 [ECS 释放 API/接入](ecs-release-api.md)，此前见[执行/确认](ecs-release-worker.md)、[任务](ecs-release-queue.md)、[预览](ecs-release-preview.md)和[固定调用层](ecs-release.md)；最近真实只读运行见[轻量流量包缓存验证](swas-traffic-package.md)，此前实现见[名称与 Logo](branding.md)，来源验证见 [CDT 服务](cdt-service-reads.md)、[闲置资源](idle-resource-sources.md)；另见 [延迟结果清理](latency-retention.md)、[API Key 只读刷新](api-key-refresh.md)、[审计](audit-log.md)、[CPU 规格只读验证](cpu-credit-specs.md)及各需求行所列文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源与释放执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。
+最近构建、vet、全量 race、契约检查及隔离副本真实只读缓存验证见[闲置候选](idle-resource-candidates.md)；此前见 [ECS 释放 API/接入](ecs-release-api.md)、[执行/确认](ecs-release-worker.md)、[任务](ecs-release-queue.md)、[预览](ecs-release-preview.md)和[固定调用层](ecs-release.md)。另见[轻量流量包](swas-traffic-package.md)、[名称与 Logo](branding.md)、[CDT 服务](cdt-service-reads.md)、[闲置来源](idle-resource-sources.md)、[延迟清理](latency-retention.md)、[API Key 刷新](api-key-refresh.md)、[审计](audit-log.md)、[CPU 规格](cpu-credit-specs.md)及各需求行文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源与释放执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。

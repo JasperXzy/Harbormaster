@@ -4,6 +4,8 @@
 
 后续更新（2026-11-14）：[释放影响预览](ecs-release-preview.md)已把固定 DescribeDisks 及所需影响字段接入后台采集/RAM 草稿。本页的“生产发现未实现”指闲置候选检测；释放缓存没有闲置计费判断、报价或浪费估算，不能据此标记 F9.4 已交付。
 
+再后续：[闲置候选与缓存](idle-resource-candidates.md)已复用这些读取实现后台状态候选和只读 API，unknown 行保留旧证据；报价、月估算及告警尚未实现。本页的原始 M0 方法/命令与历史结果保留，不把它们解释为后续全部功能验收。
+
 ## 方法与官方依据
 
 新增固定 M0 检查 `--check idle-resources`，对已导入账号的地域依次读取 DescribeInstances、DescribeDisks、DescribeEipAddresses。可用现有 `--region` 缩小范围，不能绕过账号地域限制。磁盘只允许 RegionId、MaxResults、NextToken；不开放任意 RPC、端点、过滤条件或 DryRun，更不允许解绑、停机或释放。

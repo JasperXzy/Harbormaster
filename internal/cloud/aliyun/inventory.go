@@ -166,6 +166,7 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 	}
 	observe("ecs_read", err)
 	for _, region := range a.RegionIDs {
+		regionStartedAt := time.Now().UTC()
 		if before() != nil || ctx.Err() != nil {
 			result.Failure = "account_changed"
 			break
@@ -183,6 +184,11 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 		observe("vpc_read", packages.err)
 		swas := requiredID(c.pages(ctx, cred, "ListInstances", region, "Instances", 100, before), "InstanceId")
 		observe("swas_read", swas.err)
+		result.Idle = append(result.Idle,
+			idleObservation(a, region, "ecs", ecs, ecs, regionStartedAt),
+			idleObservation(a, region, "swas", swas, ecs, regionStartedAt),
+			idleObservation(a, region, "disk", disks, ecs, regionStartedAt),
+			idleObservation(a, region, "eip", eips, ecs, regionStartedAt))
 		if len(eips.rows) > 0 && metricID == "" {
 			metricID = text(eips.rows[0], "AllocationId")
 			metricRegion = region
