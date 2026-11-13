@@ -2,6 +2,8 @@
 
 2026-11-13，补充 PRD F9.4。状态：实例、磁盘及 EIP 的只读字段/权限通路已确认；当前样本没有闲置正例，生产发现、告警与月度费用估算未实现。估算口径已提问，尚未收到选择。本批没有改变面板契约或生产扫描器。
 
+后续更新（2026-11-14）：[释放影响预览](ecs-release-preview.md)已把固定 DescribeDisks 及所需影响字段接入后台采集/RAM 草稿。本页的“生产发现未实现”指闲置候选检测；释放缓存没有闲置计费判断、报价或浪费估算，不能据此标记 F9.4 已交付。
+
 ## 方法与官方依据
 
 新增固定 M0 检查 `--check idle-resources`，对已导入账号的地域依次读取 DescribeInstances、DescribeDisks、DescribeEipAddresses。可用现有 `--region` 缩小范围，不能绕过账号地域限制。磁盘只允许 RegionId、MaxResults、NextToken；不开放任意 RPC、端点、过滤条件或 DryRun，更不允许解绑、停机或释放。

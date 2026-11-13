@@ -70,9 +70,16 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 	if powerResponse.Code != 503 || !strings.Contains(powerResponse.Body.String(), "instance_power_disabled") {
 		t.Fatal("demo accepted cloud write", powerResponse.Code, powerResponse.Body)
 	}
+	releaseResponse := call("POST", "/instances/demo-sin/release", `{"confirmation_name":"sin-pro (demo)","preview_token":"not-a-real-confirmation"}`, cookie, session["csrf_token"])
+	if releaseResponse.Code != 503 || !strings.Contains(releaseResponse.Body.String(), "instance_release_disabled") {
+		t.Fatal("demo accepted release", releaseResponse.Code, releaseResponse.Body)
+	}
 	infoResponse := call("GET", "/system/info", "", cookie, "")
 	if !strings.Contains(infoResponse.Body.String(), `"instance_power_enabled":false`) {
 		t.Fatal("demo advertises power enabled")
+	}
+	if !strings.Contains(infoResponse.Body.String(), `"instance_release_enabled":false`) {
+		t.Fatal("demo advertised release execution", infoResponse.Body)
 	}
 	w = call("GET", "/instances?limit=1", "", cookie, "")
 	jobs := call("GET", "/jobs?type=refresh&trigger=panel&account_id=demo-account-1", "", cookie, "")

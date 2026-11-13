@@ -1,6 +1,6 @@
 # ECS 释放调用层
 
-2026-11-13：本文记录独立固定调用层及其模拟验证。后续已实现[预览](ecs-release-preview.md)、[持久任务](ecs-release-queue.md)及[独立执行/确认](ecs-release-worker.md)。尚无生产启动/配置或释放提交入口；F7.4 没有完成。没有使用真实账号发送 DeleteInstance，包括 DryRun。
+2026-11-13：本文记录固定调用层及其模拟验证。后续已实现[预览](ecs-release-preview.md)、[任务](ecs-release-queue.md)、[执行/确认](ecs-release-worker.md)及[管理员 API/生产接入](ecs-release-api.md)。独立开关默认关闭；前端、Telegram 和真实验收尚未完成。没有使用真实账号发送 DeleteInstance，包括 DryRun。
 
 ## 官方接口核对
 

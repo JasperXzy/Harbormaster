@@ -54,7 +54,7 @@
 | F6.1–F6.13 | 手动电源任务入队时原子保存期望状态、失败保留意图已实现；共享元数据身份读取前置组件已交付，自身排除仍未接通。[身份基础](server-identity.md)。自动化规则、调度电源动作、保活、控制台状态确认、豁免、主备、提前量、试运行、模拟用量和排除自身的业务逻辑未实现。 |
 | F7.1、F7.5 | 刷新与权限查询已走持久队列；任务列表/详情、分页筛选和来源记录已实现。固定开机/关机/重启、持久任务、入队保存意图、独立 worker、状态确认和管理员提交接口已模拟测试；serve 显式配置开启后可执行，默认关闭，真实操作未验收。[任务记录](job-history.md)、[电源调用](instance-power.md) |
 | F7.2、F7.3 | 换 EIP、创建 ECS 未实现，也未执行真实操作。 |
-| F7.4 | 固定调用层、影响缓存/管理员预览、持久任务和独立执行/确认 worker 已实现并本地模拟测试。仅已停止 PostPaid ECS，精确名称/影响确认、与电源互斥、一次发送边界、不重放及恢复取消。受理后完整定向查询零行才记录 not_found_after_accept，不声称物理清理。尚无生产启动/配置/提交或 Telegram 入口；未执行真实释放或 DryRun。[调用层](ecs-release.md)、[预览](ecs-release-preview.md)、[任务](ecs-release-queue.md)、[执行与确认](ecs-release-worker.md) |
+| F7.4 | 固定调用层、影响缓存/管理员预览、持久任务、执行/确认及管理员提交 API/serve 接入已实现并本地模拟测试；默认独立开关关闭，run-once/M0 不执行。仅已停止 PostPaid ECS，精确名称/影响确认、与电源互斥、一次发送边界、不重放和恢复取消。受理后完整定向零行才记录 not_found_after_accept，不声称物理清理。前端适配、Telegram 入口及真实云验收未完成；未执行真实释放或 DryRun。[调用层](ecs-release.md)、[预览](ecs-release-preview.md)、[任务](ecs-release-queue.md)、[执行](ecs-release-worker.md)、[API/接入](ecs-release-api.md) |
 | F8.1 | 有 Telegram 发送层、加密配置存储和安全 GET；生产配置写入口、测试发送及 worker 尚未接通。[发送边界](telegram-delivery-design.md)、[队列](notification-storage.md) |
 | F8.2 | CDT/流量包用量阈值通知未启用；CDT 暂定单位期间的策略仍待答。 |
 | F8.3 | 当前可管理十一个生产规则：账号失败、CDT 不可用、agent 掉线、到期、规格带宽、公网 IPv4 变化、可用余额低阈值，以及网络延迟/失败比例/不可达/线路变化。线路变化还需组合显式开启；见[网络告警](network-alerts.md)和[每日快照](trace-snapshots.md)。余额目标初始为空，由用户设置。[余额告警](balance-alerts.md)、[IP 告警](public-ip-alerts.md) |
@@ -65,7 +65,7 @@
 | F9.1 | 余额与月账单缓存已实现；CNY 两账号真实通过，USD/国际站仅模拟验证。保留提供方条目，不猜退款净额。[费用](account-finance.md) |
 | F9.2 | 已实现按账号完整读取当月实例账单、凭据版本隔离缓存及实例费用只读 API；保留币种/账单类型/原始金额，无匹配不补零。两账号真实成功，2 台 ECS 与 sha-pro 共匹配 4 行；国际站及最终对账仍待验证。[实例费用](instance-billing.md) |
 | F9.3 | 自动续费读取和默认 7 天到期事件已实现；上海 ECS、sha-pro 真实续费状态通过，提醒只记录不发送。[续费](instance-renewal.md)、[提醒](expiration-alerts.md) |
-| F9.4 | 实例、磁盘与 EIP 的只读字段/权限通路已真实核实，固定 M0 检查已交付；当前没有闲置正例。生产发现/告警、月度费用估算仍未实现，参考费用口径已提问待答。[来源验证](idle-resource-sources.md) |
+| F9.4 | 实例、磁盘与 EIP 的只读字段/权限通路已真实核实；固定 M0 检查已交付，生产磁盘影响字段现用于释放预览。当前没有闲置正例；闲置候选判定/告警、月度费用估算仍未实现，参考费用口径待答。[来源验证](idle-resource-sources.md) |
 | F9.5 | 按账号与币种配置可用余额阈值、精确比较、告警/恢复/去重记录已实现；实际送达未接通。[余额告警](balance-alerts.md) |
 | F10.1–F10.6 | ICMP/TCP 测速、server/agent 持久执行、加密恢复、目标/组合管理、默认五分钟调度和运行历史接口已实现。本机 TLS/SQLite/恢复/调度测试通过；真实发现地址取得 3 台新快照、1 台未知。网络告警/恢复/去重记录已实现，尚无实际发送。前端矩阵/曲线由 Claude 负责；未真实部署或公网测速。[网络管理](network-management.md)、[网络告警](network-alerts.md) |
 | F10.7–F10.11 | 线路执行器、队列/私有协议、agent 恢复、server worker、面板异步提交/历史/详情/导出已实现并本地测试。离线 ASN＋国家库、可选 City、月度更新和状态/资源接口已实现；真实库读取与下载通过。归属、限时公网 PTR、逐跳统计、证据标签、版本冻结和署名已接入。每日快照/完整路径变化事件、双向原子提交/独立执行/导出及 API 已实现并本地测试；未验收真实每日执行、两端公网路径或消息送达。TCP 原始线路仅 Linux。[线路面板](trace-panel-api.md)、[离线库](offline-ip-database.md)、[归属接入](trace-enrichment.md)、[每日快照](trace-snapshots.md)、[双向追踪](duplex-traces.md) |
@@ -149,4 +149,4 @@
 - M3/M4：核心功能及验收均未完成。
 - 非功能：macOS 空库设置/密码登录后测到 RSS 约 210.2MB，显式 GOMEMLIMIT=80MiB 时约 146.8MB，该本地 RSS 场景未达 100MB；未据此设置默认内存限制或修改 PRD。[内存实测与修订建议](server-memory-baseline.md)。生产 Linux/10 实例常驻内存、agent 资源占用、长期数据库 ≤1GB、保留期、保护响应 ≤30 秒、真实发送可靠性与跨平台运行仍缺对应实测。
 
-最近构建、vet、全量 race 和契约检查见 [ECS 释放执行与确认](ecs-release-worker.md)，此前见[释放任务](ecs-release-queue.md)、[预览](ecs-release-preview.md)和[固定调用层](ecs-release.md)；最近真实只读运行见[轻量流量包缓存验证](swas-traffic-package.md)，此前实现见[名称与 Logo](branding.md)，来源验证见 [CDT 服务](cdt-service-reads.md)、[闲置资源](idle-resource-sources.md)；另见 [延迟结果清理](latency-retention.md)、[API Key 只读刷新](api-key-refresh.md)、[审计](audit-log.md)、[CPU 规格只读验证](cpu-credit-specs.md)及各需求行所列文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。
+最近构建、vet、全量 race 和契约检查见 [ECS 释放 API/接入](ecs-release-api.md)，此前见[执行/确认](ecs-release-worker.md)、[任务](ecs-release-queue.md)、[预览](ecs-release-preview.md)和[固定调用层](ecs-release.md)；最近真实只读运行见[轻量流量包缓存验证](swas-traffic-package.md)，此前实现见[名称与 Logo](branding.md)，来源验证见 [CDT 服务](cdt-service-reads.md)、[闲置资源](idle-resource-sources.md)；另见 [延迟结果清理](latency-retention.md)、[API Key 只读刷新](api-key-refresh.md)、[审计](audit-log.md)、[CPU 规格只读验证](cpu-credit-specs.md)及各需求行所列文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源与释放执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。

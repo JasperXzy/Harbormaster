@@ -99,6 +99,38 @@ func TestInstancePowerRequiresExplicitProductionEnable(t *testing.T) {
 	}
 }
 
+func TestInstanceReleaseRequiresIndependentProductionEnable(t *testing.T) {
+	t.Setenv("HM_DEV", "false")
+	t.Setenv("HM_INSTANCE_POWER_ENABLED", "true")
+	t.Setenv("HM_INSTANCE_RELEASE_ENABLED", "false")
+	c, err := Load("")
+	if err != nil || c.InstanceReleaseEnabled || !c.InstancePowerEnabled {
+		t.Fatal(c, err)
+	}
+	p := filepath.Join(t.TempDir(), "release.json")
+	if err := os.WriteFile(p, []byte(`{"instance_release_enabled":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if c, err := Load(p); err != nil || c.InstanceReleaseEnabled {
+		t.Fatal("environment did not override release file flag", c, err)
+	}
+	t.Setenv("HM_INSTANCE_POWER_ENABLED", "false")
+	t.Setenv("HM_INSTANCE_RELEASE_ENABLED", "true")
+	c, err = Load("")
+	if err != nil || !c.InstanceReleaseEnabled || c.InstancePowerEnabled {
+		t.Fatal(c, err)
+	}
+	t.Setenv("HM_DEV", "true")
+	if _, err := Load(""); err == nil {
+		t.Fatal("development enabled release")
+	}
+	t.Setenv("HM_DEV", "false")
+	t.Setenv("HM_INSTANCE_RELEASE_ENABLED", "sometimes")
+	if _, err := Load(""); err == nil {
+		t.Fatal("invalid release flag accepted")
+	}
+}
+
 func TestSystemEventPollingConfiguration(t *testing.T) {
 	c, err := Load("")
 	if err != nil || c.SystemEventPollIntervalSeconds != 60 {

@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-14  Manual ECS release API: POST /instances/{instance_id}/release requires session+CSRF, one durable Idempotency-Key, exact confirmation_name and the current eligible preview_token. Local enqueue returns 202 only; the separate serve worker runs only with explicit instance_release_enabled=true, independently of the power flag. Default/development mode return 503 instance_release_disabled. SystemInfo.instance_release_enabled and preview.execution_enabled reflect the configured production capability; eligible is still separately required. API Key instance:control does not grant release. run-once/M0 remain read-only and demo refuses submission. No runtime flag was enabled or real cloud write performed during implementation.
 # 2026-11-14  Release worker: add an isolated, opt-in internal worker with fresh targeted ECS/disk preflight, one dispatch attempt and post-acceptance targeted presence observations. Only a complete zero-row response after acceptance completes the job with not_found_after_accept and marks the cached instance absent; this is visibility evidence, not proof of physical cleanup. Reads/errors/timeouts never become absence. Acceptance, transport uncertainty and shutdown do not cause replay. No production startup/submission binding is added in this phase; release preview execution_enabled remains false.
 # 2026-11-13  Release task storage: reserve instance_release and ECSReleaseJobResult for durable stopped PostPaid ECS release requests. Enqueue validates the current cached preview token and exact provider name atomically, persists the reviewed impact and deduplicates event keys beyond completion/restore. Active release/power requests exclude each other; release does not rewrite power intent. A separate claim/dispatch protocol requires matching fresh read evidence and a committed send marker; uncertain or accepted dispatches are never resent. Restore cancels unfinished release tasks. This storage phase adds no submission route or production execution worker; execution_enabled remains false.
 # 2026-11-13  ECS release preview: authenticated GET /instances/{instance_id}/release-preview reads credential-fenced, background-collected instance/disk facts only. The first release scope is user-confirmed stopped PostPaid ECS (including spot), with existing disk/auto-snapshot deletion attributes preserved; EIP/manual snapshots are retained. Missing attachment/lock/protection/deletion information blocks eligibility. Previews expire after five minutes, failures retain dated prior facts, and only an eligible current preview receives a content token. execution_enabled remains false in this phase; no release submission/worker is added. RAM drafts add ecs:DescribeDisks to support impact discovery. A preview cannot guarantee that another cloud actor will not change attributes afterward.
@@ -1954,6 +1955,64 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /instances/{instance_id}/release:
+    parameters:
+      - $ref: "#/components/parameters/InstanceId"
+    post:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: releaseECSInstance
+      summary: Enqueue explicitly confirmed stopped PostPaid ECS release
+      description: |
+        Requires instance_release_enabled=true in production. This capability is independent of instance_power_enabled; default/demo refuse submission.
+        Read release-preview first and display its impact. Submit the exact provider instance name and token while the preview remains eligible.
+        Generate one Idempotency-Key per confirmation and retain it on retries. Same key/same confirmation returns the original job even after preview expiry, completion or restore; changed parameters conflict.
+        Release/power operations on one instance exclude each other. Enqueue preserves existing power intent. The worker re-reads and compares current impact before its committed one-time dispatch marker.
+        Force=false, TerminateSubscription=false; no automatic stop, deletion-protection edit, disk-attribute edit, EIP or manual-snapshot deletion.
+        API acceptance is not completion. Inspect the durable job outcome and confirmation basis; no retries after unknown delivery.
+        No bearer API Key consumer is provided for release.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, pattern: '^[A-Za-z0-9_-]{16,64}$'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [confirmation_name, preview_token]
+              properties:
+                confirmation_name: {type: string, minLength: 1, maxLength: 128, description: Exact provider name as displayed in the preview; case and whitespace matter.}
+                preview_token: {type: string, pattern: '^[a-f0-9]{64}$'}
+      responses:
+        "202":
+          $ref: "#/components/responses/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: release_preview_changed, instance_release_busy or idempotency_key_conflict; fetch current preview before starting a different confirmation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          description: instance_release_disabled or internal_error; no synchronous cloud call.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /instances/{instance_id}/power:
     parameters:
       - $ref: "#/components/parameters/InstanceId"
@@ -2355,7 +2414,7 @@ paths:
       tags: [instances]
       operationId: getECSReleasePreview
       summary: Read cached ECS release eligibility and resource impact
-      description: No cloud queries or writes on GET. Background discovery reads complete regional ECS and disk lists, including multi-attach ownership. Only stopped PostPaid ECS is eligible; locks, deletion protection, incomplete facts, disabled accounts/regions, absent resources and stale observations block eligibility. No automatic attribute edits, stopping, snapshot deletion or EIP release. The token binds the displayed impact, source time and current account configuration; it is not an Alibaba Cloud idempotency token or permission grant. Refresh through the existing asynchronous instance refresh API. Execution is unavailable in this phase.
+      description: No cloud queries or writes on GET. Background discovery reads complete regional ECS and disk lists, including multi-attach ownership. Only stopped PostPaid ECS is eligible; locks, deletion protection, incomplete facts, disabled accounts/regions, absent resources and stale observations block eligibility. No automatic attribute edits, stopping, snapshot deletion or EIP release. The token binds the displayed impact, source time and current account configuration; it is not an Alibaba Cloud idempotency token or permission grant. Refresh through the existing asynchronous instance refresh API. Submission also requires execution_enabled=true; this flag alone does not imply eligibility or verified write permission.
       responses:
         "200":
           description: Cached impact or an explicit unavailable/blocked state; a successful response does not authorize or perform release.
@@ -3441,7 +3500,7 @@ components:
             `refresh`、`telegram_test`、`heartbeat_test` 为 null。`network_probe` 通常为 null；延迟测速原始结果到期清理后，可为 `{action: "probe", result_expired: true, result_expired_at: "<UTC timestamp>"}`，其任务状态及原错误仍保留。
             保留期内的测速结果见 `/network/plans/{id}/runs`，线路追踪详情见 `/network/traces/{id}`；此清理不作用于线路追踪。
             `instance_power` 为 PowerJobResult（任务未完成时也保留请求与执行阶段）。
-            `instance_release` 为 ECSReleaseJobResult；独立 worker 已本地模拟测试，本阶段没有生产提交/启动入口。
+            `instance_release` 为 ECSReleaseJobResult；生产仅显式开启独立释放开关后接受提交并启动 worker，递送未知结果不重放。
           additionalProperties: true
 
     ECSReleaseJobResult:
@@ -3615,6 +3674,9 @@ components:
         instance_power_enabled:
           type: boolean
           description: Whether this server accepts manual power jobs. Independent of configuration-write availability; false by default and in demo mode.
+        instance_release_enabled:
+          type: boolean
+          description: Whether this production serve process accepts release jobs and starts the separate worker. False by default and in demo; independent of power capability and not proof of cloud write permission.
         version:
           type: string
         commit:
@@ -4711,7 +4773,7 @@ components:
             message: {type: string}
         expires_at: {type: string, format: date-time, nullable: true}
         preview_token: {type: string, nullable: true, pattern: '^[a-f0-9]{64}$', description: 'Present only for an eligible preview. This is a content fingerprint, not a secret or cloud ClientToken.'}
-        execution_enabled: {type: boolean, description: False in this phase. Eligibility alone does not enable release.}
+        execution_enabled: {type: boolean, description: Production release capability configured for this server; false by default and in demo. Eligibility is a separate required condition.}
         impact:
           type: object
           nullable: true

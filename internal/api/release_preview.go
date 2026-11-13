@@ -18,6 +18,7 @@ func (p *productionPanel) releasePreview(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		businessError(w, err)
 	} else {
+		v.ExecutionEnabled = p.releaseEnabled
 		writeJSON(w, 200, v)
 	}
 	return true

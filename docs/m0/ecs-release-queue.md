@@ -1,6 +1,6 @@
 # ECS 释放持久任务
 
-2026-11-13：本文记录持久任务入队、二次确认、去重、租约、发送边界和结果存储阶段。后续[独立执行/确认 worker](ecs-release-worker.md)已实现；仍无生产启动/配置或面板/Telegram 提交入口，execution_enabled 为 false。没有真实释放或 DryRun。
+2026-11-13：本文记录持久任务入队、二次确认、去重、租约、发送边界和结果存储阶段。后续[执行/确认](ecs-release-worker.md)及[管理员 API/生产接入](ecs-release-api.md)已实现；独立开关默认关闭，Telegram 入口未实现。没有真实释放或 DryRun。
 
 ## 入队与确认
 

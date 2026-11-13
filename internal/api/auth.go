@@ -31,6 +31,7 @@ type productionPanel struct {
 	probeRetentionDays int
 	ipdb               *ipinfo.Manager
 	powerEnabled       bool
+	releaseEnabled     bool
 	s                  *store.Store
 	access             panelAccess
 	timezone           string
@@ -46,6 +47,7 @@ type productionPanel struct {
 
 func NewProductionPanel(s *store.Store, c config.Config, engine *collect.Engine, databases ...*ipinfo.Manager) http.Handler {
 	p := &productionPanel{powerEnabled: !c.Dev && c.InstancePowerEnabled && engine != nil && engine.Box != nil, s: s, access: newPanelAccess(c), timezone: c.Timezone, ttl: time.Duration(c.SessionTTLSeconds) * time.Second, now: time.Now, engine: engine, publicURL: c.PublicURL, agentReleaseDir: c.AgentReleaseDir}
+	p.releaseEnabled = !c.Dev && c.InstanceReleaseEnabled && engine != nil && engine.Box != nil
 	p.probeRetentionDays = c.ProbeHistoryRetentionDays
 	if p.probeRetentionDays == 0 {
 		p.probeRetentionDays = 30
@@ -104,7 +106,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if p.branding(w, r, path) {
 		return
 	}
-	if p.releasePreview(w, r, path) {
+	if p.releasePreview(w, r, path) || p.instanceRelease(w, r, path) {
 		return
 	}
 	if path == "/session" {
@@ -139,7 +141,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, buildinfo.BuildTime); err == nil {
 			builtAt = t.UTC().Format(time.RFC3339)
 		}
-		writeJSON(w, 200, map[string]any{"version": buildinfo.Version, "commit": buildinfo.Commit, "built_at": builtAt, "latest_agent_version": p.releaseVersions.Get(p.agentReleaseDir, p.now()), "data_mode": "live", "read_only": p.engine == nil, "instance_power_enabled": p.powerEnabled})
+		writeJSON(w, 200, map[string]any{"version": buildinfo.Version, "commit": buildinfo.Commit, "built_at": builtAt, "latest_agent_version": p.releaseVersions.Get(p.agentReleaseDir, p.now()), "data_mode": "live", "read_only": p.engine == nil, "instance_power_enabled": p.powerEnabled, "instance_release_enabled": p.releaseEnabled})
 	case "/settings":
 		zone := p.timezone
 		err := p.s.DB.QueryRowContext(r.Context(), "SELECT value FROM app_meta WHERE key='business_timezone'").Scan(&zone)

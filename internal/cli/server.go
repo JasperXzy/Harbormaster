@@ -284,8 +284,10 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 		frontend = ui.Handler()
 	}
 	powerEngine := newPowerEngine(c, s, engine, log)
+	releaseEngine := newReleaseEngine(c, s, engine, log)
 	heartbeatRunner := newHeartbeatRunner(c, s, engine, listener, log)
 	c.InstancePowerEnabled = powerEngine != nil
+	c.InstanceReleaseEnabled = releaseEngine != nil
 	var panel http.Handler
 	var ipdb *ipinfo.Manager
 	if c.Dev {
@@ -331,12 +333,16 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 			workers.Add(1)
 			go func() { defer workers.Done(); powerEngine.Run(workerCtx) }()
 		}
+		if releaseEngine != nil {
+			workers.Add(1)
+			go func() { defer workers.Done(); releaseEngine.Run(workerCtx) }()
+		}
 		defer func() { cancel(); workers.Wait() }()
 	}
 	h := &http.Server{Handler: api.NewHandler(s, panel, frontend), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10, BaseContext: func(net.Listener) context.Context { return ctx }}
 	done := make(chan error, 1)
 	go func() { done <- h.Serve(listener) }()
-	log.Info("server_started", "listen", listener.Addr().String(), "development", c.Dev, "frontend", c.Frontend, "cloud_writes", powerEngine != nil)
+	log.Info("server_started", "listen", listener.Addr().String(), "development", c.Dev, "frontend", c.Frontend, "cloud_writes", powerEngine != nil || releaseEngine != nil)
 	select {
 	case err = <-done:
 		if !errors.Is(err, http.ErrServerClosed) {

@@ -21,6 +21,7 @@ type Config struct {
 	IPDBAutoUpdate                 bool     `json:"ipdb_auto_update"`
 	SystemEventPollIntervalSeconds int      `json:"system_event_poll_interval_seconds"`
 	InstancePowerEnabled           bool     `json:"instance_power_enabled"`
+	InstanceReleaseEnabled         bool     `json:"instance_release_enabled"`
 	Listen                         string   `json:"listen"`
 	DataDir                        string   `json:"data_dir"`
 	Dev                            bool     `json:"dev"`
@@ -91,6 +92,13 @@ func Load(path string) (Config, error) {
 		}
 		c.InstancePowerEnabled = b
 	}
+	if v, ok := os.LookupEnv("HM_INSTANCE_RELEASE_ENABLED"); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return c, errors.New("invalid HM_INSTANCE_RELEASE_ENABLED")
+		}
+		c.InstanceReleaseEnabled = b
+	}
 	for key, value := range map[string]*bool{"HM_IPDB_CITY_ENABLED": &c.IPDBCityEnabled, "HM_IPDB_AUTO_UPDATE": &c.IPDBAutoUpdate} {
 		if raw, ok := os.LookupEnv(key); ok {
 			v, err := strconv.ParseBool(raw)
@@ -128,6 +136,9 @@ func (c Config) Validate() error {
 	}
 	if c.Dev && c.InstancePowerEnabled {
 		return errors.New("instance power cannot be enabled in development mode")
+	}
+	if c.Dev && c.InstanceReleaseEnabled {
+		return errors.New("instance release cannot be enabled in development mode")
 	}
 	if c.CDTPollIntervalSeconds < 60 || c.CDTPollIntervalSeconds > 86400 {
 		return errors.New("invalid CDT poll interval")

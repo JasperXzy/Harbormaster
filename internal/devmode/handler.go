@@ -113,6 +113,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/release") {
+		if r.Method != "POST" {
+			failure(w, 405, "method_not_allowed")
+		} else {
+			failure(w, 503, "instance_release_disabled")
+		}
+		return
+	}
 	if h.systemEvents(w, r, path) {
 		return
 	}
@@ -143,7 +151,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch path {
 	case "/system/info":
-		respond(w, 200, object{"version": "dev-m0", "commit": "unknown", "built_at": nil, "latest_agent_version": "v0.2.0", "data_mode": "demo", "read_only": true, "instance_power_enabled": false})
+		respond(w, 200, object{"version": "dev-m0", "commit": "unknown", "built_at": nil, "latest_agent_version": "v0.2.0", "data_mode": "demo", "read_only": true, "instance_power_enabled": false, "instance_release_enabled": false})
 	case "/notify/quiet-hours":
 		respond(w, 200, model.QuietHours{Start: "23:00", End: "08:00", Timezone: h.loc.String()})
 	case "/settings/heartbeat":
