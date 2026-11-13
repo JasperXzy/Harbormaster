@@ -254,7 +254,7 @@ func (s *Store) FinishJob(ctx context.Context, j model.Job, result any, code str
 		}
 		raw = string(b)
 	}
-	res, err := s.DB.ExecContext(ctx, "UPDATE job SET status=?,finished_at=?,error_code=?,result_json=?,lease_owner=NULL,lease_until=0 WHERE id=? AND type NOT IN ('instance_power','heartbeat_test','network_probe') AND status='running' AND lease_owner=? AND lease_until>?", status, timestamp(now), failure, raw, j.ID, j.Owner, now.Unix())
+	res, err := s.DB.ExecContext(ctx, "UPDATE job SET status=?,finished_at=?,error_code=?,result_json=?,lease_owner=NULL,lease_until=0 WHERE id=? AND type NOT IN ('instance_power','instance_release','heartbeat_test','network_probe') AND status='running' AND lease_owner=? AND lease_until>?", status, timestamp(now), failure, raw, j.ID, j.Owner, now.Unix())
 	if err != nil {
 		return err
 	}
@@ -269,7 +269,7 @@ func (s *Store) RetryJob(ctx context.Context, j model.Job, delay time.Duration, 
 	if busy {
 		decrement = 1
 	}
-	res, err := s.DB.ExecContext(ctx, "UPDATE job SET status='queued',available_at=?,lease_owner=NULL,lease_until=0,attempts=attempts-? WHERE id=? AND type NOT IN ('instance_power','heartbeat_test','network_probe') AND status='running' AND lease_owner=? AND lease_until>?", now.Add(delay).Unix(), decrement, j.ID, j.Owner, now.Unix())
+	res, err := s.DB.ExecContext(ctx, "UPDATE job SET status='queued',available_at=?,lease_owner=NULL,lease_until=0,attempts=attempts-? WHERE id=? AND type NOT IN ('instance_power','instance_release','heartbeat_test','network_probe') AND status='running' AND lease_owner=? AND lease_until>?", now.Add(delay).Unix(), decrement, j.ID, j.Owner, now.Unix())
 	if err != nil {
 		return err
 	}

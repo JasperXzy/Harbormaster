@@ -45,3 +45,5 @@ AccessKey Secret、Telegram Token 等需要可逆使用的值放 credential；ag
 2026-11-13 增量：迁移 041 增加 swas_traffic_cache，按实例/凭据版本/套餐 ID 保存轻量流量包最近成功值、列表成员证据、抓取/尝试时间及错误码，与实例发现同事务更新。旧身份记录保留但不参与当前读取。[数据边界与验证](swas-traffic-package.md)。
 
 2026-11-13 增量：迁移 042 增加 release_inventory，按账号/凭据版本/地域保存完整 ECS 和磁盘影响字段、成功/尝试时间及稳定错误。账号/任务租约与实例快照同事务校验；失败保留原内容和成功时间，旧尝试不覆盖新结果；换凭据后隐藏旧缓存。管理员预览只读取本表，没有释放任务或执行入口。[边界与验证](ecs-release-preview.md)。
+
+2026-11-13 增量：迁移 043 扩展固定任务类型，保持外键开启、验证全部关联后恢复立即检查；旧任务/SSE/审计/清理触发器及公开序号保留。新增 instance_release_job / instance_release_request 保存确认影响、一次发送边界、结果与长期事件键；恢复取消旧任务而不重放。[设计与迁移验证](ecs-release-queue.md)。

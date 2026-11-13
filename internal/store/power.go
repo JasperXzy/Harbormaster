@@ -112,6 +112,13 @@ func (s *Store) EnqueuePowerJob(ctx context.Context, instanceID, action, stopMod
 	if !slices.Contains(a.RegionIDs, region) {
 		return model.Job{}, ErrAccountChanged
 	}
+	var releasing int
+	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM job WHERE type='instance_release' AND instance_id=? AND status IN ('queued','running')`, instanceID).Scan(&releasing); err != nil {
+		return model.Job{}, err
+	}
+	if releasing != 0 {
+		return model.Job{}, ErrPowerBusy
+	}
 	var activeID string
 	err = tx.QueryRowContext(ctx, "SELECT id FROM job WHERE type='instance_power' AND instance_id=? AND status IN ('queued','running')", instanceID).Scan(&activeID)
 	if err == nil {

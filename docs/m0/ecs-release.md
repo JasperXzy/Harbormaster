@@ -1,6 +1,6 @@
 # ECS 释放调用层
 
-2026-11-13：本文记录独立固定调用层及其模拟验证。后续已实现后台只读影响采集和管理员[预览接口](ecs-release-preview.md)。尚未提供释放提交、任务、worker 或 Telegram 入口；F7.4 没有完成。没有使用真实账号发送 DeleteInstance，包括 DryRun。
+2026-11-13：本文记录独立固定调用层及其模拟验证。后续已实现后台只读影响采集、管理员[预览接口](ecs-release-preview.md)及[持久任务协议](ecs-release-queue.md)。尚未提供释放提交、执行 worker 或 Telegram 入口；F7.4 没有完成。没有使用真实账号发送 DeleteInstance，包括 DryRun。
 
 ## 官方接口核对
 

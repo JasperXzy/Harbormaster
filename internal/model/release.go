@@ -10,6 +10,20 @@ import (
 
 const ReleasePreviewLifetime = 5 * time.Minute
 
+type ReleaseObservation struct {
+	InstancePresent bool      `json:"instance_present"`
+	ObservedAt      time.Time `json:"observed_at"`
+}
+
+type ReleaseJobResult struct {
+	Action            string              `json:"action"`
+	ConfirmedName     string              `json:"confirmed_name"`
+	PreviewFetchedAt  time.Time           `json:"preview_fetched_at"`
+	DispatchOutcome   string              `json:"dispatch_outcome"`
+	Observation       *ReleaseObservation `json:"observation"`
+	ConfirmationBasis *string             `json:"confirmation_basis"`
+}
+
 // ReleaseInventory is a complete regional read, never a provider atomic
 // snapshot. Optional provider facts remain pointers until actually observed.
 type ReleaseInventory struct {

@@ -46,15 +46,23 @@ func saveReleaseInventory(ctx context.Context, tx *sql.Tx, a model.Account, o mo
 
 // ReleasePreview reads one SQLite snapshot and never requests a cloud action.
 func (s *Store) ReleasePreview(ctx context.Context, instanceID string, now time.Time) (model.ReleasePreview, error) {
-	v := model.ReleasePreview{InstanceID: instanceID, Status: "never_fetched", BlockReasons: []string{}}
 	tx, err := s.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return model.ReleasePreview{}, err
+	}
+	defer tx.Rollback()
+	v, err := readReleasePreviewTx(ctx, tx, instanceID, now)
 	if err != nil {
 		return v, err
 	}
-	defer tx.Rollback()
+	return v, tx.Commit()
+}
+
+func readReleasePreviewTx(ctx context.Context, tx *sql.Tx, instanceID string, now time.Time) (model.ReleasePreview, error) {
+	v := model.ReleasePreview{InstanceID: instanceID, Status: "never_fetched", BlockReasons: []string{}}
 	var cloudID, kind, region string
 	var present int
-	err = tx.QueryRowContext(ctx, `SELECT i.account_id,i.cloud_id,i.kind,i.region,coalesce(r.present,0) FROM instance i
+	err := tx.QueryRowContext(ctx, `SELECT i.account_id,i.cloud_id,i.kind,i.region,coalesce(r.present,0) FROM instance i
  LEFT JOIN resource_snapshot r ON r.account_id=i.account_id AND r.kind=i.kind AND r.id=i.id WHERE i.id=?`, instanceID).Scan(&v.AccountID, &cloudID, &kind, &region, &present)
 	if errors.Is(err, sql.ErrNoRows) {
 		return v, ErrNotFound
@@ -68,7 +76,7 @@ func (s *Store) ReleasePreview(ctx context.Context, instanceID string, now time.
 	}
 	if kind != "ecs" {
 		v.Status, v.BlockReasons = "blocked", []string{"unsupported_instance_kind"}
-		return v, tx.Commit()
+		return v, nil
 	}
 	if !a.Enabled {
 		v.BlockReasons = append(v.BlockReasons, "account_disabled")
@@ -126,5 +134,5 @@ func (s *Store) ReleasePreview(ctx context.Context, instanceID string, now time.
 	if scopeBlocked {
 		v.Status, v.Token = "blocked", nil
 	}
-	return v, tx.Commit()
+	return v, nil
 }
