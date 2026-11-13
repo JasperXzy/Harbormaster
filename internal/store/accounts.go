@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/model"
@@ -109,6 +110,9 @@ func (s *Store) CreateAccount(ctx context.Context, a model.Account, cipher []byt
 	if err != nil {
 		return j, err
 	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: "account_created", TargetType: "account", TargetID: a.ID, AccountID: a.ID, Details: model.AuditDetails{ChangedFields: []string{"name", "site", "region_ids", "enabled", "quota_mainland_bytes", "quota_overseas_bytes", "reset_day", "alert_thresholds_percent"}, CredentialsChanged: true, Revision: new(int64(1))}}, a.UpdatedAt); err != nil {
+		return j, err
+	}
 	return j, tx.Commit()
 }
 
@@ -124,6 +128,9 @@ func (s *Store) UpdateAccount(ctx context.Context, id string, change func(*model
 	if err != nil {
 		return a, err
 	}
+	previous := a
+	previous.RegionIDs = slices.Clone(a.RegionIDs)
+	previous.Thresholds = slices.Clone(a.Thresholds)
 	cipher, err := change(&a)
 	if err != nil {
 		return a, err
@@ -174,6 +181,18 @@ func (s *Store) UpdateAccount(ctx context.Context, id string, change func(*model
 		if _, err = enqueueJob(ctx, tx, kind, id, []string{id}, now); err != nil {
 			return a, err
 		}
+	}
+	action := "account_updated"
+	if previous.Enabled && !a.Enabled {
+		action = "account_disabled"
+	}
+	details := model.AuditDetails{ChangedFields: auditChanges(
+		auditChange{"name", previous.Name, a.Name}, auditChange{"region_ids", previous.RegionIDs, a.RegionIDs},
+		auditChange{"enabled", previous.Enabled, a.Enabled}, auditChange{"quota_mainland_bytes", previous.QuotaMainland, a.QuotaMainland},
+		auditChange{"quota_overseas_bytes", previous.QuotaOverseas, a.QuotaOverseas}, auditChange{"reset_day", previous.ResetDay, a.ResetDay},
+		auditChange{"alert_thresholds_percent", previous.Thresholds, a.Thresholds}), CredentialsChanged: cipher != nil, Revision: &a.Revision}
+	if err = appendAudit(ctx, tx, auditEvent{Action: action, TargetType: "account", TargetID: id, AccountID: id, Details: details}, now); err != nil {
+		return a, err
 	}
 	return a, tx.Commit()
 }

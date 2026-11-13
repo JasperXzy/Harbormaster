@@ -173,6 +173,9 @@ func (s *Store) EnqueuePowerJob(ctx context.Context, instanceID, action, stopMod
 	if err != nil {
 		return j, err
 	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: "instance_power_requested", TargetType: "instance", TargetID: instanceID, AccountID: accountID, JobID: id, Details: model.AuditDetails{ChangedFields: []string{"desired_state"}, Operation: action, StopMode: stopMode, Status: "queued", DispatchOutcome: "not_sent"}}, now); err != nil {
+		return j, err
+	}
 	return j, tx.Commit()
 }
 
@@ -299,6 +302,9 @@ func (s *Store) BeginPowerDispatch(ctx context.Context, j model.Job, now time.Ti
 	if err != nil {
 		return p, err
 	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: "instance_power_dispatch_started", TargetType: "instance", TargetID: p.InstanceID, AccountID: p.AccountID, JobID: j.ID, Actor: &model.AuditActor{Kind: "system"}, Details: model.AuditDetails{ChangedFields: []string{"dispatch_started_at", "dispatch_outcome"}, Operation: p.Action, StopMode: p.StopMode, Status: "running", DispatchOutcome: "dispatching"}}, now); err != nil {
+		return p, err
+	}
 	return p, tx.Commit()
 }
 
@@ -332,6 +338,13 @@ func (s *Store) RecordPowerDispatch(ctx context.Context, j model.Job, outcome, c
 		return ErrPowerDispatched
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE instance_power_job SET dispatch_outcome=? WHERE job_id=?", outcome, j.ID); err != nil {
+		return err
+	}
+	status := "failed"
+	if outcome == "accepted" {
+		status = "running"
+	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: "instance_power_dispatch_recorded", TargetType: "instance", TargetID: p.InstanceID, AccountID: p.AccountID, JobID: j.ID, Actor: &model.AuditActor{Kind: "system"}, Details: model.AuditDetails{ChangedFields: []string{"dispatch_outcome"}, Operation: p.Action, StopMode: p.StopMode, Status: status, DispatchOutcome: outcome, ErrorCode: code}}, now); err != nil {
 		return err
 	}
 	if outcome == "accepted" {

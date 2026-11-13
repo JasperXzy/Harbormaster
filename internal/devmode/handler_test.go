@@ -46,7 +46,7 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 	}
 	var session map[string]string
 	_ = json.Unmarshal(w.Body.Bytes(), &session)
-	for _, path := range []string{"/system/info", "/network/ipdb", "/network/targets", "/network/points", "/network/plans", "/network/plans/demo-plan-agent", "/network/targets/target_cloudflare_dns", "/notify/quiet-hours", "/settings/heartbeat", "/passkeys", "/session/methods", "/settings", "/system-events", "/accounts", "/ram-policies", "/api-keys", "/accounts/demo-account-1/finance", "/accounts/demo-account-2/finance", "/instances/demo-sin/finance", "/instances/demo-sha/finance", "/instances?limit=1", "/traffic/quotas", "/traffic/daily?account_id=demo-account-1", "/traffic/billing-subjects", "/bandwidth-packages", "/bandwidth-packages/demo-package/hourly", "/notify/telegram", "/alert-rules", "/notifications"} {
+	for _, path := range []string{"/system/info", "/network/ipdb", "/network/targets", "/network/points", "/network/plans", "/network/plans/demo-plan-agent", "/network/targets/target_cloudflare_dns", "/notify/quiet-hours", "/settings/heartbeat", "/passkeys", "/session/methods", "/settings", "/system-events", "/accounts", "/ram-policies", "/api-keys", "/audit-log", "/accounts/demo-account-1/finance", "/accounts/demo-account-2/finance", "/instances/demo-sin/finance", "/instances/demo-sha/finance", "/instances?limit=1", "/traffic/quotas", "/traffic/daily?account_id=demo-account-1", "/traffic/billing-subjects", "/bandwidth-packages", "/bandwidth-packages/demo-package/hourly", "/notify/telegram", "/alert-rules", "/notifications"} {
 		w = call("GET", path, "", cookie, "")
 		if w.Code != 200 || !json.Valid(w.Body.Bytes()) {
 			t.Errorf("%s: %d %s", path, w.Code, w.Body.String())
@@ -67,6 +67,13 @@ func TestDevelopmentContractAndSessionBoundary(t *testing.T) {
 	}
 	if jobs := call("GET", "/jobs/demo-job-refresh", "", cookie, ""); jobs.Code != 200 {
 		t.Fatal("demo job detail", jobs.Code)
+	}
+	powerJob := call("GET", "/jobs?type=instance_power&instance_id=demo-sin", "", cookie, "")
+	if powerJob.Code != 200 || !strings.Contains(powerJob.Body.String(), "demo-power-job") || strings.Contains(powerJob.Body.String(), "demo-job-refresh") {
+		t.Fatal("audit task link filter", powerJob.Code, powerJob.Body)
+	}
+	if jobs := call("GET", "/jobs/demo-power-job", "", cookie, ""); jobs.Code != 200 || !strings.Contains(jobs.Body.String(), "api_key_revoked") {
+		t.Fatal("audit task detail", jobs.Code, jobs.Body)
 	}
 	systemEvents := call("GET", "/system-events?source=cms_spot&instance_id=demo-sin", "", cookie, "")
 	if systemEvents.Code != 200 || !strings.Contains(systemEvents.Body.String(), "demo-cloud-event-2") || strings.Contains(systemEvents.Body.String(), "demo-cloud-event-1") {

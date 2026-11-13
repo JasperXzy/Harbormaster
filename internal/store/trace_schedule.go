@@ -145,6 +145,9 @@ func (s *Store) SaveTraceSchedule(ctx context.Context, id string, in model.Trace
 	if in.Active {
 		in.NextRunAt = &next
 	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: "trace_schedule_updated", TargetType: "trace_schedule", TargetID: id, Details: model.AuditDetails{ChangedFields: auditChanges(auditChange{"enabled", old.Enabled, in.Enabled}, auditChange{"notify_changes", old.NotifyChanges, in.NotifyChanges}, auditChange{"time_of_day", old.TimeOfDay, in.TimeOfDay}, auditChange{"max_hops", old.MaxHops, in.MaxHops}, auditChange{"count", old.Count, in.Count}, auditChange{"timeout_ms", old.TimeoutMS, in.TimeoutMS}, auditChange{"timezone", old.Timezone, in.Timezone}), Revision: &in.Revision}}, now); err != nil {
+		return in, err
+	}
 	return in, tx.Commit()
 }
 

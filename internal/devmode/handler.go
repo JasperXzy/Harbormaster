@@ -125,6 +125,9 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
+	if demoAuditLog(w, r, path, now) {
+		return
+	}
 	if h.jobs(w, r, path, now) {
 		return
 	}

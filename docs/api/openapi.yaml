@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-13  Audit journal: add cached admin-only /audit-log with bounded keyset pagination and filter-bound cursors. Record account configuration/credential-change markers, implemented rule settings, API key management, agent grants/binding/revocation and instance power lifecycle in the same SQLite transaction as each change. Actors derive from trusted session/API-key/CLI/system context. Details contain fixed metadata and changed field names only; storing configuration before/after values remains a pending user decision. Never store credential/token/hash/ciphertext or raw provider error payloads; no historical audit backfill is fabricated.
 # 2026-11-13  Duplex traces: add atomic paired agent trace submissions, saved endpoint/address evidence, detail and text export. User confirmed both-or-neither enqueue with independent execution and actual timestamps thereafter. Both managed instances need fresh unique public addresses and authenticated trace capability at submission; queued legs recheck endpoint address evidence, running legs retain their original measurements. Trace history adds nullable duplex_id/direction backlinks. Reads never probe or refresh cloud data; no claim of synchronized packets or a symmetric path.
 # 2026-11-13  Trace snapshots: add per-probe-plan daily trace schedules and bounded snapshot history/comparisons. User chose business-timezone 03:00 default, no historical backfill, one current catch-up; compare only complete reached paths with unchanged target IP and unique complete per-TTL ASN evidence, coalescing adjacent ASNs. Different ASN database versions establish a new starting point without an alert. Add optional non-urgent network_route_change event records; Telegram delivery remains separate.
 # 2026-11-13  Trace enrichment: persist background offline ASN/geolocation, bounded public-only PTR, per-TTL response statistics and evidence-based network labels separately from immutable agent reports. Detail/export read frozen results and dataset attribution; history adds enrichment_status only. Missing responses/ASN remain unknown; CN2 tier, Alibaba cross-border status and detour stay unconfirmed. Restored unfinished enrichment is cancelled with old work.
@@ -1330,6 +1331,35 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /audit-log:
+    get:
+      tags: [system]
+      operationId: listAuditLog
+      summary: List stored administrative change records
+      description: Admin session only. Append-only change evidence from this implementation onward; existing state is not retroactively described as historical user actions. Newest sequence first. Cursor binds all filters. Optional from/to must be supplied together with a maximum 31-day range and no future to; omitting both paginates existing history without a retention guarantee. Reads never execute tasks or cloud queries. Summary is placeholder text until frontend wording is finalized. Configuration before/after values are not included pending the user's detail-policy answer.
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Cursor"
+        - {name: from, in: query, schema: {type: string, format: date-time}}
+        - {name: to, in: query, schema: {type: string, format: date-time}}
+        - {name: actor, in: query, schema: {type: string, enum: [admin, api_key, cli, telegram, system]}}
+        - {name: action, in: query, schema: {type: string, maxLength: 80}, description: Exact stable action code}
+        - {name: target_type, in: query, schema: {type: string, maxLength: 40}}
+        - {name: target_id, in: query, schema: {type: string, maxLength: 128}}
+        - {name: account_id, in: query, schema: {type: string, maxLength: 128}}
+      responses:
+        "200":
+          description: Stored records only
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, next_cursor]
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/AuditEntry"}}
+                  next_cursor: {type: string, nullable: true}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "422": {$ref: "#/components/responses/ValidationFailed"}
   /jobs:
     get:
       tags: [jobs]
@@ -2643,6 +2673,38 @@ components:
         go_heap_alloc_bytes: {type: integer, format: int64, description: Current total Go heap; excludes mmap.}
         process_peak_rss_bytes: {type: integer, format: int64, nullable: true, description: OS peak process resident memory; not component-only or current RSS. Null if unavailable.}
         mapped_file_bytes: {type: integer, format: int64, description: Total sizes of mapped dataset files; not a resident-memory measurement.}
+    AuditEntry:
+      type: object
+      required: [id, created_at, actor, action, target_type, target_id, account_id, job_id, summary, details]
+      properties:
+        id: {type: string}
+        created_at: {type: string, format: date-time}
+        actor:
+          type: object
+          required: [kind, id]
+          properties:
+            kind: {type: string, enum: [admin, api_key, cli, telegram, system]}
+            id: {type: string, nullable: true, description: Validated internal API-key ID when applicable; never the token. Null for the single administrator and system/CLI sources.}
+        action: {type: string, description: "Stable codes include account_created/account_updated/account_disabled; alert_rule_updated; quiet_hours_updated; probe_target_created/updated/deleted; probe_plan_created/updated/deleted; trace_schedule_updated; api_key_created/revoked; agent_registration_issued/agent_registered/agent_revoked; instance_power_requested/started/dispatch_started/dispatch_recorded/finished."}
+        target_type: {type: string, description: account / alert_rule / quiet_hours / probe_target / probe_plan / trace_schedule / api_key / instance}
+        target_id: {type: string}
+        account_id: {type: string, nullable: true}
+        job_id: {type: string, nullable: true, description: Links operation evidence to its persistent task; not proof of cloud success.}
+        summary: {type: string, description: Placeholder action text; frontend owns final wording.}
+        details:
+          type: object
+          required: [changed_fields, credentials_changed]
+          description: Fixed safe metadata only. No values from credentials or arbitrary configuration/provider payloads. A credential replacement is a boolean marker.
+          properties:
+            changed_fields: {type: array, items: {type: string}}
+            credentials_changed: {type: boolean}
+            revision: {type: integer, format: int64}
+            operation: {type: string, enum: [start, stop, reboot]}
+            stop_mode: {type: string, enum: [keep_charging, stop_charging]}
+            status: {type: string, enum: [queued, running, succeeded, failed]}
+            dispatch_outcome: {type: string, enum: [not_sent, dispatching, accepted, rejected, unknown]}
+            error_code: {type: string, description: Fixed local error code only.}
+            confirmation_basis: {type: string}
     TraceScheduleInput:
       type: object
       additionalProperties: false

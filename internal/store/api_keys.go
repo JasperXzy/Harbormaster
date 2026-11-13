@@ -63,12 +63,23 @@ func (s *Store) CreateAPIKey(ctx context.Context, in model.APIKeyCreate, now tim
 	if err != nil {
 		return model.APIKey{}, "", err
 	}
-	result, err := s.DB.ExecContext(ctx, "INSERT INTO api_key(id,name,scopes_json,token_hash,created_at) VALUES(?,?,?,?,?)", key.ID, key.Name, string(scopes), hash[:], timestamp(now))
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return model.APIKey{}, "", err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, "INSERT INTO api_key(id,name,scopes_json,token_hash,created_at) VALUES(?,?,?,?,?)", key.ID, key.Name, string(scopes), hash[:], timestamp(now))
 	if err != nil {
 		return model.APIKey{}, "", err
 	}
 	key.Sequence, err = result.LastInsertId()
 	if err != nil {
+		return model.APIKey{}, "", err
+	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: "api_key_created", TargetType: "api_key", TargetID: key.ID, Details: model.AuditDetails{ChangedFields: []string{"name", "scopes"}, CredentialsChanged: true}}, now); err != nil {
+		return model.APIKey{}, "", err
+	}
+	if err = tx.Commit(); err != nil {
 		return model.APIKey{}, "", err
 	}
 	return key, token, nil
@@ -100,6 +111,13 @@ func (s *Store) RevokeAPIKey(ctx context.Context, id string, now time.Time) erro
 		return err
 	}
 	defer tx.Rollback()
+	key, err := readAPIKey(tx.QueryRowContext(ctx, "SELECT "+keyColumns+" FROM api_key WHERE id=?", id))
+	if err != nil {
+		return err
+	}
+	if key.RevokedAt != nil {
+		return tx.Commit()
+	}
 	result, err := tx.ExecContext(ctx, "UPDATE api_key SET revoked_at=coalesce(revoked_at,?) WHERE id=?", timestamp(now), id)
 	if err != nil {
 		return err
@@ -117,6 +135,9 @@ func (s *Store) RevokeAPIKey(ctx context.Context, id string, now time.Time) erro
  WHERE type='instance_power' AND status IN ('queued','running') AND id IN
  (SELECT k.job_id FROM api_key_power_job k JOIN instance_power_job p ON p.job_id=k.job_id WHERE k.key_id=? AND p.dispatch_started_at IS NULL)`, timestamp(now), id)
 	if err != nil {
+		return err
+	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: "api_key_revoked", TargetType: "api_key", TargetID: id, Details: model.AuditDetails{ChangedFields: []string{"revoked_at"}, CredentialsChanged: true}}, now); err != nil {
 		return err
 	}
 	return tx.Commit()

@@ -93,6 +93,9 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r = r.WithContext(model.WithJobTrigger(r.Context(), "panel"))
+	if p.auditLog(w, r, path) {
+		return
+	}
 	if path == "/session" {
 		switch r.Method {
 		case "GET":

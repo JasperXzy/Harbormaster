@@ -92,6 +92,7 @@ func (s *Store) SaveNetworkTarget(ctx context.Context, id string, in model.Netwo
 	if err = requireInstance(ctx, tx, in.InstanceID); err != nil {
 		return in, err
 	}
+	previous := model.NetworkTarget{}
 	if id == "" {
 		if in.Revision != 0 {
 			return in, ErrNetworkChanged
@@ -99,7 +100,7 @@ func (s *Store) SaveNetworkTarget(ctx context.Context, id string, in model.Netwo
 		in.ID = model.NewID("target_")
 		in.CreatedAt = now.UTC()
 	} else {
-		previous, err := readTarget(ctx, tx, id)
+		previous, err = readTarget(ctx, tx, id)
 		if err != nil {
 			return in, err
 		}
@@ -123,6 +124,15 @@ func (s *Store) SaveNetworkTarget(ctx context.Context, id string, in model.Netwo
 	}
 	_, err = tx.ExecContext(ctx, "INSERT INTO network_target(id,revision,config_json,enabled) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,config_json=excluded.config_json,enabled=excluded.enabled", in.ID, in.Revision, string(raw), in.Enabled)
 	if err != nil {
+		return in, err
+	}
+	action := "probe_target_updated"
+	fields := auditChanges(auditChange{"name", previous.Name, in.Name}, auditChange{"kind", previous.Kind, in.Kind}, auditChange{"host", previous.Host, in.Host}, auditChange{"instance_id", previous.InstanceID, in.InstanceID}, auditChange{"tcp_port", previous.TCPPort, in.TCPPort}, auditChange{"enabled", previous.Enabled, in.Enabled})
+	if id == "" {
+		action = "probe_target_created"
+		fields = []string{"name", "kind", "host", "instance_id", "tcp_port", "enabled"}
+	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: action, TargetType: "probe_target", TargetID: in.ID, Details: model.AuditDetails{ChangedFields: fields, Revision: &in.Revision}}, now); err != nil {
 		return in, err
 	}
 	return in, tx.Commit()
@@ -154,6 +164,9 @@ func (s *Store) DeleteNetworkTarget(ctx context.Context, id string, revision int
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE network_target SET deleted=1,enabled=0,revision=revision+1 WHERE id=?", id); err != nil {
+		return err
+	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: "probe_target_deleted", TargetType: "probe_target", TargetID: id, Details: model.AuditDetails{ChangedFields: auditChanges(auditChange{"deleted", false, true}, auditChange{"enabled", current.Enabled, false}), Revision: new(revision + 1)}}, now); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -250,6 +263,7 @@ func (s *Store) SaveProbePlan(ctx context.Context, id string, in model.ProbePlan
 	if err = requireInstance(ctx, tx, in.InstanceID); err != nil {
 		return in, err
 	}
+	previous := model.ProbePlan{}
 	if id == "" {
 		if in.Revision != 0 {
 			return in, ErrNetworkChanged
@@ -257,7 +271,7 @@ func (s *Store) SaveProbePlan(ctx context.Context, id string, in model.ProbePlan
 		in.ID = model.NewID("plan_")
 		in.CreatedAt = now.UTC()
 	} else {
-		previous, err := readProbePlan(ctx, tx, id)
+		previous, err = readProbePlan(ctx, tx, id)
 		if err != nil {
 			return in, err
 		}
@@ -296,6 +310,15 @@ func (s *Store) SaveProbePlan(ctx context.Context, id string, in model.ProbePlan
 	if err != nil {
 		return in, err
 	}
+	action := "probe_plan_updated"
+	fields := auditChanges(auditChange{"name", previous.Name, in.Name}, auditChange{"point_kind", previous.PointKind, in.PointKind}, auditChange{"instance_id", previous.InstanceID, in.InstanceID}, auditChange{"target_id", previous.TargetID, in.TargetID}, auditChange{"family", previous.Family, in.Family}, auditChange{"method", previous.Method, in.Method}, auditChange{"frequency_seconds", previous.FrequencySeconds, in.FrequencySeconds}, auditChange{"count", previous.Count, in.Count}, auditChange{"timeout_ms", previous.TimeoutMS, in.TimeoutMS}, auditChange{"interval_ms", previous.IntervalMS, in.IntervalMS}, auditChange{"enabled", previous.Enabled, in.Enabled})
+	if id == "" {
+		action = "probe_plan_created"
+		fields = []string{"name", "point_kind", "instance_id", "target_id", "family", "method", "frequency_seconds", "count", "timeout_ms", "interval_ms", "enabled"}
+	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: action, TargetType: "probe_plan", TargetID: in.ID, Details: model.AuditDetails{ChangedFields: fields, Revision: &in.Revision}}, now); err != nil {
+		return in, err
+	}
 	return in, tx.Commit()
 }
 func (s *Store) DeleteProbePlan(ctx context.Context, id string, revision int64, now time.Time) error {
@@ -324,6 +347,9 @@ func (s *Store) DeleteProbePlan(ctx context.Context, id string, revision int64, 
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE probe_plan SET deleted=1,enabled=0,revision=revision+1 WHERE id=?", id); err != nil {
+		return err
+	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: "probe_plan_deleted", TargetType: "probe_plan", TargetID: id, Details: model.AuditDetails{ChangedFields: auditChanges(auditChange{"deleted", false, true}, auditChange{"enabled", current.Enabled, false}), Revision: new(revision + 1)}}, now); err != nil {
 		return err
 	}
 	return tx.Commit()

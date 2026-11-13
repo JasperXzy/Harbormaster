@@ -14,6 +14,7 @@ func (h *handler) jobs(w http.ResponseWriter, r *http.Request, path string, now 
 	}
 	items := []object{
 		{"id": "demo-job-refresh", "type": "refresh", "status": "succeeded", "created_at": now.Add(-time.Minute).Format(time.RFC3339), "started_at": now.Add(-time.Minute).Format(time.RFC3339), "finished_at": now.Add(-50 * time.Second).Format(time.RFC3339), "error": nil, "result": nil, "account_ids": []string{"demo-account-1", "demo-account-2"}, "instance_id": nil, "trigger": "panel"},
+		{"id": "demo-power-job", "type": "instance_power", "status": "failed", "created_at": now.Add(-20 * time.Minute).Format(time.RFC3339), "started_at": nil, "finished_at": now.Add(-19 * time.Minute).Format(time.RFC3339), "error": model.Error("api_key_revoked"), "result": model.PowerJobResult{Action: "stop", StopMode: new("keep_charging"), DispatchOutcome: "not_sent"}, "account_ids": []string{"demo-account-1"}, "instance_id": "demo-sin", "trigger": "api"},
 		{"id": "demo-job-permissions", "type": "permission_check", "status": "failed", "created_at": now.Add(-time.Hour).Format(time.RFC3339), "started_at": now.Add(-time.Hour).Format(time.RFC3339), "finished_at": now.Add(-59 * time.Minute).Format(time.RFC3339), "error": object{"code": "permission_denied", "message": "demo placeholder"}, "result": nil, "account_ids": []string{"demo-account-2"}, "instance_id": nil, "trigger": "schedule"},
 	}
 	if path != "/jobs" {
@@ -34,7 +35,7 @@ func (h *handler) jobs(w http.ResponseWriter, r *http.Request, path string, now 
 	}
 	filtered := []object{}
 	for _, item := range items {
-		if f.InstanceID != "" || (f.Type != "" && item["type"] != f.Type) || (f.Status != "" && item["status"] != f.Status) || (f.Trigger != "" && item["trigger"] != f.Trigger) {
+		if (f.InstanceID != "" && item["instance_id"] != f.InstanceID) || (f.Type != "" && item["type"] != f.Type) || (f.Status != "" && item["status"] != f.Status) || (f.Trigger != "" && item["trigger"] != f.Trigger) {
 			continue
 		}
 		match := f.AccountID == ""

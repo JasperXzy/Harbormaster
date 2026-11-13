@@ -28,9 +28,10 @@ func (s *Store) AgentGrant(ctx context.Context, instanceID string, now time.Time
 	}
 	defer tx.Rollback()
 	var enabled, present bool
-	err = tx.QueryRowContext(ctx, `SELECT a.enabled,EXISTS(SELECT 1 FROM resource_snapshot r WHERE r.id=i.id AND r.account_id=i.account_id AND r.kind=i.kind AND r.present=1)
+	var account string
+	err = tx.QueryRowContext(ctx, `SELECT i.account_id,a.enabled,EXISTS(SELECT 1 FROM resource_snapshot r WHERE r.id=i.id AND r.account_id=i.account_id AND r.kind=i.kind AND r.present=1)
  FROM instance i JOIN account_settings a ON a.account_id=i.account_id
- WHERE i.id=? AND i.kind IN ('ecs','swas')`, instanceID).Scan(&enabled, &present)
+ WHERE i.id=? AND i.kind IN ('ecs','swas')`, instanceID).Scan(&account, &enabled, &present)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", time.Time{}, ErrNotFound
 	}
@@ -53,6 +54,9 @@ func (s *Store) AgentGrant(ctx context.Context, instanceID string, now time.Time
 	if err != nil {
 		return "", time.Time{}, err
 	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: "agent_registration_issued", TargetType: "instance", TargetID: instanceID, AccountID: account, Details: model.AuditDetails{ChangedFields: []string{"agent_registration"}, CredentialsChanged: true}}, now); err != nil {
+		return "", time.Time{}, err
+	}
 	return code, expiry, tx.Commit()
 }
 
@@ -68,13 +72,13 @@ func (s *Store) RegisterAgent(ctx context.Context, r agentproto.Registration, no
 	codeHash := sha256.Sum256([]byte(r.Code))
 	nonceHash := sha256.Sum256([]byte(r.Nonce))
 	tokenHash := sha256.Sum256([]byte(agentproto.DeriveToken(r.Code, r.Nonce)))
-	var instance, kind, cloudID, region, expires string
+	var instance, account, kind, cloudID, region, expires string
 	var consumed, agentID sql.NullString
 	var usedNonce []byte
 	var enabled, present bool
-	err = tx.QueryRowContext(ctx, `SELECT g.instance_id,i.kind,i.cloud_id,i.region,g.expires_at,g.consumed_at,g.nonce_hash,g.agent_id,a.enabled,
+	err = tx.QueryRowContext(ctx, `SELECT g.instance_id,i.account_id,i.kind,i.cloud_id,i.region,g.expires_at,g.consumed_at,g.nonce_hash,g.agent_id,a.enabled,
  EXISTS(SELECT 1 FROM resource_snapshot rs WHERE rs.account_id=i.account_id AND rs.id=i.id AND rs.kind=i.kind AND rs.present=1)
- FROM agent_registration g JOIN instance i ON i.id=g.instance_id JOIN account_settings a ON a.account_id=i.account_id WHERE g.code_hash=?`, codeHash[:]).Scan(&instance, &kind, &cloudID, &region, &expires, &consumed, &usedNonce, &agentID, &enabled, &present)
+ FROM agent_registration g JOIN instance i ON i.id=g.instance_id JOIN account_settings a ON a.account_id=i.account_id WHERE g.code_hash=?`, codeHash[:]).Scan(&instance, &account, &kind, &cloudID, &region, &expires, &consumed, &usedNonce, &agentID, &enabled, &present)
 	if errors.Is(err, sql.ErrNoRows) {
 		return agentproto.Registered{}, ErrRegistration
 	}
@@ -123,6 +127,9 @@ func (s *Store) RegisterAgent(ctx context.Context, r agentproto.Registration, no
 		return response, err
 	}
 	response.AgentID = id
+	if err = appendAudit(ctx, tx, auditEvent{Action: "agent_registered", TargetType: "instance", TargetID: instance, AccountID: account, Actor: &model.AuditActor{Kind: "system"}, Details: model.AuditDetails{ChangedFields: []string{"agent_binding", "agent_token"}, CredentialsChanged: true}}, now); err != nil {
+		return agentproto.Registered{}, err
+	}
 	return response, tx.Commit()
 }
 func (s *Store) RevokeAgent(ctx context.Context, instanceID string, now time.Time) error {
@@ -131,14 +138,17 @@ func (s *Store) RevokeAgent(ctx context.Context, instanceID string, now time.Tim
 		return err
 	}
 	defer tx.Rollback()
-	var count int
-	if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM instance WHERE id=?", instanceID).Scan(&count); err != nil {
+	var account string
+	if err = tx.QueryRowContext(ctx, "SELECT account_id FROM instance WHERE id=?", instanceID).Scan(&account); errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	} else if err != nil {
 		return err
 	}
-	if count == 0 {
-		return ErrNotFound
+	var active, grants int
+	if err = tx.QueryRowContext(ctx, "SELECT (SELECT count(*) FROM agent WHERE instance_id=? AND revoked_at IS NULL),(SELECT count(*) FROM agent_registration WHERE instance_id=?)", instanceID, instanceID).Scan(&active, &grants); err != nil {
+		return err
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE agent SET revoked_at=?,last_received_at=NULL WHERE instance_id=?", timestamp(now), instanceID); err != nil {
+	if _, err = tx.ExecContext(ctx, "UPDATE agent SET revoked_at=coalesce(revoked_at,?),last_received_at=NULL WHERE instance_id=?", timestamp(now), instanceID); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM agent_registration WHERE instance_id=?", instanceID); err != nil {
@@ -149,6 +159,18 @@ func (s *Store) RevokeAgent(ctx context.Context, instanceID string, now time.Tim
 	}
 	if err = cancelPendingNotifications(ctx, tx, "rule_key='agent_offline' AND instance_id=?", []any{instanceID}, "agent_revoked", now); err != nil {
 		return err
+	}
+	if active+grants > 0 {
+		fields := []string{}
+		if active > 0 {
+			fields = append(fields, "agent_token")
+		}
+		if grants > 0 {
+			fields = append(fields, "agent_registration")
+		}
+		if err = appendAudit(ctx, tx, auditEvent{Action: "agent_revoked", TargetType: "instance", TargetID: instanceID, AccountID: account, Details: model.AuditDetails{ChangedFields: fields, CredentialsChanged: true}}, now); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
