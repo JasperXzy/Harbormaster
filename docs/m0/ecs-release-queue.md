@@ -1,6 +1,6 @@
 # ECS 释放持久任务
 
-2026-11-13：在已确认的停止/PostPaid 范围和[影响预览](ecs-release-preview.md)之上，完成持久任务的入队、二次确认、去重、租约、发送边界和结果存储协议。尚无面板/Telegram 提交入口、执行 worker 或云端缺失确认步骤；execution_enabled 仍为 false。没有真实释放或 DryRun。
+2026-11-13：本文记录持久任务入队、二次确认、去重、租约、发送边界和结果存储阶段。后续[独立执行/确认 worker](ecs-release-worker.md)已实现；仍无生产启动/配置或面板/Telegram 提交入口，execution_enabled 为 false。没有真实释放或 DryRun。
 
 ## 入队与确认
 

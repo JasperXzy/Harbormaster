@@ -1,6 +1,6 @@
 # ECS 释放影响预览
 
-2026-11-13：本文记录后台只读采集、凭据版本隔离缓存和管理员预览阶段。后续[持久任务协议](ecs-release-queue.md)已实现，仍没有释放提交或执行 worker，execution_enabled 固定 false。没有使用真实凭据调用释放或 DryRun，也没有新增本批真实云查询。
+2026-11-13：本文记录后台只读采集、凭据版本隔离缓存和管理员预览阶段。后续[持久任务](ecs-release-queue.md)和[独立执行/确认](ecs-release-worker.md)已实现，仍没有生产启动/配置或释放提交入口，execution_enabled 为 false。没有使用真实凭据调用释放或 DryRun，也没有新增本批真实云查询。
 
 ## 已确认规则
 
