@@ -1,0 +1,90 @@
+{
+  "date": "2026-11-18",
+  "timezone": "Asia/Singapore",
+  "release": {
+    "source_commit": "103f3a9a3856dd678ea8fbe8ce5716306e27d32d",
+    "version": "v0.1.0-trial.20261118",
+    "manifest_sha256": "f99d8e450c5a9fc5ff1d382a8a42530fbdf7af714cc602546c42e2f8b2d7874f",
+    "files": [
+      {
+        "name": "hm-agent-linux-amd64",
+        "sha256": "8412ed276218d65d083cf3224c16321bcd206e08649f960d0290f7913721a882",
+        "bytes": 11965080
+      },
+      {
+        "name": "hm-agent-linux-arm64",
+        "sha256": "22aec8c5d49ba498fe012056e5dd72ece811779b5072d45c9db9eb60ee9f3efa",
+        "bytes": 11102214
+      },
+      {
+        "name": "hm-agent.service",
+        "sha256": "a91f2f26f419867c973e5a04340b2fa9a366d3c3e2e6c817a628538dc79f6a14",
+        "bytes": 994
+      },
+      {
+        "name": "install.sh",
+        "sha256": "61fae2f57450872a8e1959be7269957003bd7c25bcb9dd586a42549b89a1129b",
+        "bytes": 7172
+      },
+      {
+        "name": "VERSION",
+        "sha256": "bfb2e229155c2bc2402d4920eefdce1549d166a429471eaf38db388009e7e0fb",
+        "bytes": 22
+      }
+    ],
+    "published": true,
+    "directory": "/opt/harbormaster/agent-releases",
+    "manifest_published_last": true,
+    "native_version_verified": {
+      "program": "hm-agent",
+      "version": "v0.1.0-trial.20261118"
+    },
+    "agent_started": false,
+    "target_host_modified": false
+  },
+  "verification": {
+    "public_downloads": [
+      {
+        "name": "hm-agent-linux-amd64",
+        "status": 200,
+        "sha256_match": true,
+        "bytes": 11965080
+      },
+      {
+        "name": "hm-agent-linux-arm64",
+        "status": 200,
+        "sha256_match": true,
+        "bytes": 11102214
+      },
+      {
+        "name": "hm-agent.service",
+        "status": 200,
+        "sha256_match": true,
+        "bytes": 994
+      },
+      {
+        "name": "install.sh",
+        "status": 200,
+        "sha256_match": true,
+        "bytes": 7172
+      },
+      {
+        "name": "VERSION",
+        "status": 200,
+        "sha256_match": true,
+        "bytes": 22
+      },
+      {
+        "name": "SHA256SUMS",
+        "status": 200,
+        "sha256_match": true,
+        "bytes": 408
+      }
+    ],
+    "origin_and_container_mount_visible": true,
+    "backend_healthy": true,
+    "cloud_write_flags_disabled": true,
+    "registration_codes_issued_for_validation": 0,
+    "sg_server_modified": false
+  }
+}
