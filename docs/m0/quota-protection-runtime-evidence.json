@@ -1,0 +1,111 @@
+{
+  "checked_at": "2026-11-17T20:40:26.101273+00:00",
+  "commit": "8a467e9",
+  "version": "0.1.0-trial.20261118.2",
+  "image": "harbormaster-server:trial-8a467e9",
+  "container_status": "running",
+  "container_health": "healthy",
+  "started_at": "2026-11-17T20:24:02.454850839Z",
+  "nonroot_user": "65532:65532",
+  "rootfs_readonly": true,
+  "power_enabled": false,
+  "release_enabled": false,
+  "power_env": "false",
+  "release_env": "false",
+  "server_not_managed": true,
+  "local_http_checks": {
+    "healthz": 200,
+    "readyz": 200
+  },
+  "migration_count": 48,
+  "sample_count": 2330,
+  "active_agent_count": 2,
+  "latest_reports": [
+    "2026-11-17T20:40:25.054952088Z",
+    "2026-11-17T20:40:22.307107713Z"
+  ],
+  "quota_rule_count": 0,
+  "recorded_automatic_dispatches": 0,
+  "estimates": [
+    {
+      "scope": "mainland",
+      "mode": "unverified",
+      "status": "unavailable",
+      "calculated_at": "2026-11-17T20:40:23.034815901Z",
+      "from_at": null,
+      "to_at": "2026-11-17T20:40:23.034815901Z",
+      "known_increment_bytes": 0,
+      "qualified_for_execution": false,
+      "reasons": [
+        "official_basis_missing"
+      ]
+    },
+    {
+      "scope": "overseas",
+      "mode": "unverified",
+      "status": "incomplete",
+      "calculated_at": "2026-11-17T20:40:23.034815901Z",
+      "from_at": "2026-11-17T19:38:25.567516098Z",
+      "to_at": "2026-11-17T20:40:23.034815901Z",
+      "known_increment_bytes": 0,
+      "qualified_for_execution": false,
+      "reasons": [
+        "cdt_eligibility_unknown",
+        "lag_window_assumption",
+        "official_cutoff_or_unit_unverified",
+        "topology_history_incomplete",
+        "topology_observed_only",
+        "unattributed_subject"
+      ]
+    },
+    {
+      "scope": "mainland",
+      "mode": "unverified",
+      "status": "incomplete",
+      "calculated_at": "2026-11-17T20:40:23.034815901Z",
+      "from_at": "2026-11-17T19:35:50.337443243Z",
+      "to_at": "2026-11-17T20:40:23.034815901Z",
+      "known_increment_bytes": 0,
+      "qualified_for_execution": false,
+      "reasons": [
+        "cdt_eligibility_unknown",
+        "lag_window_assumption",
+        "official_cutoff_or_unit_unverified",
+        "topology_history_incomplete",
+        "topology_observed_only",
+        "unattributed_subject"
+      ]
+    },
+    {
+      "scope": "overseas",
+      "mode": "unverified",
+      "status": "incomplete",
+      "calculated_at": "2026-11-17T20:40:23.034815901Z",
+      "from_at": "2026-11-17T19:35:50.337443243Z",
+      "to_at": "2026-11-17T20:40:14.543742765Z",
+      "known_increment_bytes": 101672590,
+      "qualified_for_execution": false,
+      "reasons": [
+        "boundary_upper_allocation",
+        "cdt_eligibility_unknown",
+        "lag_window_assumption",
+        "official_cutoff_or_unit_unverified",
+        "partial_hour_upper",
+        "topology_history_incomplete",
+        "topology_observed_only"
+      ]
+    }
+  ],
+  "reconciliations": [
+    {
+      "status": "not_comparable",
+      "reason": "official_basis_unverified",
+      "count": 166
+    }
+  ],
+  "backup_directory": "/var/backups/harbormaster/quota-8a467e9",
+  "frontend_changed": false,
+  "agent_release_changed": false,
+  "dns_changed": false,
+  "tls_changed": false
+}

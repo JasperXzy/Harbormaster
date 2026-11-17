@@ -1,0 +1,30 @@
+{
+  "checked_at": "2026-11-17T20:45:10.213293+00:00",
+  "commit": "8a467e9",
+  "network": "none",
+  "cloned_data": true,
+  "production_settings_changed": false,
+  "clone_lag_seconds": 60,
+  "ready_scope_count": 1,
+  "recorded_dispatches": 0,
+  "results": [
+    {
+      "mode": "unverified",
+      "status": "ready",
+      "from_at": "2026-11-17T20:39:55.30085298Z",
+      "to_at": "2026-11-17T20:45:02.013736986Z",
+      "increment_bytes": 14241926,
+      "worst_case_bytes": 0,
+      "estimated_bytes": 123289247036,
+      "qualified_for_execution": false,
+      "reasons": [
+        "boundary_upper_allocation",
+        "cdt_eligibility_unknown",
+        "lag_window_assumption",
+        "official_cutoff_or_unit_unverified",
+        "partial_hour_upper",
+        "topology_observed_only"
+      ]
+    }
+  ]
+}
