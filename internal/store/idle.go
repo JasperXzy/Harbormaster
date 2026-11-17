@@ -76,7 +76,10 @@ func saveIdle(ctx context.Context, tx *sql.Tx, a model.Account, o model.IdleObse
 	_, err = tx.ExecContext(ctx, `UPDATE idle_resource_source SET candidate_count=(SELECT count(*) FROM idle_resource_candidate c
  WHERE c.account_id=idle_resource_source.account_id AND c.credential_version=idle_resource_source.credential_version AND c.region=idle_resource_source.region AND c.kind=idle_resource_source.kind)
  WHERE account_id=? AND credential_version=? AND region=? AND kind=?`, a.ID, a.CredentialVersion, o.Region, o.Kind)
-	return err
+	if err != nil {
+		return err
+	}
+	return checkIdleObservation(ctx, tx, a, o, now)
 }
 
 func sourceMatches(f model.IdleFilter, region, kind string) bool {

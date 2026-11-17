@@ -51,11 +51,12 @@ func (c IdleCandidate) Valid() bool {
 type IdleData struct {
 	Scanned         int
 	UnclassifiedIDs []string
+	NonCandidateIDs []string
 	Candidates      []IdleCandidate
 }
 
 func (d IdleData) Valid() bool {
-	if d.Scanned < 0 || d.Scanned > 10000 || d.UnclassifiedIDs == nil || d.Candidates == nil || len(d.UnclassifiedIDs)+len(d.Candidates) > d.Scanned {
+	if d.Scanned < 0 || d.Scanned > 10000 || d.UnclassifiedIDs == nil || d.Candidates == nil || len(d.UnclassifiedIDs)+len(d.NonCandidateIDs)+len(d.Candidates) > d.Scanned {
 		return false
 	}
 	seen := map[string]bool{}
@@ -70,6 +71,12 @@ func (d IdleData) Valid() bool {
 			return false
 		}
 		seen[c.CloudID] = true
+	}
+	for _, id := range d.NonCandidateIDs {
+		if id == "" || seen[id] {
+			return false
+		}
+		seen[id] = true
 	}
 	return true
 }

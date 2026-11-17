@@ -5,6 +5,19 @@ import (
 	"time"
 )
 
+func TestIdleDataSeparatesUnknownAndKnownNonCandidates(t *testing.T) {
+	d := IdleData{Scanned: 2, UnclassifiedIDs: []string{"unknown"}, NonCandidateIDs: []string{"healthy"}, Candidates: []IdleCandidate{}}
+	if !d.Valid() {
+		t.Fatal("valid classification rejected")
+	}
+	for _, ids := range [][]string{{"unknown"}, {"healthy", "healthy"}, {""}, {"healthy", "another"}} {
+		d.NonCandidateIDs = ids
+		if d.Valid() {
+			t.Fatal("overlapping, repeated, empty or excessive classified IDs accepted", ids)
+		}
+	}
+}
+
 func TestIdleSourceAgeAndUnknownCoverage(t *testing.T) {
 	now := time.Now().UTC()
 	v := IdleSource{Enabled: true}

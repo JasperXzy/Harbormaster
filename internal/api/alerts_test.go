@@ -15,12 +15,15 @@ func TestAlertRuleAPIUsesAvailableSourcesAndSharedOfflineTimeout(t *testing.T) {
 	var list struct {
 		Items []model.AlertRule `json:"items"`
 	}
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 11 {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 12 {
 		t.Fatal(w.Code, w.Body)
 	}
 	for _, rule := range list.Items {
 		if rule.Key == "cdt_usage" || rule.Key == "cdt_forecast_exceed" {
 			t.Fatal("unverified metering rule advertised")
+		}
+		if rule.Key == "idle_resource_detected" && (!rule.Enabled || rule.Urgent) {
+			t.Fatal("idle discovery rule defaults", rule)
 		}
 	}
 	input := map[string]any{"params": map[string]int{"offline_after_seconds": 90}}
@@ -66,5 +69,11 @@ func TestAlertRuleAPIUsesAvailableSourcesAndSharedOfflineTimeout(t *testing.T) {
 		if w = panelRequest(p, "PATCH", "/alert-rules/instance_public_ip_changed", map[string]any{"params": map[string]int{key: 1}}, cookie, csrf); w.Code != 422 {
 			t.Fatal("IP rule accepted an unrelated threshold", key, w.Code)
 		}
+	}
+	if w = panelRequest(p, "PATCH", "/alert-rules/idle_resource_detected", map[string]any{"enabled": false, "params": map[string]int{}}, cookie, csrf); w.Code != 200 || !strings.Contains(w.Body.String(), `"enabled":false`) || !strings.Contains(w.Body.String(), `"urgent":false`) {
+		t.Fatal("idle rule cannot be disabled", w.Code, w.Body)
+	}
+	if w = panelRequest(p, "PATCH", "/alert-rules/idle_resource_detected", map[string]any{"params": map[string]int{"consecutive_failures": 3}}, cookie, csrf); w.Code != 422 {
+		t.Fatal("idle discovery rule accepted a failure threshold", w.Code)
 	}
 }

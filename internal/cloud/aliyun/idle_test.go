@@ -46,7 +46,7 @@ func TestIdleInstanceAndEIPClassificationPreservesUnknown(t *testing.T) {
 			if tc.reason != "" {
 				want = 1
 			}
-			if len(o.Data.Candidates) != want {
+			if len(o.Data.Candidates) != want || len(o.Data.NonCandidateIDs) != 1-tc.unknown-want || !o.Data.Valid() {
 				t.Fatal(o.Data)
 			}
 			if want == 1 {
@@ -107,7 +107,7 @@ func TestIdleDisksUseAllAttachmentEvidenceAndIndependentScopes(t *testing.T) {
 			if tc.reason != "" {
 				want = 1
 			}
-			if len(o.Data.Candidates) != want {
+			if len(o.Data.Candidates) != want || len(o.Data.NonCandidateIDs) != 1-tc.unknown-want || !o.Data.Valid() {
 				t.Fatal(o.Data)
 			}
 			if want == 1 {

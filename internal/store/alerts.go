@@ -12,10 +12,10 @@ import (
 )
 
 type alertObservation struct {
-	rule, target, account, instance, plan string
-	outcome                               string // firing, healthy, unknown; absent targets are no longer applicable.
-	detail                                string
-	basis                                 string
+	rule, target, account, instance, plan, resource string
+	outcome                                         string // firing, healthy, unknown; absent targets are no longer applicable.
+	detail                                          string
+	basis                                           string
 }
 
 // EvaluateAlerts reads evidence and commits state transitions + notifications
@@ -189,6 +189,11 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 		return err
 	}
 	observations = append(observations, network...)
+	idle, err := idleAlertObservations(ctx, tx, rules)
+	if err != nil {
+		return err
+	}
+	observations = append(observations, idle...)
 	seen := map[string]bool{}
 	for _, o := range observations {
 		seen[o.rule+"/"+o.target] = true
@@ -222,7 +227,7 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 		if _, err = tx.ExecContext(ctx, "UPDATE alert_state SET active=0,changed_at=? WHERE rule_key=? AND target_id=?", timestamp(now), key[0], key[1]); err != nil {
 			return err
 		}
-		if err = cancelPendingNotifications(ctx, tx, "rule_key=? AND (account_id=? OR instance_id=? OR probe_plan_id=?)", []any{key[0], key[1], key[1], key[1]}, "alert_no_longer_applicable", now); err != nil {
+		if err = cancelPendingNotifications(ctx, tx, "rule_key=? AND (account_id=? OR instance_id=? OR probe_plan_id=? OR resource_id=?)", []any{key[0], key[1], key[1], key[1], key[1]}, "alert_no_longer_applicable", now); err != nil {
 			return err
 		}
 	}
@@ -279,6 +284,9 @@ func applyAlert(ctx context.Context, tx *sql.Tx, o alertObservation, now time.Ti
 	n := model.Notification{EventKey: "alert/" + o.rule + "/" + o.target + "/" + strconv.FormatInt(episode, 10) + "/" + kind, Kind: kind, Severity: severity, RuleKey: &o.rule, Title: "Harbormaster " + kind + ": " + o.rule, Body: "target=" + o.target + "; " + detail}
 	if o.plan != "" {
 		n.ProbePlanID = &o.plan
+	}
+	if o.resource != "" {
+		n.ResourceID = &o.resource
 	}
 	if o.account != "" {
 		n.AccountID = &o.account

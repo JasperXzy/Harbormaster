@@ -176,6 +176,8 @@ func idleObservation(a model.Account, region, kind string, source, ecs collectio
 			d.UnclassifiedIDs = append(d.UnclassifiedIDs, text(row, idKey))
 		} else if candidate != nil {
 			d.Candidates = append(d.Candidates, *candidate)
+		} else {
+			d.NonCandidateIDs = append(d.NonCandidateIDs, text(row, idKey))
 		}
 	}
 	if !d.Valid() {

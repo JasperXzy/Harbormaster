@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-17  Idle candidate incidents: add enabled-by-default non-urgent idle_resource_detected with empty params. Fresh successful classification records one incident per logical resource, retains it through unknown/failed/stale reads, and recovers only on an explicit known non-candidate observation. Complete disappearance, disabled scope or disabled rule closes silently. Notification.resource_id optionally links EIP/disk/instance evidence independently of instance_id. Current quiet/maintenance suppression and no-backfill policy apply. Messages remain fixed placeholders and no Telegram dispatcher/send is enabled; costs remain unestimated.
 # 2026-11-14  Idle resource candidates: GET /idle-resources reads credential-fenced background evidence for unbound EIP, stopped subscription ECS/SWAS, stopped PostPaid ECS in KeepCharging or explicitly unsupported charge exemption, and unattached/cloud disks whose known attachments are all stopped. Reuse existing complete inventory calls; no new cloud action or GET-triggered query. Each source exposes last successful counts, unclassified rows, failures, age and disabled scope; unknown classification retains prior evidence with its original time. Candidate presence does not establish actual billed waste. monthly_cost/currency stay null pending the separately requested estimation policy and verified prices. No idle alerts, deletion or resource mutation is enabled in this phase.
 # 2026-11-14  Manual ECS release API: POST /instances/{instance_id}/release requires session+CSRF, one durable Idempotency-Key, exact confirmation_name and the current eligible preview_token. Local enqueue returns 202 only; the separate serve worker runs only with explicit instance_release_enabled=true, independently of the power flag. Default/development mode return 503 instance_release_disabled. SystemInfo.instance_release_enabled and preview.execution_enabled reflect the configured production capability; eligible is still separately required. API Key instance:control does not grant release. run-once/M0 remain read-only and demo refuses submission. No runtime flag was enabled or real cloud write performed during implementation.
 # 2026-11-14  Release worker: add an isolated, opt-in internal worker with fresh targeted ECS/disk preflight, one dispatch attempt and post-acceptance targeted presence observations. Only a complete zero-row response after acceptance completes the job with not_found_after_accept and marks the cached instance absent; this is visibility evidence, not proof of physical cleanup. Reads/errors/timeouts never become absence. Acceptance, transport uncertainty and shutdown do not cause replay. No production startup/submission binding is added in this phase; release preview execution_enabled remains false.
@@ -2680,7 +2681,7 @@ paths:
       tags: [notify]
       operationId: listAlertRules
       summary: 内置告警规则
-      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable and network_route_change. Usage/forecast rules are not returned until their metering source and policy are available.
+      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable, network_route_change and idle_resource_detected. Usage/forecast rules are not returned until their metering source and policy are available.
       responses:
         "200":
           description: 告警规则
@@ -5559,7 +5560,7 @@ components:
 
     AlertRuleKey:
       type: string
-      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable, network_route_change]
+      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable, network_route_change, idle_resource_detected]
       description: 内置规则；仅返回当前已实现且有可用来源的规则。
 
     Severity:
@@ -5568,7 +5569,7 @@ components:
 
     AlertRuleParams:
       type: object
-      description: 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient、instance_public_ip_changed 和 network_route_change 使用空对象，无额外阈值。公网 IP 和线路变化按每次有效事件记录，不产生恢复通知；线路还需要组合中明确开启 notify_changes。
+      description: 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient、instance_public_ip_changed、network_route_change 和 idle_resource_detected 使用空对象，无额外阈值。公网 IP 和线路变化按每次有效事件记录，不产生恢复通知；线路还需要组合中明确开启 notify_changes。闲置候选依据新采集的明确状态去重与恢复，未估算金额。
       properties:
         probe_thresholds:
           type: array
@@ -5701,6 +5702,10 @@ components:
           type: string
           nullable: true
           description: Network alert combination identity; null for other notifications.
+        resource_id:
+          type: string
+          nullable: true
+          description: Logical idle resource identity, including EIP/disk candidates that have no single instance link. Existing notification types return null.
         delivery_status:
           $ref: "#/components/schemas/DeliveryStatus"
         urgent: {type: boolean, description: 服务端判定并持久保存，前端不能编辑单条通知的紧急性。}

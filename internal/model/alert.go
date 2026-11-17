@@ -152,7 +152,7 @@ func (r AlertRule) Validate() map[string]string {
 		if r.Params.OfflineAfterSeconds != nil {
 			fields["params.offline_after_seconds"] = "not_applicable"
 		}
-	case "spec_bandwidth_insufficient", "instance_public_ip_changed", "network_route_change":
+	case "spec_bandwidth_insufficient", "instance_public_ip_changed", "network_route_change", "idle_resource_detected":
 		if r.Params.ConsecutiveFailures != nil {
 			fields["params.consecutive_failures"] = "not_applicable"
 		}

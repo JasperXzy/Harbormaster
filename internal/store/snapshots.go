@@ -26,17 +26,6 @@ func (s *Store) SaveScan(ctx context.Context, j model.Job, a model.Account, resu
 	if n != 1 {
 		return ErrAccountChanged
 	}
-	seenIdleScopes := map[string]bool{}
-	for _, observation := range result.Idle {
-		key := model.Scope(observation.Kind, observation.Region)
-		if seenIdleScopes[key] {
-			return ErrIdleObservation
-		}
-		seenIdleScopes[key] = true
-		if err := saveIdle(ctx, tx, a, observation, now); err != nil {
-			return err
-		}
-	}
 	seenReleaseRegions := map[string]bool{}
 	for _, observation := range result.ReleaseInventory {
 		if seenReleaseRegions[observation.Region] {
@@ -100,6 +89,17 @@ func (s *Store) SaveScan(ctx context.Context, j model.Job, a model.Account, resu
 			if err = saveNetworkHistory(ctx, tx, v); err != nil {
 				return err
 			}
+		}
+	}
+	seenIdleScopes := map[string]bool{}
+	for _, observation := range result.Idle {
+		key := model.Scope(observation.Kind, observation.Region)
+		if seenIdleScopes[key] {
+			return ErrIdleObservation
+		}
+		seenIdleScopes[key] = true
+		if err := saveIdle(ctx, tx, a, observation, now); err != nil {
+			return err
 		}
 	}
 	for _, observation := range result.SWASTraffic {

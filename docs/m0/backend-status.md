@@ -1,6 +1,6 @@
 # 后端实现与验收状态
 
-核对日期：2026-11-14。代码以本文件所在提交为准。依据 PRD v0.5、当前生产路由、采集器、存储迁移、部署文件及已记录的实际命令结果。此表是当前状态入口；其他 M0 文档中的“本批”“未实现”等描述按各自日期理解。
+核对日期：2026-11-17。代码以本文件所在提交为准。依据 PRD v0.5、当前生产路由、采集器、存储迁移、部署文件及已记录的实际命令结果。此表是当前状态入口；其他 M0 文档中的“本批”“未实现”等描述按各自日期理解。
 
 **M1 整体尚未通过验收。** 生产账号、持久任务、只读发现及若干 M2 只读功能已交付，不等于实时额度保护、Telegram 送达、真实 agent 计量或生产部署已验收。持续目标保持未完成；下面的未实现项没有从目标中删除。
 
@@ -57,15 +57,15 @@
 | F7.4 | 固定调用层、影响缓存/管理员预览、持久任务、执行/确认及管理员提交 API/serve 接入已实现并本地模拟测试；默认独立开关关闭，run-once/M0 不执行。仅已停止 PostPaid ECS，精确名称/影响确认、与电源互斥、一次发送边界、不重放和恢复取消。受理后完整定向零行才记录 not_found_after_accept，不声称物理清理。前端适配、Telegram 入口及真实云验收未完成；未执行真实释放或 DryRun。[调用层](ecs-release.md)、[预览](ecs-release-preview.md)、[任务](ecs-release-queue.md)、[执行](ecs-release-worker.md)、[API/接入](ecs-release-api.md) |
 | F8.1 | 有 Telegram 发送层、加密配置存储和安全 GET；生产配置写入口、测试发送及 worker 尚未接通。[发送边界](telegram-delivery-design.md)、[队列](notification-storage.md) |
 | F8.2 | CDT/流量包用量阈值通知未启用；CDT 暂定单位期间的策略仍待答。 |
-| F8.3 | 当前可管理十一个生产规则：账号失败、CDT 不可用、agent 掉线、到期、规格带宽、公网 IPv4 变化、可用余额低阈值，以及网络延迟/失败比例/不可达/线路变化。线路变化还需组合显式开启；见[网络告警](network-alerts.md)和[每日快照](trace-snapshots.md)。余额目标初始为空，由用户设置。[余额告警](balance-alerts.md)、[IP 告警](public-ip-alerts.md) |
+| F8.3 | 当前可管理十二个生产规则：账号失败、CDT 不可用、agent 掉线、到期、规格带宽、公网 IPv4 变化、可用余额低阈值、闲置资源，以及网络延迟/失败比例/不可达/线路变化。线路变化还需组合显式开启；见[网络告警](network-alerts.md)和[每日快照](trace-snapshots.md)。余额目标初始为空，由用户设置。[余额告警](balance-alerts.md)、[IP 告警](public-ip-alerts.md)、[闲置告警](idle-resource-alerts.md) |
 | F8.4–F8.6 | Telegram 远程控制、日报、邮件和 Webhook 未实现。 |
 | F8.7 | outbox 持久化、租约、重试状态及历史接口已实现；实际发送 worker 和重试政策未接通。 |
-| F8.8、F8.9 | 已实现六类状态来源的事件/恢复/去重记录，以及公网 IPv4 和完整线路变化的单次事件记录（不产生恢复）；未验证 Telegram 实际送达。 |
+| F8.8、F8.9 | 已有状态来源的事件/恢复/去重已实现；新增闲置逻辑资源的去重和明确非候选恢复，未知不恢复，不可见/监控取消静默结束。公网 IPv4 和完整线路变化为单次事件记录（不产生恢复）；未验证 Telegram 实际送达。[闲置告警](idle-resource-alerts.md) |
 | F8.10 | 每日静默/维护期配置、紧急豁免、持久抑制记录、入队/领取/发送前检查已实现；用户确认结束后不补发。真实发送仍待 Telegram dispatcher 接通，前端待适配。[静默](quiet-hours.md) |
 | F9.1 | 余额与月账单缓存已实现；CNY 两账号真实通过，USD/国际站仅模拟验证。保留提供方条目，不猜退款净额。[费用](account-finance.md) |
 | F9.2 | 已实现按账号完整读取当月实例账单、凭据版本隔离缓存及实例费用只读 API；保留币种/账单类型/原始金额，无匹配不补零。两账号真实成功，2 台 ECS 与 sha-pro 共匹配 4 行；国际站及最终对账仍待验证。[实例费用](instance-billing.md) |
 | F9.3 | 自动续费读取和默认 7 天到期事件已实现；上海 ECS、sha-pro 真实续费状态通过，提醒只记录不发送。[续费](instance-renewal.md)、[提醒](expiration-alerts.md) |
-| F9.4 | ECS/SWAS 停机、未绑定 EIP、未挂载/挂载目标均停止云盘的后台候选、身份隔离缓存、来源覆盖/未知保留与分页只读 API/开发示例已实现并本地测试。月费用/币种均 null；闲置告警、报价与月估算尚未实现，口径待答。真实来源曾只读通过，当前样本缺闲置正例。[来源验证](idle-resource-sources.md)、[候选与缓存](idle-resource-candidates.md) |
+| F9.4 | ECS/SWAS 停机、未绑定 EIP、未挂载/挂载目标均停止云盘的后台候选、身份隔离缓存、来源覆盖/未知保留与分页只读 API/开发示例已实现并本地测试。闲置规则及通知记录已本地验证，实际送达未接通；月费用/币种均 null，报价与月估算未实现，口径待答。真实来源曾只读通过，当前样本缺闲置正例。[来源验证](idle-resource-sources.md)、[候选与缓存](idle-resource-candidates.md)、[闲置告警](idle-resource-alerts.md) |
 | F9.5 | 按账号与币种配置可用余额阈值、精确比较、告警/恢复/去重记录已实现；实际送达未接通。[余额告警](balance-alerts.md) |
 | F10.1–F10.6 | ICMP/TCP 测速、server/agent 持久执行、加密恢复、目标/组合管理、默认五分钟调度和运行历史接口已实现。本机 TLS/SQLite/恢复/调度测试通过；真实发现地址取得 3 台新快照、1 台未知。网络告警/恢复/去重记录已实现，尚无实际发送。前端矩阵/曲线由 Claude 负责；未真实部署或公网测速。[网络管理](network-management.md)、[网络告警](network-alerts.md) |
 | F10.7–F10.11 | 线路执行器、队列/私有协议、agent 恢复、server worker、面板异步提交/历史/详情/导出已实现并本地测试。离线 ASN＋国家库、可选 City、月度更新和状态/资源接口已实现；真实库读取与下载通过。归属、限时公网 PTR、逐跳统计、证据标签、版本冻结和署名已接入。每日快照/完整路径变化事件、双向原子提交/独立执行/导出及 API 已实现并本地测试；未验收真实每日执行、两端公网路径或消息送达。TCP 原始线路仅 Linux。[线路面板](trace-panel-api.md)、[离线库](offline-ip-database.md)、[归属接入](trace-enrichment.md)、[每日快照](trace-snapshots.md)、[双向追踪](duplex-traces.md) |
@@ -149,4 +149,4 @@
 - M3/M4：核心功能及验收均未完成。
 - 非功能：macOS 空库设置/密码登录后测到 RSS 约 210.2MB，显式 GOMEMLIMIT=80MiB 时约 146.8MB，该本地 RSS 场景未达 100MB；未据此设置默认内存限制或修改 PRD。[内存实测与修订建议](server-memory-baseline.md)。生产 Linux/10 实例常驻内存、agent 资源占用、长期数据库 ≤1GB、保留期、保护响应 ≤30 秒、真实发送可靠性与跨平台运行仍缺对应实测。
 
-最近构建、vet、全量 race、契约检查及隔离副本真实只读缓存验证见[闲置候选](idle-resource-candidates.md)；此前见 [ECS 释放 API/接入](ecs-release-api.md)、[执行/确认](ecs-release-worker.md)、[任务](ecs-release-queue.md)、[预览](ecs-release-preview.md)和[固定调用层](ecs-release.md)。另见[轻量流量包](swas-traffic-package.md)、[名称与 Logo](branding.md)、[CDT 服务](cdt-service-reads.md)、[闲置来源](idle-resource-sources.md)、[延迟清理](latency-retention.md)、[API Key 刷新](api-key-refresh.md)、[审计](audit-log.md)、[CPU 规格](cpu-credit-specs.md)及各需求行文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源与释放执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。
+最近构建、vet、全量 race 和契约检查见[闲置告警](idle-resource-alerts.md)；隔离副本真实只读缓存验证见[闲置候选](idle-resource-candidates.md)。此前见 [ECS 释放 API/接入](ecs-release-api.md)、[执行/确认](ecs-release-worker.md)、[任务](ecs-release-queue.md)、[预览](ecs-release-preview.md)和[固定调用层](ecs-release.md)。另见[轻量流量包](swas-traffic-package.md)、[名称与 Logo](branding.md)、[CDT 服务](cdt-service-reads.md)、[闲置来源](idle-resource-sources.md)、[延迟清理](latency-retention.md)、[API Key 刷新](api-key-refresh.md)、[审计](audit-log.md)、[CPU 规格](cpu-credit-specs.md)及各需求行文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源与释放执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。
