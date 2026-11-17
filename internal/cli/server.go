@@ -29,6 +29,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/notify"
 	"github.com/JasperXzy/harbormaster/internal/probes"
+	"github.com/JasperXzy/harbormaster/internal/protection"
 	"github.com/JasperXzy/harbormaster/internal/retention"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
@@ -284,6 +285,7 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 	if c.Frontend == "embedded" {
 		frontend = ui.Handler()
 	}
+	c = resolveServerIdentity(ctx, c, s)
 	powerEngine := newPowerEngine(c, s, engine, log)
 	releaseEngine := newReleaseEngine(c, s, engine, log)
 	heartbeatRunner := newHeartbeatRunner(c, s, engine, listener, log)
@@ -305,8 +307,12 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 	if engine != nil {
 		workerCtx, cancel := context.WithCancel(ctx)
 		var workers sync.WaitGroup
-		workers.Add(5)
+		workers.Add(6)
 		go func() { defer workers.Done(); engine.Run(workerCtx) }()
+		go func() {
+			defer workers.Done()
+			(protection.Runner{Store: s, Policy: protectionPolicy(c), Log: log}).Run(workerCtx)
+		}()
 		go func() {
 			defer workers.Done()
 			(estimation.Runner{Store: s, Timezone: c.Timezone, Log: log}).Run(workerCtx)

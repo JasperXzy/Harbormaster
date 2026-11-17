@@ -65,8 +65,22 @@ func (s *Store) EnqueuePowerJob(ctx context.Context, instanceID, action, stopMod
 		return model.Job{}, err
 	}
 	defer tx.Rollback()
+	j, err := enqueuePowerJobTx(ctx, tx, instanceID, action, stopMode, eventKey, "", now)
+	if err != nil {
+		return j, err
+	}
+	return j, tx.Commit()
+}
+func enqueuePowerJobTx(ctx context.Context, tx *sql.Tx, instanceID, action, stopMode, eventKey, automaticPrincipal string, now time.Time) (model.Job, error) {
+	if !model.ValidPowerEventKey(eventKey) {
+		return model.Job{}, ErrPowerParameters
+	}
+	var err error
 	keyID := model.APIKeyPrincipal(ctx)
 	principal := "panel"
+	if automaticPrincipal != "" {
+		principal = automaticPrincipal
+	}
 	if keyID != "" {
 		if err = requireControlAPIKey(ctx, tx, keyID); err != nil {
 			return model.Job{}, err
@@ -86,7 +100,7 @@ func (s *Store) EnqueuePowerJob(ctx context.Context, instanceID, action, stopMod
 		if previous.InstanceID != instanceID || previous.Action != action || previous.StopMode != stopMode {
 			return model.Job{}, ErrPowerEventConflict
 		}
-		return previous.Job, tx.Commit()
+		return previous.Job, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return model.Job{}, err
@@ -122,6 +136,13 @@ func (s *Store) EnqueuePowerJob(ctx context.Context, instanceID, action, stopMod
 	var activeID string
 	err = tx.QueryRowContext(ctx, "SELECT id FROM job WHERE type='instance_power' AND instance_id=? AND status IN ('queued','running')", instanceID).Scan(&activeID)
 	if err == nil {
+		var automated int
+		if e := tx.QueryRowContext(ctx, "SELECT count(*) FROM quota_power_job WHERE job_id=?", activeID).Scan(&automated); e != nil {
+			return model.Job{}, e
+		}
+		if automaticPrincipal != "" || automated != 0 {
+			return model.Job{}, ErrPowerBusy
+		}
 		active, e := readPower(ctx, tx, activeID)
 		if e != nil {
 			return model.Job{}, e
@@ -139,7 +160,7 @@ func (s *Store) EnqueuePowerJob(ctx context.Context, instanceID, action, stopMod
 		if _, e = tx.ExecContext(ctx, "INSERT INTO instance_power_request(principal_id,event_key,job_id) VALUES(?,?,?)", principal, eventKey, active.Job.ID); e != nil {
 			return model.Job{}, e
 		}
-		return active.Job, tx.Commit()
+		return active.Job, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return model.Job{}, err
@@ -166,24 +187,48 @@ func (s *Store) EnqueuePowerJob(ctx context.Context, instanceID, action, stopMod
 			return model.Job{}, err
 		}
 	}
+	if automaticPrincipal == "" && action == "start" {
+		var oldDesired string
+		if err = tx.QueryRowContext(ctx, "SELECT desired_state FROM instance WHERE id=?", instanceID).Scan(&oldDesired); err != nil {
+			return model.Job{}, err
+		}
+		if oldDesired == "quota_stopped" {
+			if _, err = tx.ExecContext(ctx, "INSERT INTO quota_exemption VALUES(?,?,'manual_start') ON CONFLICT(instance_id) DO UPDATE SET expires_at=excluded.expires_at,source=excluded.source", instanceID, timestamp(now.Add(time.Hour))); err != nil {
+				return model.Job{}, err
+			}
+			if err = rearmQuotaExemption(ctx, tx, instanceID); err != nil {
+				return model.Job{}, err
+			}
+		}
+	}
+
 	desired := "running"
 	if action == "stop" {
 		desired = "stopped"
+		if automaticPrincipal != "" {
+			desired = "quota_stopped"
+		}
 	}
-	if _, err = tx.ExecContext(ctx, "UPDATE instance SET desired_state=? WHERE id=?", desired, instanceID); err != nil {
-		return model.Job{}, err
-	}
-	if _, err = tx.ExecContext(ctx, "INSERT INTO instance_intent(instance_id,job_id,updated_at) VALUES(?,?,?) ON CONFLICT(instance_id) DO UPDATE SET job_id=excluded.job_id,updated_at=excluded.updated_at", instanceID, id, timestamp(now)); err != nil {
-		return model.Job{}, err
+	if automaticPrincipal == "" {
+		if _, err = tx.ExecContext(ctx, "UPDATE instance SET desired_state=? WHERE id=?", desired, instanceID); err != nil {
+			return model.Job{}, err
+		}
+		if _, err = tx.ExecContext(ctx, "INSERT INTO instance_intent(instance_id,job_id,updated_at) VALUES(?,?,?) ON CONFLICT(instance_id) DO UPDATE SET job_id=excluded.job_id,updated_at=excluded.updated_at", instanceID, id, timestamp(now)); err != nil {
+			return model.Job{}, err
+		}
 	}
 	j, err := readJob(tx.QueryRowContext(ctx, "SELECT "+jobColumns+" FROM job WHERE id=?", id))
 	if err != nil {
 		return j, err
 	}
-	if err = appendAudit(ctx, tx, auditEvent{Action: "instance_power_requested", TargetType: "instance", TargetID: instanceID, AccountID: accountID, JobID: id, Details: model.AuditDetails{ChangedFields: []string{"desired_state"}, Operation: action, StopMode: stopMode, Status: "queued", DispatchOutcome: "not_sent"}}, now); err != nil {
+	fields := []string{"desired_state"}
+	if automaticPrincipal != "" {
+		fields = []string{"job"}
+	}
+	if err = appendAudit(ctx, tx, auditEvent{Action: "instance_power_requested", TargetType: "instance", TargetID: instanceID, AccountID: accountID, JobID: id, Details: model.AuditDetails{ChangedFields: fields, Operation: action, StopMode: stopMode, Status: "queued", DispatchOutcome: "not_sent"}}, now); err != nil {
 		return j, err
 	}
-	return j, tx.Commit()
+	return j, nil
 }
 
 // ClaimPowerJob only retries a lease that expired BEFORE the dispatch marker.
@@ -249,6 +294,9 @@ func powerLease(ctx context.Context, tx *sql.Tx, j model.Job, now time.Time) (Po
 // BeginPowerDispatch must commit successfully before making the cloud call.
 // Caller-supplied target/action fields are ignored; the persisted record wins.
 func (s *Store) BeginPowerDispatch(ctx context.Context, j model.Job, now time.Time) (PowerOperation, error) {
+	return s.BeginPowerDispatchWithPolicy(ctx, j, model.ProtectionPolicy{}, now)
+}
+func (s *Store) BeginPowerDispatchWithPolicy(ctx context.Context, j model.Job, policy model.ProtectionPolicy, now time.Time) (PowerOperation, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return PowerOperation{}, err
@@ -298,6 +346,17 @@ func (s *Store) BeginPowerDispatch(ctx context.Context, j model.Job, now time.Ti
 			return p, err
 		}
 		return p, map[string]error{"account_disabled": ErrAccountDisabled, "account_changed": ErrAccountChanged, "instance_not_found": ErrNotFound}[code]
+	}
+	if err = authorizeQuotaDispatch(ctx, tx, p, policy, now); err != nil {
+		if errors.Is(err, ErrProtectionGuard) {
+			if _, e := tx.ExecContext(ctx, "UPDATE job SET status='failed',finished_at=?,error_code='automatic_power_guard_blocked',lease_owner=NULL,lease_until=0 WHERE id=?", timestamp(now), j.ID); e != nil {
+				return p, e
+			}
+			if e := tx.Commit(); e != nil {
+				return p, e
+			}
+		}
+		return p, err
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE instance_power_job SET dispatch_started_at=?,dispatch_outcome='dispatching' WHERE job_id=?", timestamp(now), j.ID); err != nil {
 		return p, err

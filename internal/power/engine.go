@@ -24,6 +24,7 @@ type Observer interface {
 }
 
 type Engine struct {
+	ProtectionPolicy                  model.ProtectionPolicy
 	Store                             *store.Store
 	Box                               *security.Box
 	Writer                            Writer
@@ -167,9 +168,9 @@ func (e *Engine) RunOne(ctx context.Context) (bool, error) {
 	if jobCtx.Err() != nil {
 		return fail("cancelled")
 	}
-	p, err = e.Store.BeginPowerDispatch(jobCtx, p.Job, time.Now().UTC())
+	p, err = e.Store.BeginPowerDispatchWithPolicy(jobCtx, p.Job, e.ProtectionPolicy, time.Now().UTC())
 	if err != nil {
-		if errors.Is(err, store.ErrAccountChanged) || errors.Is(err, store.ErrAccountDisabled) || errors.Is(err, store.ErrNotFound) {
+		if errors.Is(err, store.ErrProtectionGuard) || errors.Is(err, store.ErrAccountChanged) || errors.Is(err, store.ErrAccountDisabled) || errors.Is(err, store.ErrNotFound) {
 			return true, nil
 		}
 		return true, err

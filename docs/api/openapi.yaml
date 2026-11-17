@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-18  Quota protection: add session-only rule CRUD, expiring account/scope simulations, durable decision history/status and temporary instance exemptions. Rules explicitly choose threshold/action/targets/stop mode/reserve/dry-run. Unverified sources and simulations can only rehearse; disabled power creates terminal local records, never latent cloud jobs. Automatic sends re-evaluate in the dispatch transaction, require known server identity, apply exemptions and a persisted default 3-per-10-minute per-instance budget. Host binding is deployment configuration outside DB backups.
 # 2026-11-18  Dual-path metering: QuotaStatus.estimation is an independently qualified cached result. Trusted period/unit/cutoff uses aligned mode; otherwise a configurable lag window is unverified and rehearsal-only. Unknown coverage stays null; hourly shared traffic is combined before max, with boundary upper allocations explicit. GET/PUT /traffic/estimation-settings is session/CSRF protected, revision fenced, and never calls clouds. Legacy aligned fields remain null for unverified estimates.
 # 2026-11-18  Agent installer command: execute sh directly for uid 0; require sudo only for non-root users, with a fixed installer_requires_root_or_sudo error when unavailable. Registration secrets remain on stdin and download/manifest SHA256 pins remain unchanged. No response fields or agent service privileges change.
 # 2026-11-17  Idle candidate incidents: add enabled-by-default non-urgent idle_resource_detected with empty params. Fresh successful classification records one incident per logical resource, retains it through unknown/failed/stale reads, and recovers only on an explicit known non-candidate observation. Complete disappearance, disabled scope or disabled rule closes silently. Notification.resource_id optionally links EIP/disk/instance evidence independently of instance_id. Current quiet/maintenance suppression and no-backfill policy apply. Messages remain fixed placeholders and no Telegram dispatcher/send is enabled; costs remain unestimated.
@@ -162,6 +163,197 @@ security:
   - sessionCookie: []
 
 paths:
+  /protection/status:
+    get:
+      tags: [traffic]
+      operationId: getProtectionStatus
+      summary: 读取保护执行开关与服务自身绑定
+      responses:
+        "200":
+          description: 身份未知时自动停机被阻止；实例 ID 绑定不随数据库迁移。
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [power_enabled, release_enabled, self_identity_known, self_instance_id, automatic_limit, automatic_window_seconds]
+                properties:
+                  power_enabled: {type: boolean}
+                  release_enabled: {type: boolean}
+                  self_identity_known: {type: boolean}
+                  self_instance_id: {type: string, nullable: true}
+                  automatic_limit: {type: integer, example: 3}
+                  automatic_window_seconds: {type: integer, example: 600}
+  /protection/rules:
+    get:
+      tags: [traffic]
+      operationId: listQuotaProtectionRules
+      summary: 读取额度保护规则
+      responses:
+        "200":
+          description: 本地规则，GET 不查询云端。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/QuotaProtectionRule"}}
+    post:
+      tags: [traffic]
+      operationId: createQuotaProtectionRule
+      summary: 新建额度保护规则
+      description: 创建时 revision=0。试运行和禁用电源的判定只保留演练结果，不会稍后重放。确认自身实例字段仅接受当前已知绑定实例 ID，表示显式允许该规则停止面板所在机器。
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/QuotaProtectionRuleInput"}
+      responses:
+        "201":
+          description: 已保存
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/QuotaProtectionRule"}
+        "422": {description: validation_failed}
+  /protection/rules/{rule_id}:
+    parameters:
+      - {name: rule_id, in: path, required: true, schema: {type: string}}
+    put:
+      tags: [traffic]
+      operationId: updateQuotaProtectionRule
+      summary: 替换额度保护规则
+      description: revision 必须匹配；变更取消尚未发送的旧电源任务，已发送动作保留证据。编辑后重新判断当前条件。
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/QuotaProtectionRuleInput"}
+      responses:
+        "200":
+          description: 已保存
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/QuotaProtectionRule"}
+        "409": {description: revision_conflict}
+        "422": {description: validation_failed}
+    delete:
+      tags: [traffic]
+      operationId: deleteQuotaProtectionRule
+      summary: 停用并删除规则，保留历史
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - {name: revision, in: query, required: true, schema: {type: integer, format: int64}}
+      responses:
+        "204": {description: 已删除，未发送任务已取消}
+        "409": {description: revision_conflict}
+  /protection/simulations:
+    get:
+      tags: [traffic]
+      operationId: listQuotaSimulations
+      summary: 读取尚未到期的模拟用量
+      responses:
+        "200":
+          description: 模拟不会写入官方观测或真实流量账本。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/QuotaSimulation"}}
+    put:
+      tags: [traffic]
+      operationId: setQuotaSimulation
+      summary: 注入临时模拟用量
+      description: 强制只演练；到期自动失效，不能产生真实电源任务。expires_at 必须晚于当前时间且不超过 24 小时。每个账号＋范围（轻量还包含 source_instance_id）只有一份，替换有独立 revision。新建或替换已经过期的模拟可用 revision=0；服务端修订号持续递增。
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/QuotaSimulation"}
+      responses:
+        "200":
+          description: 已保存
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/QuotaSimulation"}
+        "409": {description: revision_conflict}
+        "422": {description: validation_failed}
+    delete:
+      tags: [traffic]
+      operationId: clearQuotaSimulation
+      summary: 提前清除模拟用量
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - {name: account_id, in: query, required: true, schema: {type: string}}
+        - {name: scope, in: query, required: true, schema: {type: string, enum: [mainland, overseas, swas]}}
+        - {name: source_instance_id, in: query, schema: {type: string}}
+        - {name: revision, in: query, required: true, schema: {type: integer, format: int64, minimum: 1}}
+      responses:
+        "204": {description: 已失效，保留修订号}
+        "409": {description: revision_conflict}
+  /protection/decisions:
+    get:
+      tags: [traffic]
+      operationId: listQuotaDecisions
+      summary: 读取持久化保护判定历史
+      parameters:
+        - {name: rule_id, in: query, schema: {type: string}}
+        - {name: before, in: query, schema: {type: integer, format: int64, minimum: 1}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+      responses:
+        "200":
+          description: 倒序历史，按 before 游标继续；演练结果不会改写实际期望状态。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/QuotaDecision"}}
+                  next_before: {type: integer, format: int64, nullable: true}
+  /instances/{instance_id}/protection-exemption:
+    parameters:
+      - {name: instance_id, in: path, required: true, schema: {type: string}}
+    put:
+      tags: [traffic]
+      operationId: setProtectionExemption
+      summary: 设置临时额度保护豁免
+      description: duration_seconds 为 1–86400 秒，仅影响额度停机，不影响普通手动电源操作。额度停机后手动开机默认自动豁免 3600 秒。
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [duration_seconds]
+              properties:
+                duration_seconds: {type: integer, minimum: 1, maximum: 86400}
+      responses:
+        "200": {description: 已保存，返回 instance_id/expires_at}
+    delete:
+      tags: [traffic]
+      operationId: clearProtectionExemption
+      summary: 清除临时额度保护豁免
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "204": {description: 已清除}
   /traffic/estimation-settings:
     get:
       tags: [traffic]
@@ -4621,7 +4813,7 @@ components:
           type: string
           nullable: true
           enum: [running, stopped, quota_stopped, null]
-          description: Recorded intent, not observed cloud state. Null before the first recorded intent; quota_stopped is reserved for future protection rules.
+          description: Recorded intent, not observed cloud state. Null before the first recorded intent; quota_stopped is recorded at a qualified automatic dispatch boundary; dry-runs and disabled actions do not alter intent.
         desired_state_updated_at:
           type: string
           format: date-time
@@ -4717,6 +4909,15 @@ components:
           description: 计入国内还是海外额度；不计入 CDT 为 null。
         agent:
           $ref: "#/components/schemas/Agent"
+        quota_exemption_until:
+          type: string
+          format: date-time
+          nullable: true
+          description: 当前有效的额度保护临时豁免截止时间；手动开机默认一小时。
+        is_server_self:
+          type: boolean
+          nullable: true
+          description: 来自部署绑定或可靠匹配元数据；身份未知时为 null。
         traffic_estimation:
           allOf: [{$ref: "#/components/schemas/TrafficEstimation"}]
           nullable: true
@@ -5132,6 +5333,81 @@ components:
       enum: [ok, unavailable, never_fetched, cutoff_unknown]
       description: unavailable = CDT 官方接口连续取不到数据，正沿用最近一次官方值。
 
+    QuotaProtectionRuleInput:
+      type: object
+      additionalProperties: false
+      required: [revision, name, enabled, account_id, scope, source_instance_id, threshold_kind, threshold, action, target_instance_ids, stop_mode, reserve_seconds, dry_run, confirmed_self_instance_id]
+      properties:
+        revision: {type: integer, format: int64, minimum: 0}
+        name: {type: string, minLength: 1, maxLength: 80}
+        enabled: {type: boolean}
+        account_id: {type: string}
+        scope: {type: string, enum: [mainland, overseas, swas]}
+        source_instance_id: {type: string, description: 轻量范围必须填写；CDT 范围为空字符串。}
+        threshold_kind: {type: string, enum: [bytes, percent]}
+        threshold: {type: integer, format: int64, minimum: 1, description: bytes 是字节；percent 是 1–100 的整数。}
+        action: {type: string, enum: [notify, stop_notify]}
+        target_instance_ids: {type: array, maxItems: 1000, uniqueItems: true, items: {type: string}}
+        stop_mode: {type: string, enum: ["", keep_charging, stop_charging], description: CDT 停机指定 ECS 模式，轻量为空；预付费不允许 stop_charging。}
+        reserve_seconds: {type: integer, minimum: 0, maximum: 3600, default: 60}
+        dry_run: {type: boolean, default: true}
+        confirmed_self_instance_id: {type: string, description: 默认空；显式确认当前服务自身绑定实例才能填写。}
+    QuotaProtectionRule:
+      type: object
+      description: 规则配置加上持久 ID 与创建、更新时间。
+      properties:
+        revision: {type: integer, format: int64, minimum: 0}
+        name: {type: string, minLength: 1, maxLength: 80}
+        enabled: {type: boolean}
+        account_id: {type: string}
+        scope: {type: string, enum: [mainland, overseas, swas]}
+        source_instance_id: {type: string, description: 轻量范围必须填写；CDT 范围为空字符串。}
+        threshold_kind: {type: string, enum: [bytes, percent]}
+        threshold: {type: integer, format: int64, minimum: 1, description: bytes 是字节；percent 是 1–100 的整数。}
+        action: {type: string, enum: [notify, stop_notify]}
+        target_instance_ids: {type: array, maxItems: 1000, uniqueItems: true, items: {type: string}}
+        stop_mode: {type: string, enum: ["", keep_charging, stop_charging], description: CDT 停机指定 ECS 模式，轻量为空；预付费不允许 stop_charging。}
+        reserve_seconds: {type: integer, minimum: 0, maximum: 3600, default: 60}
+        dry_run: {type: boolean, default: true}
+        confirmed_self_instance_id: {type: string, description: 默认空；显式确认当前服务自身绑定实例才能填写。}
+        id: {type: string}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+    QuotaSimulation:
+      type: object
+      additionalProperties: false
+      required: [revision, account_id, scope, source_instance_id, usage_bytes, expires_at]
+      properties:
+        revision: {type: integer, format: int64, minimum: 0}
+        account_id: {type: string}
+        scope: {type: string, enum: [mainland, overseas, swas]}
+        source_instance_id: {type: string}
+        usage_bytes: {type: integer, format: int64, minimum: 0}
+        expires_at: {type: string, format: date-time}
+    QuotaDecision:
+      type: object
+      required: [id, rule_id, rule_revision, account_id, scope, evaluated_at, state, simulation, threshold_bytes, evaluated_bytes, reasons, targets]
+      properties:
+        id: {type: integer, format: int64}
+        rule_id: {type: string}
+        rule_revision: {type: integer, format: int64}
+        account_id: {type: string}
+        scope: {type: string}
+        evaluated_at: {type: string, format: date-time}
+        state: {type: string, enum: [below, triggered, unknown, inactive]}
+        simulation: {type: boolean}
+        threshold_bytes: {type: integer, format: int64, nullable: true}
+        evaluated_bytes: {type: integer, format: int64, nullable: true}
+        reasons: {type: array, items: {type: string}}
+        targets:
+          type: array
+          items:
+            type: object
+            required: [instance_id, outcome, job_id]
+            properties:
+              instance_id: {type: string}
+              outcome: {type: string, description: Fixed outcome code (would_stop, power_disabled, self_identity_unknown, self_excluded, exempt, already_stopped, operation_limited, queued, source_unqualified, busy, target_unavailable).}
+              job_id: {type: string, nullable: true}
     EstimationSettings:
       type: object
       additionalProperties: false

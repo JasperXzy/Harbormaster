@@ -17,5 +17,5 @@ func newPowerEngine(c config.Config, s *store.Store, collector *collect.Engine, 
 	if c.Dev || !c.InstancePowerEnabled || collector == nil || collector.Box == nil {
 		return nil
 	}
-	return &power.Engine{Store: s, Box: collector.Box, Writer: aliyun.NewPowerClient(nil, 200*time.Millisecond), Observer: aliyun.PowerObserver{Caller: aliyun.NewClient(nil, 200*time.Millisecond)}, Enabled: true, Workers: c.WorkerCount, Log: log}
+	return &power.Engine{ProtectionPolicy: protectionPolicy(c), Store: s, Box: collector.Box, Writer: aliyun.NewPowerClient(nil, 200*time.Millisecond), Observer: aliyun.PowerObserver{Caller: aliyun.NewClient(nil, 200*time.Millisecond)}, Enabled: true, Workers: c.WorkerCount, Log: log}
 }

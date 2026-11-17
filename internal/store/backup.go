@@ -117,6 +117,22 @@ func (s *Store) PrepareRestoredCopy(ctx context.Context, now time.Time) (Restore
 			return result, err
 		}
 	}
+	if _, err = tx.ExecContext(ctx, "UPDATE quota_power_job SET final_notified=1"); err != nil {
+		return result, err
+	}
+
+	// An old backup cannot know operations sent after it was captured. Preserve
+	// its action ledger, invalidate source caches, and wait one budget window.
+	if _, err = tx.ExecContext(ctx, "INSERT INTO app_meta(key,value) VALUES('protection_restore_until',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", timestamp(now.Add(10*time.Minute))); err != nil {
+		return result, err
+	}
+	if _, err = tx.ExecContext(ctx, "DELETE FROM traffic_estimate"); err != nil {
+		return result, err
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE metering_topology SET complete=0,quality='observed'"); err != nil {
+		return result, err
+	}
+
 	return result, tx.Commit()
 }
 

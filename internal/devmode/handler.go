@@ -242,6 +242,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		respond(w, 200, object{"items": paged, "next_cursor": cursor})
+	case "/protection/status":
+		respond(w, 200, object{"power_enabled": false, "release_enabled": false, "self_identity_known": false, "self_instance_id": nil, "automatic_limit": 3, "automatic_window_seconds": 600})
+	case "/protection/rules", "/protection/simulations":
+		respond(w, 200, object{"items": []object{}})
+	case "/protection/decisions":
+		respond(w, 200, object{"items": []object{}, "next_before": nil})
 	case "/traffic/estimation-settings":
 		respond(w, 200, map[string]any{"revision": 0, "lag_window_seconds": 3600, "bandwidth_mode_instance_ids": []string{}})
 	case "/traffic/quotas":

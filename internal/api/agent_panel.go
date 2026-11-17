@@ -65,6 +65,11 @@ func (p *productionPanel) overlayAgents(ctx context.Context, items []map[string]
 		estimates[q.AccountID+":"+q.Scope] = q.Estimation
 	}
 
+	exemptions, err := p.s.QuotaExemptions(ctx, p.now())
+	if err != nil {
+		return err
+	}
+
 	available := p.releaseVersions.Get(p.agentReleaseDir, p.now())
 	for _, item := range items {
 		id, _ := item["id"].(string)
@@ -79,6 +84,15 @@ func (p *productionPanel) overlayAgents(ctx context.Context, items []map[string]
 		account, _ := item["account_id"].(string)
 		scope, _ := item["cdt_scope"].(string)
 		item["traffic_estimation"] = estimates[account+":"+scope]
+
+		item["quota_exemption_until"] = nil
+		if until, ok := exemptions[id]; ok {
+			item["quota_exemption_until"] = until
+		}
+		item["is_server_self"] = nil
+		if p.protectionPolicy.SelfKnown {
+			item["is_server_self"] = p.protectionPolicy.SelfInstanceID == id
+		}
 
 		item["agent"] = v.Agent
 		item["realtime"] = v.Realtime

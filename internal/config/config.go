@@ -16,6 +16,8 @@ import (
 )
 
 type Config struct {
+	ServerInstanceID               string   `json:"server_instance_id"`
+	ServerNotManaged               bool     `json:"server_not_managed"`
 	ProbeHistoryRetentionDays      int      `json:"probe_history_retention_days"`
 	IPDBCityEnabled                bool     `json:"ipdb_city_enabled"`
 	IPDBAutoUpdate                 bool     `json:"ipdb_auto_update"`
@@ -56,7 +58,7 @@ func Load(path string) (Config, error) {
 			return c, errors.New("configuration must contain one JSON object")
 		}
 	}
-	for k, p := range map[string]*string{"HM_LISTEN": &c.Listen, "HM_DATA_DIR": &c.DataDir, "HM_LOG_LEVEL": &c.LogLevel, "HM_TIMEZONE": &c.Timezone, "HM_FRONTEND": &c.Frontend, "HM_PUBLIC_URL": &c.PublicURL, "HM_AGENT_RELEASE_DIR": &c.AgentReleaseDir} {
+	for k, p := range map[string]*string{"HM_SERVER_INSTANCE_ID": &c.ServerInstanceID, "HM_LISTEN": &c.Listen, "HM_DATA_DIR": &c.DataDir, "HM_LOG_LEVEL": &c.LogLevel, "HM_TIMEZONE": &c.Timezone, "HM_FRONTEND": &c.Frontend, "HM_PUBLIC_URL": &c.PublicURL, "HM_AGENT_RELEASE_DIR": &c.AgentReleaseDir} {
 		if v, ok := os.LookupEnv(k); ok {
 			*p = v
 		}
@@ -77,6 +79,13 @@ func Load(path string) (Config, error) {
 			return c, errors.New("invalid HM_SESSION_TTL_SECONDS")
 		}
 		c.SessionTTLSeconds = n
+	}
+	if v, ok := os.LookupEnv("HM_SERVER_NOT_MANAGED"); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return c, errors.New("invalid server identity configuration")
+		}
+		c.ServerNotManaged = b
 	}
 	if v, ok := os.LookupEnv("HM_DEV"); ok {
 		b, err := strconv.ParseBool(v)
@@ -128,6 +137,10 @@ func Load(path string) (Config, error) {
 }
 
 func (c Config) Validate() error {
+	if c.ServerInstanceID != "" && (c.ServerNotManaged || len(c.ServerInstanceID) > 256 || strings.TrimSpace(c.ServerInstanceID) != c.ServerInstanceID || strings.ContainsAny(c.ServerInstanceID, "\r\n\t")) {
+		return errors.New("invalid server identity configuration")
+	}
+
 	if c.ProbeHistoryRetentionDays < 1 || c.ProbeHistoryRetentionDays > 3650 {
 		return errors.New("probe history retention must be between 1 and 3650 days")
 	}

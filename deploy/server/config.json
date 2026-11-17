@@ -11,6 +11,8 @@
   "worker_count": 2,
   "instance_power_enabled": false,
   "instance_release_enabled": false,
+  "server_instance_id": "",
+  "server_not_managed": false,
   "probe_history_retention_days": 30,
   "resource_scan_interval_seconds": 300,
   "system_event_poll_interval_seconds": 60,

@@ -28,6 +28,7 @@ import (
 )
 
 type productionPanel struct {
+	protectionPolicy   model.ProtectionPolicy
 	probeRetentionDays int
 	ipdb               *ipinfo.Manager
 	powerEnabled       bool
@@ -47,6 +48,7 @@ type productionPanel struct {
 
 func NewProductionPanel(s *store.Store, c config.Config, engine *collect.Engine, databases ...*ipinfo.Manager) http.Handler {
 	p := &productionPanel{powerEnabled: !c.Dev && c.InstancePowerEnabled && engine != nil && engine.Box != nil, s: s, access: newPanelAccess(c), timezone: c.Timezone, ttl: time.Duration(c.SessionTTLSeconds) * time.Second, now: time.Now, engine: engine, publicURL: c.PublicURL, agentReleaseDir: c.AgentReleaseDir}
+	p.protectionPolicy = model.ProtectionPolicy{PowerEnabled: p.powerEnabled, SelfKnown: c.ServerNotManaged || c.ServerInstanceID != "", SelfInstanceID: c.ServerInstanceID, Timezone: c.Timezone}
 	p.releaseEnabled = !c.Dev && c.InstanceReleaseEnabled && engine != nil && engine.Box != nil
 	p.probeRetentionDays = c.ProbeHistoryRetentionDays
 	if p.probeRetentionDays == 0 {
@@ -131,7 +133,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if p.estimationSettings(w, r, path) || p.networkProbes(w, r, path) || p.quietHours(w, r, path) || p.heartbeatSettings(w, r, path) || p.passwordPolicy(w, r, path, token) || p.agentHistory(w, r, path) || p.networkHistory(w, r, path) || p.passkeys(w, r, path, token) || p.instancePower(w, r, path) || p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.systemEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.jobHistory(w, r, path) || p.business(w, r, path) {
+	if p.quotaProtection(w, r, path) || p.estimationSettings(w, r, path) || p.networkProbes(w, r, path) || p.quietHours(w, r, path) || p.heartbeatSettings(w, r, path) || p.passwordPolicy(w, r, path, token) || p.agentHistory(w, r, path) || p.networkHistory(w, r, path) || p.passkeys(w, r, path, token) || p.instancePower(w, r, path) || p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.systemEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.jobHistory(w, r, path) || p.business(w, r, path) {
 		return
 	}
 	if r.Method != "GET" {

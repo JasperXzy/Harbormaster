@@ -174,3 +174,28 @@ func TestProbeHistoryRetentionDefaultsAndOverrides(t *testing.T) {
 		}
 	}
 }
+
+func TestServerSelfBindingStaysExplicitAndRejectsContradiction(t *testing.T) {
+	c, err := Load("")
+	if err != nil || c.ServerNotManaged || c.ServerInstanceID != "" {
+		t.Fatal(c, err)
+	}
+	t.Setenv("HM_SERVER_INSTANCE_ID", "ecs-local-id")
+	c, err = Load("")
+	if err != nil || c.ServerInstanceID != "ecs-local-id" {
+		t.Fatal(c, err)
+	}
+	t.Setenv("HM_SERVER_NOT_MANAGED", "true")
+	if _, err = Load(""); err == nil {
+		t.Fatal("contradictory host binding accepted")
+	}
+	t.Setenv("HM_SERVER_INSTANCE_ID", "")
+	c, err = Load("")
+	if err != nil || !c.ServerNotManaged {
+		t.Fatal(c, err)
+	}
+	t.Setenv("HM_SERVER_NOT_MANAGED", "bad")
+	if _, err = Load(""); err == nil {
+		t.Fatal("invalid host declaration accepted")
+	}
+}
