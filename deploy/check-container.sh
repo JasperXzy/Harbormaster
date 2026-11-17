@@ -59,6 +59,36 @@ with open(sys.argv[1]) as stream:
 PY
 status=$(curl --silent --output /dev/null --write-out '%{http_code}' -H 'Host: panel.example' "http://127.0.0.1:$port/api/v1/setup/status")
 [ "$status" = 403 ] || { printf '%s\n' 'plain_http_panel_was_accepted' >&2; exit 1; }
+python3 - "$port" "$fixture/setup.token" <<'PY'
+import http.client,json,secrets,sys
+port=int(sys.argv[1])
+with open(sys.argv[2]) as stream:
+    token=stream.read().strip()
+headers={'Host':'panel.example','X-Forwarded-Proto':'https','X-Forwarded-For':'192.0.2.5','Origin':'https://panel.example','Content-Type':'application/json'}
+def request(method,path,body=None):
+    conn=http.client.HTTPConnection('127.0.0.1',port,timeout=5)
+    conn.request(method,'/api/v1'+path,json.dumps(body) if body is not None else None,headers)
+    response=conn.getresponse()
+    status=response.status
+    cookie=response.getheader('Set-Cookie')
+    value=json.loads(response.read())
+    conn.close()
+    return status,cookie,value
+status,cookie,session=request('POST','/setup',{'setup_token':token,'password':secrets.token_urlsafe(32)})
+assert status==201 and cookie and session.get('csrf_token'), 'fixture_setup_failed'
+headers['Cookie']=cookie.split(';',1)[0]
+status,_,info=request('GET','/system/info')
+assert status==200 and info['data_mode']=='live', 'fixture_system_info_failed'
+assert info['instance_power_enabled'] is False and info['instance_release_enabled'] is False, 'fixture_cloud_writes_enabled'
+status,_,accounts=request('GET','/accounts')
+assert status==200 and accounts['items']==[], 'fixture_accounts_failed'
+conn=http.client.HTTPConnection('127.0.0.1',port,timeout=5)
+conn.request('GET','/api/v1/events',headers=headers)
+response=conn.getresponse()
+assert response.status==200 and response.getheader('Content-Type').startswith('text/event-stream'), 'fixture_sse_failed'
+conn.close()
+print('container_setup_session_empty_accounts_sse_cloud_writes_disabled_verified')
+PY
 docker logs "$container" > "$fixture/logs" 2>&1
 if sudo grep -Fq -f "$fixture/master.key" "$fixture/logs" || sudo grep -Fq -f "$fixture/setup.token" "$fixture/logs"; then
   printf '%s\n' 'container_logs_leaked_fixture_credentials' >&2; exit 1

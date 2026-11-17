@@ -1,0 +1,9 @@
+# Layer over compose.yml for the initial cloud-read-only deployment.
+# Administrative configuration and SQLite remain writable.
+services:
+  hm-server:
+    environment:
+      HM_DEV: "false"
+      HM_INSTANCE_POWER_ENABLED: "false"
+      HM_INSTANCE_RELEASE_ENABLED: "false"
+      HM_IPDB_AUTO_UPDATE: "false"
