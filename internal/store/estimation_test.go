@@ -197,3 +197,26 @@ func TestEstimatorRetainsBasisOnFailedReadAndNeverCountsUnknownAgentAsZero(t *te
 		t.Fatal("accepted a verified basis without timestamp evidence")
 	}
 }
+
+func TestEstimateFailureDoesNotStarveOtherAccounts(t *testing.T) {
+	s, _, _, base := estimateFixture(t)
+	ctx := context.Background()
+	if _, err := s.DB.Exec("UPDATE cdt_observation SET mainland_bytes=9223372036854775807"); err != nil {
+		t.Fatal(err)
+	}
+	account := model.Account{ID: "b", Name: "b", Site: "china", Enabled: true, RegionIDs: []string{"cn-shanghai"}}
+	raw, _ := json.Marshal(account)
+	if _, err := s.DB.Exec("INSERT INTO account VALUES('b','b','china','now')"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.Exec("INSERT INTO account_settings(account_id,config_json,enabled) VALUES('b',?,1)", string(raw)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RefreshEstimates(ctx, time.UTC, base.Add(120*time.Second)); err == nil {
+		t.Fatal("overflow became a finite estimate")
+	}
+	var count int
+	if err := s.DB.QueryRow("SELECT count(*) FROM traffic_estimate WHERE account_id='b'").Scan(&count); err != nil || count != 2 {
+		t.Fatal("one account starved another", count, err)
+	}
+}

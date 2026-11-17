@@ -11,10 +11,24 @@ import (
 
 func (p *productionPanel) alertRules(w http.ResponseWriter, r *http.Request, path string) bool {
 	if path == "/alert-rules" && r.Method == "GET" {
+		raw := r.URL.Query().Get("include_reconciliation")
+		if raw != "" && raw != "true" && raw != "false" {
+			fieldError(w, "include_reconciliation", "invalid_format")
+			return true
+		}
 		rules, err := p.s.AlertRules(r.Context())
 		if err != nil {
 			businessError(w, err)
 		} else {
+			if raw != "true" {
+				filtered := []model.AlertRule{}
+				for _, rule := range rules {
+					if rule.Key != "cdt_estimation_deviation" {
+						filtered = append(filtered, rule)
+					}
+				}
+				rules = filtered
+			}
 			writeJSON(w, 200, map[string]any{"items": rules})
 		}
 		return true

@@ -35,6 +35,7 @@ func (s *Store) RefreshEstimates(ctx context.Context, loc *time.Location, now ti
 	if err != nil {
 		return err
 	}
+	var firstError error
 	for _, a := range accounts {
 		if !a.Enabled {
 			continue
@@ -57,6 +58,9 @@ func (s *Store) RefreshEstimates(ctx context.Context, loc *time.Location, now ti
 				return e
 			}
 			for _, scope := range []string{"mainland", "overseas"} {
+				if e = reconcileCDT(ctx, tx, current, scope, settings, loc, now); e != nil {
+					return e
+				}
 				v, e := calculateEstimate(ctx, tx, current, scope, settings, loc, now)
 				if e != nil {
 					return e
@@ -72,14 +76,23 @@ func (s *Store) RefreshEstimates(ctx context.Context, loc *time.Location, now ti
 			}
 			return tx.Commit()
 		}()
-		if err != nil {
-			return err
+		if err != nil && firstError == nil {
+			firstError = err
 		}
 	}
-	return nil
+	return firstError
 }
 func calculateEstimate(ctx context.Context, tx *sql.Tx, a model.Account, scope string, settings model.EstimationSettings, loc *time.Location, now time.Time) (model.TrafficEstimation, error) {
+	return calculateEstimateAt(ctx, tx, a, scope, settings, loc, now, nil, time.Time{}, false)
+}
+
+// Historical reconciliation supplies a trusted earlier basis and a fixed
+// cutoff. It forbids projections and checks exact coverage at that cutoff.
+func calculateEstimateAt(ctx context.Context, tx *sql.Tx, a model.Account, scope string, settings model.EstimationSettings, loc *time.Location, now time.Time, supplied *model.CDTObservation, cutoff time.Time, actualOnly bool) (model.TrafficEstimation, error) {
 	v := model.TrafficEstimation{Mode: "unverified", Status: "unavailable", To: now, CalculatedAt: now, LagSeconds: settings.LagSeconds, Reasons: []string{}}
+	if !cutoff.IsZero() {
+		v.To = cutoff
+	}
 	reasons := map[string]bool{}
 	qualified := true
 	complete := true
@@ -98,18 +111,29 @@ func calculateEstimate(ctx context.Context, tx *sql.Tx, a model.Account, scope s
 	if scope == "overseas" {
 		column = "overseas_bytes"
 	}
-	basis, err := readObservation(tx.QueryRowContext(ctx, "SELECT "+observationColumns+" FROM cdt_observation WHERE account_id=? AND credential_version=? AND fetched_at>=? AND fetched_at<? AND fetched_at<=? AND error_code IS NULL AND "+column+" IS NOT NULL ORDER BY id DESC LIMIT 1", a.ID, a.CredentialVersion, timestamp(start), timestamp(end), timestamp(now)))
-	if errors.Is(err, sql.ErrNoRows) {
-		reason("official_basis_missing")
-		return finish()
+	var basis model.CDTObservation
+	var err error
+	if supplied != nil {
+		basis = *supplied
+	} else {
+		basis, err = readObservation(tx.QueryRowContext(ctx, "SELECT "+observationColumns+" FROM cdt_observation WHERE account_id=? AND credential_version=? AND fetched_at>=? AND fetched_at<? AND fetched_at<=? AND error_code IS NULL AND "+column+" IS NOT NULL ORDER BY id DESC LIMIT 1", a.ID, a.CredentialVersion, timestamp(start), timestamp(end), timestamp(now)))
+		if errors.Is(err, sql.ErrNoRows) {
+			reason("official_basis_missing")
+			return finish()
+		}
+		if err != nil {
+			return v, err
+		}
 	}
-	if err != nil {
-		return v, err
-	}
+
 	v.BasisID = basis.ID
 	base := basis.Mainland
 	if scope == "overseas" {
 		base = basis.Overseas
+	}
+	if base == nil {
+		reason("official_basis_missing")
+		return finish()
 	}
 	from := basis.FetchedAt.Add(-time.Duration(settings.LagSeconds) * time.Second)
 	if from.Before(start) {
@@ -124,7 +148,7 @@ func calculateEstimate(ctx context.Context, tx *sql.Tx, a model.Account, scope s
 		reason("lag_window_assumption")
 	}
 	v.From = &from
-	if !now.After(from) || now.Sub(from) > 32*24*time.Hour {
+	if !v.To.After(from) || v.To.Sub(from) > 32*24*time.Hour {
 		reason("invalid_estimation_window")
 		return finish()
 	}
@@ -228,7 +252,7 @@ func calculateEstimate(ctx context.Context, tx *sql.Tx, a model.Account, scope s
 		}
 		m.Available = m.ID != "" && !revoked.Valid && !m.At.IsZero() && !m.Received.IsZero() && !m.At.After(now) && !m.Received.After(now) && quality.Valid && quality.String != "clock_skew" && (parseAgentTime(registered) == nil || !m.Received.Before(*parseAgentTime(registered)))
 		m.Offline = m.Available && (now.Sub(m.At) >= 30*time.Second || now.Sub(m.Received) >= 30*time.Second)
-		if m.Available && !m.Offline && m.At.Before(v.To) {
+		if !actualOnly && m.Available && !m.Offline && m.At.Before(v.To) {
 			v.To = m.At
 		}
 		agents[id] = m
@@ -286,7 +310,12 @@ func calculateEstimate(ctx context.Context, tx *sql.Tx, a model.Account, scope s
 			}
 			recent := []metering.Interval{}
 			var last *metering.Interval
-			e = walkMeteringIntervals(ctx, tx, m.ID, earlierTime(from, m.At.Add(-10*time.Minute)), m.At, func(interval metering.Interval) error {
+			walkFrom, walkUntil := earlierTime(from, m.At.Add(-10*time.Minute)), m.At
+			if actualOnly {
+				walkFrom = from
+				walkUntil = v.To
+			}
+			e = walkMeteringIntervals(ctx, tx, m.ID, walkFrom, walkUntil, func(interval metering.Interval) error {
 				// Boundary-crossing current samples may end after the common watermark.
 				copy := interval
 				last = &copy
@@ -303,6 +332,9 @@ func calculateEstimate(ctx context.Context, tx *sql.Tx, a model.Account, scope s
 					continue
 				}
 				return v, e
+			}
+			if actualOnly {
+				continue
 			}
 			var r metering.Rate
 			if m.Offline && m.Status == "running" {

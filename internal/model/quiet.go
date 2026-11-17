@@ -88,7 +88,7 @@ func (n Notification) AlwaysUrgent() bool {
 	}
 	if n.RuleKey != nil {
 		switch *n.RuleKey {
-		case "agent_offline", "cdt_usage", "cdt_forecast_exceed", "cdt_official_unavailable":
+		case "agent_offline", "cdt_usage", "cdt_forecast_exceed", "cdt_official_unavailable", "quota_protection", "cdt_estimation_deviation":
 			return true
 		}
 	}

@@ -246,7 +246,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, object{"power_enabled": false, "release_enabled": false, "self_identity_known": false, "self_instance_id": nil, "automatic_limit": 3, "automatic_window_seconds": 600})
 	case "/protection/rules", "/protection/simulations":
 		respond(w, 200, object{"items": []object{}})
-	case "/protection/decisions":
+	case "/traffic/reconciliations", "/protection/decisions":
 		respond(w, 200, object{"items": []object{}, "next_before": nil})
 	case "/traffic/estimation-settings":
 		respond(w, 200, map[string]any{"revision": 0, "lag_window_seconds": 3600, "bandwidth_mode_instance_ids": []string{}})
@@ -278,7 +278,18 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/notify/telegram":
 		respond(w, 200, object{"bot_token_set": false, "chat_id": "", "proxy_mode": "none", "proxy_url": "", "status": "not_configured", "last_error": nil, "last_success_at": nil})
 	case "/alert-rules":
-		respond(w, 200, object{"items": f.Rules})
+		raw := r.URL.Query().Get("include_reconciliation")
+		if raw != "" && raw != "true" && raw != "false" {
+			failure(w, 422, "validation_failed")
+			return
+		}
+		items := []object{}
+		for _, rule := range f.Rules {
+			if rule["key"] != "cdt_estimation_deviation" || raw == "true" {
+				items = append(items, rule)
+			}
+		}
+		respond(w, 200, object{"items": items})
 	case "/notifications":
 		items, cursor, err := paginate(f.Notifications, r)
 		if err != nil {

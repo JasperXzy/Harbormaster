@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/JasperXzy/harbormaster/internal/cloud/aliyun"
 	"github.com/JasperXzy/harbormaster/internal/model"
+	"github.com/JasperXzy/harbormaster/internal/protection"
 	"testing"
 	"time"
 )
@@ -63,9 +64,6 @@ func TestQuotaThroughMockCloudConfirmationAndNotification(t *testing.T) {
 	}
 	policy := model.ProtectionPolicy{PowerEnabled: true, SelfKnown: true, Timezone: "UTC"}
 	e.ProtectionPolicy = policy
-	if err = s.EvaluateQuotaProtection(ctx, policy, now); err != nil {
-		t.Fatal(err)
-	}
 	calls, reads := 0, 0
 	e.Writer = writerFunc(func(_ context.Context, _ aliyun.Credentials, r aliyun.PowerRequest) (aliyun.PowerResult, error) {
 		calls++
@@ -88,11 +86,51 @@ func TestQuotaThroughMockCloudConfirmationAndNotification(t *testing.T) {
 		}
 		return model.PowerObservation{Status: status, StoppedMode: mode, ObservedAt: time.Now().UTC()}, nil
 	})
+
 	began := time.Now()
-	ran, err := e.RunOne(ctx)
-	if err != nil || !ran || calls != 1 || time.Since(began) > 30*time.Second {
-		t.Fatal(ran, err, calls)
+	workerCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	powerDone, protectionDone := make(chan struct{}), make(chan struct{})
+	go func() { defer close(powerDone); e.Run(workerCtx) }()
+	go func() { defer close(protectionDone); (protection.Runner{Store: s, Policy: policy}).Run(workerCtx) }()
+	stopped := false
+	stop := func() {
+		if !stopped {
+			stopped = true
+			cancel()
+			<-powerDone
+			<-protectionDone
+		}
 	}
+	defer stop()
+	poll := time.NewTicker(10 * time.Millisecond)
+	defer poll.Stop()
+	confirmed := false
+	for !confirmed {
+		rows, _, queryErr := s.QuotaDecisions(ctx, "", 0, 10)
+		if queryErr != nil {
+			t.Fatal(queryErr)
+		}
+		if len(rows) > 0 && len(rows[0].Targets) > 0 && rows[0].Targets[0].JobID != nil {
+			j, e := s.Job(ctx, *rows[0].Targets[0].JobID)
+			if e != nil {
+				t.Fatal(e)
+			}
+			confirmed = j.Status == "succeeded"
+		}
+		if !confirmed {
+			select {
+			case <-workerCtx.Done():
+				t.Fatal("scheduled protection did not complete", workerCtx.Err())
+			case <-poll.C:
+			}
+		}
+	}
+	stop()
+	if calls != 1 || time.Since(began) > 30*time.Second {
+		t.Fatal("scheduler-to-confirmation", calls, time.Since(began))
+	}
+	t.Logf("scheduled threshold to confirmed mock stop: %s", time.Since(began))
+
 	decisions, _, err := s.QuotaDecisions(ctx, "", 0, 10)
 	if err != nil || len(decisions) != 1 || len(decisions[0].Targets) != 1 || decisions[0].Targets[0].JobID == nil {
 		t.Fatal(decisions, err)

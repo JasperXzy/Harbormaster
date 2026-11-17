@@ -48,7 +48,7 @@ func (r AlertRule) Validate() map[string]string {
 		if r.Params.ProbeThresholds != nil {
 			fields["params.probe_thresholds"] = "not_applicable"
 		}
-		if r.Params.RecoverySamples != nil {
+		if r.Params.RecoverySamples != nil && r.Key != "cdt_estimation_deviation" {
 			fields["params.recovery_samples"] = "not_applicable"
 		}
 	}
@@ -167,6 +167,19 @@ func (r AlertRule) Validate() map[string]string {
 		}
 		if r.Params.ConsecutiveFailures != nil {
 			fields["params.consecutive_failures"] = "not_applicable"
+		}
+		if r.Params.OfflineAfterSeconds != nil {
+			fields["params.offline_after_seconds"] = "not_applicable"
+		}
+	case "cdt_estimation_deviation":
+		if r.Params.ConsecutiveFailures == nil || *r.Params.ConsecutiveFailures < 1 || *r.Params.ConsecutiveFailures > 1000 {
+			fields["params.consecutive_failures"] = "required_or_out_of_range"
+		}
+		if r.Enabled && r.Params.RecoverySamples == nil {
+			fields["params.recovery_samples"] = "required"
+		}
+		if r.Params.RecoverySamples != nil && (*r.Params.RecoverySamples < 1 || *r.Params.RecoverySamples > 1000) {
+			fields["params.recovery_samples"] = "out_of_range"
 		}
 		if r.Params.OfflineAfterSeconds != nil {
 			fields["params.offline_after_seconds"] = "not_applicable"

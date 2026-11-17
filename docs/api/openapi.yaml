@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-18  CDT reconciliation: add paginated local /traffic/reconciliations and QuotaStatus.reconciliation. Compare predicted and official usage at the same trusted cutoff/period, using actual fully covered intervals only; boundary upper allocations, projections, unknown topology/eligibility and repeated/regressed cutoffs do not count as precise comparisons. Default deviation trigger needs three distinct comparable >10% observations; recovery also needs three comparable healthy observations by explicit user confirmation, denominator official; 0/0 is healthy and nonzero/0 has no finite ratio. Existing /alert-rules omits the new rule unless include_reconciliation=true to preserve the current frontend fixed dictionary. No GET queries clouds.
 # 2026-11-18  Quota protection: add session-only rule CRUD, expiring account/scope simulations, durable decision history/status and temporary instance exemptions. Rules explicitly choose threshold/action/targets/stop mode/reserve/dry-run. Unverified sources and simulations can only rehearse; disabled power creates terminal local records, never latent cloud jobs. Automatic sends re-evaluate in the dispatch transaction, require known server identity, apply exemptions and a persisted default 3-per-10-minute per-instance budget. Host binding is deployment configuration outside DB backups.
 # 2026-11-18  Dual-path metering: QuotaStatus.estimation is an independently qualified cached result. Trusted period/unit/cutoff uses aligned mode; otherwise a configurable lag window is unverified and rehearsal-only. Unknown coverage stays null; hourly shared traffic is combined before max, with boundary upper allocations explicit. GET/PUT /traffic/estimation-settings is session/CSRF protected, revision fenced, and never calls clouds. Legacy aligned fields remain null for unverified estimates.
 # 2026-11-18  Agent installer command: execute sh directly for uid 0; require sudo only for non-root users, with a fixed installer_requires_root_or_sudo error when unavailable. Registration secrets remain on stdin and download/manifest SHA256 pins remain unchanged. No response fields or agent service privileges change.
@@ -163,6 +164,26 @@ security:
   - sessionCookie: []
 
 paths:
+  /traffic/reconciliations:
+    get:
+      tags: [traffic]
+      operationId: listCDTReconciliations
+      summary: 读取同截止时刻的估算对账
+      parameters:
+        - {name: account_id, in: query, schema: {type: string}}
+        - {name: scope, in: query, schema: {type: string, enum: [mainland, overseas]}}
+        - {name: before, in: query, schema: {type: integer, format: int64, minimum: 1}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+      responses:
+        "200":
+          description: 倒序本地历史，未知／不可比较不会变成 0% 偏差。
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: {type: array, items: {$ref: "#/components/schemas/CDTReconciliation"}}
+                  next_before: {type: integer, format: int64, nullable: true}
   /protection/status:
     get:
       tags: [traffic]
@@ -2909,7 +2930,12 @@ paths:
       tags: [notify]
       operationId: listAlertRules
       summary: 内置告警规则
-      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable, network_route_change and idle_resource_detected. Usage/forecast rules are not returned until their metering source and policy are available.
+      description: Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable, network_route_change idle_resource_detected and cdt_estimation_deviation. quota_protection events are configured through separate protection rules, not this alert-rule endpoint. Usage/forecast rules are not returned until their metering source and policy are available.
+      parameters:
+        - name: include_reconciliation
+          in: query
+          schema: {type: boolean, default: false}
+          description: 显式返回新偏差规则；当前前端未接入新字典时保持省略。
       responses:
         "200":
           description: 告警规则
@@ -5408,6 +5434,26 @@ components:
               instance_id: {type: string}
               outcome: {type: string, description: Fixed outcome code (would_stop, power_disabled, self_identity_unknown, self_excluded, exempt, already_stopped, operation_limited, queued, source_unqualified, busy, target_unavailable).}
               job_id: {type: string, nullable: true}
+    CDTReconciliation:
+      type: object
+      required: [id, account_id, scope, observation_id, previous_observation_id, covered_until, checked_at, status, reason, predicted_bytes, official_bytes, relative_error, exceeds_ten_percent, bad_streak, healthy_streak, alert_active]
+      properties:
+        id: {type: integer, format: int64}
+        account_id: {type: string}
+        scope: {$ref: "#/components/schemas/QuotaScope"}
+        observation_id: {type: string}
+        previous_observation_id: {type: string, nullable: true}
+        covered_until: {type: string, format: date-time, nullable: true}
+        checked_at: {type: string, format: date-time}
+        status: {type: string, enum: [comparable, not_comparable, duplicate_cutoff]}
+        reason: {type: string}
+        predicted_bytes: {type: integer, format: int64, nullable: true}
+        official_bytes: {type: integer, format: int64, nullable: true}
+        relative_error: {type: number, nullable: true, description: 绝对差除以官方值，0.1=10%；官方为0且估算非0时为null。}
+        exceeds_ten_percent: {type: boolean, nullable: true}
+        bad_streak: {type: integer}
+        healthy_streak: {type: integer}
+        alert_active: {type: boolean}
     EstimationSettings:
       type: object
       additionalProperties: false
@@ -5462,6 +5508,10 @@ components:
         - forecast
         - updated_at
       properties:
+        reconciliation:
+          allOf: [{$ref: "#/components/schemas/CDTReconciliation"}]
+          nullable: true
+          description: 当前凭据及本地周期的最后一次对账记录，可能明确不可比较。
         estimation:
           allOf: [{$ref: "#/components/schemas/TrafficEstimation"}]
           nullable: true
@@ -5601,6 +5651,12 @@ components:
       type: object
       required: [id, account_id, fetched_at, mainland_bytes, overseas_bytes, official_quality, error]
       properties:
+        source:
+          type: string
+          description: 官方数据适配器标识，不是凭据。
+        covered_until: {type: string, format: date-time, nullable: true}
+        period_start: {type: string, format: date-time, nullable: true}
+        period_end: {type: string, format: date-time, nullable: true}
         id:
           type: string
         account_id:
@@ -5618,7 +5674,7 @@ components:
           nullable: true
         official_quality:
           type: string
-          enum: [inferred, unknown]
+          enum: [verified, inferred, unknown]
         error:
           type: object
           nullable: true
@@ -5914,7 +5970,7 @@ components:
 
     AlertRuleKey:
       type: string
-      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable, network_route_change, idle_resource_detected]
+      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable, network_route_change, idle_resource_detected, quota_protection, cdt_estimation_deviation]
       description: 内置规则；仅返回当前已实现且有可用来源的规则。
 
     Severity:
@@ -5949,7 +6005,7 @@ components:
           minimum: 1
           maximum: 1000
           default: 3
-          description: Latency/loss/unreachable rules only. Consecutive valid healthy measurements required for recovery. Skipped/missing/local-failure samples interrupt counters and never imply recovery.
+          description: Network latency/loss/unreachable use consecutive valid healthy measurements for recovery (default 3). cdt_estimation_deviation also uses this field; trigger and recovery both default to 3 by confirmed policy, and enabled rules require a recovery value. Missing or incomparable evidence interrupts counters and never implies recovery.
         balance_thresholds:
           type: array
           maxItems: 100
@@ -5985,7 +6041,7 @@ components:
           type: integer
           minimum: 1
           maximum: 1000
-          description: account_api_failure、cdt_official_unavailable 为连续失败次数；network_unreachable 为完整测速全部失败的连续次数，默认 3。
+          description: account_api_failure、cdt_official_unavailable 为连续失败次数；cdt_estimation_deviation 为不同可信截止的连续精确偏差次数（默认 3）；network_unreachable 为完整测速全部失败的连续次数，默认 3。
         offline_after_seconds:
           type: integer
           minimum: 10

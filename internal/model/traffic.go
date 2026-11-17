@@ -26,6 +26,7 @@ type CDTObservation struct {
 }
 
 type QuotaStatus struct {
+	Reconciliation    *CDTReconciliation `json:"reconciliation"`
 	Estimation        *TrafficEstimation `json:"estimation"`
 	AccountID         string             `json:"account_id"`
 	Scope             string             `json:"scope"`

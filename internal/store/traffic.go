@@ -210,6 +210,10 @@ func (s *Store) Quotas(ctx context.Context, accounts []model.Account, loc *time.
 					q.OfficialStatus = "unavailable"
 				}
 			}
+			q.Reconciliation, err = s.latestReconciliation(ctx, a, scope, start)
+			if err != nil {
+				return nil, err
+			}
 			items = append(items, q)
 		}
 	}

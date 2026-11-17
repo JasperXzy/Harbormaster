@@ -73,3 +73,23 @@ PRD 建议补充：区分手动入队意图与自动发送时意图，明确关�
 第三阶段完整检查：`go test -race ./internal/store ./internal/api ./internal/power ./internal/cli ./internal/config ./internal/backup ./internal/devmode ./internal/protection -count=1` 全部通过（store 261.995s、api 144.809s、power 26.241s、cli 24.070s、config 1.379s、backup 46.721s、devmode 13.564s）。`go build ./... && go vet ./... && git diff --check` 退出 0；OpenAPI 80 个路径，引用检查无缺失。
 
 2026-11-18 用户确认 main-server 不在纳管实例中，后续部署设置外部 `server_not_managed=true`，并继续保持两个真实云写开关关闭。另已确认偏差规则采用三次不同截止的精确可比回补，百分比以官方值为分母，0／0 无偏差、官方 0 而估算非 0 为异常；该对账检查在下一阶段接入。
+
+## 同截止对账（第四阶段）
+
+迁移 048 将每次官方观测的比较结论和跨重启连续计数持久化。新观测必须有明确同一账期、字节单位和可信截止；用前一个可信基准加上**到新截止为止的实际区间**预测，再与新官方值比较，不能拿“现在的估算”对比“滞后的官方值”。
+
+历史比较不使用离线投影，也不采用跨边界的上界分配；未知计费归属／成员、缺口、变化、非精确小时计量和缺少某区域的基准均明确不可比较。重复截止不推进计数，退后的水位不能降低最大已见水位。不可比较记录打断连续次数，保留已有事件而不假装恢复。新账号版本／账期不会重放已经处理的观测。
+
+用户已确认以官方值为分母，严格超过 10% 才异常；0／0 正常，预测非零／官方零为异常，但相对比例返回 null，不输出无穷大。触发判断使用整数大数比较，展示比例的浮点四舍五入不会改变临界判断。
+
+`cdt_estimation_deviation` 的触发默认连续 3 次不同截止的精确可比观测；恢复次数通过 alert-rule 的 `recovery_samples` 显式配置。2026-11-18 用户进一步确认连续 3 次正常后恢复，默认触发／恢复均设为 3；启用状态下不能遗漏恢复参数。独立测试明确传入 3，已验证三次异常触发、重复截止忽略、失败打断且保持事件、三次正常恢复和不重放。生产当前来源没有可信 cutoff，仍只会产生不可比较记录，不把单位假设包装成真实对账。
+
+查询使用 `GET /api/v1/traffic/reconciliations`，支持账号、范围和整数 before 游标；`QuotaStatus.reconciliation` 返回当前账号版本／周期的最新结论。GET 只读本地记录。异常、恢复也使用固定占位文字进入紧急 outbox，不在本阶段启用外部消息发送。
+
+实际针对性检查：`go test -race ./internal/store ./internal/api ./internal/metering ./internal/model -run 'TestReconciliation|TestDeviation|TestDualEstimate|TestQuotaThrough' -count=1` 通过（store 7.580s、api 3.300s、metering 1.328s）。另覆盖缺少某区域官方基准和单个账号上溢不阻塞其他账号；`go build ./... && go vet ./... && git diff --check` 退出 0。
+
+2026-11-18 最终确认：偏差告警连续 3 次不同可信截止异常后触发、连续 3 次可比正常后恢复；默认启用但当前不可比来源不会触发。新规则仅在 `/alert-rules?include_reconciliation=true` 的显式请求中返回，避免现有前端固定字典报错。
+
+最终工程验证使用 Go 1.27.1（darwin/arm64）：全量 `go test ./...` 退出 0，api 21.066s、store 11.505s、power 1.654s，其余包通过／无测试；全量 `go test -race ./...` 退出 0，api 145.443s，其余通过／缓存。用户确认默认恢复参数后，再跑相关 API／store 的 race（5.621s／8.413s）及全量标准测试，均通过。
+
+调度验收进一步让保护 Runner 与电源 Engine 的真实循环一起运行，未手工调用评估或 RunOne：阈值到假云确认停止 **1.093311708 秒**，发送 1 次，紧急 outbox 2 条，真实云调用 0。命令：`go test -race ./internal/power -run TestQuotaThrough -count=1 -v`，通过（3.792s）。这是隔离假云流程的响应时间，不冒充真实阿里云停止延迟或 24 小时计量对账结果。

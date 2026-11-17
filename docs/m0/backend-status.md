@@ -41,7 +41,7 @@
 | F2.5 | 已有持久的首次发现、消失/重现、状态及 IPv4/IPv6 变化记录和分页接口。消失表示完整扫描不再出现，不能证明释放原因；未接入云端操作事件来源。[实例事件](instance-events.md) |
 | F3.1、F3.11 | 部分：官方累计原值暂按字节展示，明确标待核实；fetched_at 与未知官方 cutoff 分开。真实每日计费数据、固定延迟结论未完成。[CDT](production-cdt.md) |
 | F3.2 | 当前公网出口与计费对象识别已实现；多出口/失败拓扑保留未知，不把创建时间当作 CDT 资格证明。 |
-| F3.3–F3.7 | 实时对齐估算、按 max 判断、对账、预测及超额费用估算均未实现/启用，不能把 demo 数值算作完成。 |
+| F3.3–F3.7 | 双路径估算、max＋速率提前量和同截止对账已实现，未核实窗口只能展示／演练；缺少可信 cutoff、单位和成员历史时不授予真实执行资格。偏差告警触发／恢复均为连续 3 次可比观测。预测及超额费用估算仍未实现。[计量与保护](realtime-metering.md) |
 | F3.8 | 有各账号本地额度及官方累计源；可靠的跨账号实时剩余额度未成立，不能把未知值当零后求和。 |
 | F3.9 | 历史计费对象归因未实现。 |
 | F3.10 | 带宽配置、计费方式和成员列表已实现；真实按周期入出聚合、主方向历史未实现。 |
@@ -51,7 +51,7 @@
 | F4.4 | 轻量预绑定注册与流量上报代码已实现，并排除 CDT 保护；真实安装和延迟测速未完成。 |
 | F5.1 | 部分：agent 原始样本/区间历史和云监控分钟历史接口已实现，支持 24h/7d 范围；云源真实已验证 112 条样本，agent 历史仅本地模拟验收。小时聚合、前端曲线及完整长期覆盖仍待完成。[Agent 历史](agent-network-history.md)、[云历史](cloud-network-history.md) |
 | F5.2 | ECS CPU/绝对积分与 SWAS CPU 的后台采集、缓存、过期状态和只读字段已实现；上海 ECS 与 sha-pro CPU 序列真实通过。真实突发积分余额仍未验证。[指标来源](cpu-metrics.md) |
-| F6.1–F6.13 | 手动电源任务入队时原子保存期望状态、失败保留意图已实现；共享元数据身份读取前置组件已交付，自身排除仍未接通。[身份基础](server-identity.md)。自动化规则、调度电源动作、保活、控制台状态确认、豁免、主备、提前量、试运行、模拟用量和排除自身的业务逻辑未实现。 |
+| F6.1–F6.13 | 额度规则、试运行、过期模拟、提前量、临时豁免、自身绑定／排除、持久频控和发送前重算已实现并通过假云停机确认与通知 outbox 验证。真实写开关保持关闭，当前来源无精确执行资格。定时电源、保活、月初开机、控制台状态确认及主备切换仍未实现。[计量与保护](realtime-metering.md) |
 | F7.1、F7.5 | 刷新与权限查询已走持久队列；任务列表/详情、分页筛选和来源记录已实现。固定开机/关机/重启、持久任务、入队保存意图、独立 worker、状态确认和管理员提交接口已模拟测试；serve 显式配置开启后可执行，默认关闭，真实操作未验收。[任务记录](job-history.md)、[电源调用](instance-power.md) |
 | F7.2、F7.3 | 换 EIP、创建 ECS 未实现，也未执行真实操作。 |
 | F7.4 | 固定调用层、影响缓存/管理员预览、持久任务、执行/确认及管理员提交 API/serve 接入已实现并本地模拟测试；默认独立开关关闭，run-once/M0 不执行。仅已停止 PostPaid ECS，精确名称/影响确认、与电源互斥、一次发送边界、不重放和恢复取消。受理后完整定向零行才记录 not_found_after_accept，不声称物理清理。前端适配、Telegram 入口及真实云验收未完成；未执行真实释放或 DryRun。[调用层](ecs-release.md)、[预览](ecs-release-preview.md)、[任务](ecs-release-queue.md)、[执行](ecs-release-worker.md)、[API/接入](ecs-release-api.md) |
@@ -145,8 +145,8 @@ main-server 只读试运行和旧 CDT-Monitor 退役已获用户授权并完成�
 ## 尚缺的阶段验收证据
 
 - M1：真实 agent 安装、连续 24 小时计量/对账 ≤5%、可靠实时估算、阈值 Telegram 送达、掉线 30 秒送达，均未证明。不能因当前告警有本地记录就标为通过。
-- M2：自动化/电源动作模拟演练、最坏情况与状态确认、Telegram 远控、外部心跳未完成。用户此次明确要求提前退役 CDT-Monitor，现已执行；不据此标记 M2 验收通过。
+- M2：额度保护调度到假云停止确认已验证（1.093 秒、真实云调用 0），包含最坏情况和持久守卫；其余自动化、真实云操作延迟、Telegram 远控与外部心跳的完整场景仍未完成。用户此次明确要求提前退役 CDT-Monitor，现已执行；不据此标记 M2 验收通过。
 - M3/M4：核心功能及验收均未完成。
 - 非功能：macOS 空库设置/密码登录后测到 RSS 约 210.2MB，显式 GOMEMLIMIT=80MiB 时约 146.8MB，该本地 RSS 场景未达 100MB；未据此设置默认内存限制或修改 PRD。[内存实测与修订建议](server-memory-baseline.md)。生产 Linux/10 实例常驻内存、agent 资源占用、长期数据库 ≤1GB、保留期、保护响应 ≤30 秒、真实发送可靠性与跨平台运行仍缺对应实测。
 
-最近构建、vet、全量 race 和契约检查见[闲置告警](idle-resource-alerts.md)；隔离副本真实只读缓存验证见[闲置候选](idle-resource-candidates.md)。此前见 [ECS 释放 API/接入](ecs-release-api.md)、[执行/确认](ecs-release-worker.md)、[任务](ecs-release-queue.md)、[预览](ecs-release-preview.md)和[固定调用层](ecs-release.md)。另见[轻量流量包](swas-traffic-package.md)、[名称与 Logo](branding.md)、[CDT 服务](cdt-service-reads.md)、[闲置来源](idle-resource-sources.md)、[延迟清理](latency-retention.md)、[API Key 刷新](api-key-refresh.md)、[审计](audit-log.md)、[CPU 规格](cpu-credit-specs.md)及各需求行文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源与释放执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。
+最近计量、保护、同截止对账、全量测试／race 和调度假云结果见[计量与保护](realtime-metering.md)。此前构建与契约检查见[闲置告警](idle-resource-alerts.md)；隔离副本真实只读缓存验证见[闲置候选](idle-resource-candidates.md)。此前见 [ECS 释放 API/接入](ecs-release-api.md)、[执行/确认](ecs-release-worker.md)、[任务](ecs-release-queue.md)、[预览](ecs-release-preview.md)和[固定调用层](ecs-release.md)。另见[轻量流量包](swas-traffic-package.md)、[名称与 Logo](branding.md)、[CDT 服务](cdt-service-reads.md)、[闲置来源](idle-resource-sources.md)、[延迟清理](latency-retention.md)、[API Key 刷新](api-key-refresh.md)、[审计](audit-log.md)、[CPU 规格](cpu-credit-specs.md)及各需求行文档。初始跨平台命令见 [M0 原始输出](validation.txt)。默认关闭真实电源与释放执行；当前未实现及未验收项仍需推进，不能据此将持续目标标记完成。
