@@ -16,12 +16,23 @@ func saveObservation(ctx context.Context, tx *sql.Tx, j model.Job, a model.Accou
 	if o.Error != nil {
 		code = o.Error.Code
 	}
+	quality := o.Quality
+	if quality != "verified" && quality != "inferred" && quality != "unknown" {
+		quality = "inferred"
+	}
+	if quality == "verified" && (o.CoveredUntil == nil || o.PeriodStart == nil || o.PeriodEnd == nil || o.Source == "" || !o.PeriodEnd.After(*o.PeriodStart) || o.CoveredUntil.Before(*o.PeriodStart) || o.CoveredUntil.After(*o.PeriodEnd) || o.CoveredUntil.After(o.FetchedAt)) {
+		return errors.New("invalid_verified_cdt_basis")
+	}
+	source := o.Source
+	if source == "" {
+		source = "ListCdtInternetTraffic"
+	}
 	raw, err := json.Marshal(o.Details)
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO cdt_observation(account_id,credential_version,job_id,attempt,fetched_at,mainland_bytes,overseas_bytes,details_json,error_code)
- VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,job_id,attempt) DO NOTHING`, a.ID, a.CredentialVersion, j.ID, j.Attempts, timestamp(o.FetchedAt), o.Mainland, o.Overseas, string(raw), code)
+	_, err = tx.ExecContext(ctx, `INSERT INTO cdt_observation(account_id,credential_version,job_id,attempt,fetched_at,mainland_bytes,overseas_bytes,details_json,error_code,covered_until,period_start,period_end,source_quality,source)
+ VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(account_id,job_id,attempt) DO NOTHING`, a.ID, a.CredentialVersion, j.ID, j.Attempts, timestamp(o.FetchedAt), o.Mainland, o.Overseas, string(raw), code, nullableMeteringTime(o.CoveredUntil), nullableMeteringTime(o.PeriodStart), nullableMeteringTime(o.PeriodEnd), quality, source)
 	return err
 }
 func (s *Store) SaveCDT(ctx context.Context, j model.Job, a model.Account, o model.CDTObservation, now time.Time) error {
@@ -82,15 +93,15 @@ func (s *Store) ScheduleCDT(ctx context.Context, interval time.Duration, now tim
 	return tx.Commit()
 }
 
-const observationColumns = "id,account_id,fetched_at,mainland_bytes,overseas_bytes,error_code"
+const observationColumns = "id,account_id,fetched_at,mainland_bytes,overseas_bytes,error_code,covered_until,period_start,period_end,source_quality,source"
 
 func readObservation(row rowScanner) (model.CDTObservation, error) {
 	var o model.CDTObservation
 	var id int64
 	var fetched string
 	var mainland, overseas sql.NullInt64
-	var code sql.NullString
-	if err := row.Scan(&id, &o.AccountID, &fetched, &mainland, &overseas, &code); err != nil {
+	var code, cutoff, start, end sql.NullString
+	if err := row.Scan(&id, &o.AccountID, &fetched, &mainland, &overseas, &code, &cutoff, &start, &end, &o.Quality, &o.Source); err != nil {
 		return o, err
 	}
 	o.ID = strconv.FormatInt(id, 10)
@@ -107,7 +118,9 @@ func readObservation(row rowScanner) (model.CDTObservation, error) {
 		x := overseas.Int64
 		o.Overseas = &x
 	}
-	o.Quality = "inferred"
+	o.CoveredUntil = parseAgentTime(cutoff)
+	o.PeriodStart = parseAgentTime(start)
+	o.PeriodEnd = parseAgentTime(end)
 	if code.Valid {
 		o.Error = model.Error(code.String)
 		o.Quality = "unknown"
@@ -178,7 +191,21 @@ func (s *Store) Quotas(ctx context.Context, accounts []model.Account, loc *time.
 					q.OfficialBytes = good.Overseas
 				}
 				q.FetchedAt = &good.FetchedAt
-				q.OfficialQuality = "inferred"
+				q.OfficialQuality = good.Quality
+				if good.Quality == "verified" && good.PeriodStart != nil && good.PeriodEnd != nil && good.PeriodStart.Equal(start) && good.PeriodEnd.Equal(end) {
+					q.OfficialAsOf = good.CoveredUntil
+					q.OfficialStatus = "ok"
+				}
+				q.Estimation, err = s.cachedEstimate(ctx, a, scope, good.ID, now)
+				if err != nil {
+					return nil, err
+				}
+				if q.Estimation != nil && q.Estimation.Mode == "aligned" && q.Estimation.Status == "ready" && q.Estimation.Qualified {
+					q.RealtimeIncrement = q.Estimation.Increment
+					q.WorstCaseBytes = q.Estimation.WorstCase
+					q.EstimatedBytes = q.Estimation.Estimated
+					q.EffectiveBytes = q.Estimation.Estimated
+				}
 				if hasLatest && latest.ID != good.ID {
 					q.OfficialStatus = "unavailable"
 				}

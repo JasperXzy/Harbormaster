@@ -56,6 +56,15 @@ func (p *productionPanel) overlayAgents(ctx context.Context, items []map[string]
 	if err != nil {
 		return err
 	}
+	quotas, err := p.quotaRows(ctx, "")
+	if err != nil {
+		return err
+	}
+	estimates := map[string]*model.TrafficEstimation{}
+	for _, q := range quotas {
+		estimates[q.AccountID+":"+q.Scope] = q.Estimation
+	}
+
 	available := p.releaseVersions.Get(p.agentReleaseDir, p.now())
 	for _, item := range items {
 		id, _ := item["id"].(string)
@@ -67,6 +76,10 @@ func (p *productionPanel) overlayAgents(ctx context.Context, items []map[string]
 		if available != nil && v.Agent.Version != nil {
 			v.Agent.UpdateAvailable = agentrelease.UpdateAvailable(*v.Agent.Version, *available)
 		}
+		account, _ := item["account_id"].(string)
+		scope, _ := item["cdt_scope"].(string)
+		item["traffic_estimation"] = estimates[account+":"+scope]
+
 		item["agent"] = v.Agent
 		item["realtime"] = v.Realtime
 		// Until an aligned CDT basis exists, online does not mean protected.

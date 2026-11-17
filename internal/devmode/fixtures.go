@@ -36,7 +36,7 @@ func makeFixtures(now time.Time, loc *time.Location) fixtures {
 			}
 			used := quota / 4
 			inc := int64(128 << 20)
-			f.Quotas = append(f.Quotas, object{"account_id": id, "scope": scope, "cycle_start": start.UTC().Format(time.RFC3339), "cycle_end": end.UTC().Format(time.RFC3339), "quota_bytes": quota, "official_bytes": used, "official_as_of": official, "official_status": "ok", "realtime_increment_bytes": inc, "worst_case_bytes": 0, "estimated_bytes": used + inc, "effective_bytes": used + inc, "thresholds_percent": []int{80, 90, 95}, "forecast": nil, "updated_at": stamp})
+			f.Quotas = append(f.Quotas, object{"account_id": id, "scope": scope, "cycle_start": start.UTC().Format(time.RFC3339), "cycle_end": end.UTC().Format(time.RFC3339), "quota_bytes": quota, "official_quality": "verified", "estimation": object{"mode": "aligned", "status": "ready", "basis_id": "demo-watermark", "from_at": official, "to_at": stamp, "calculated_at": stamp, "lag_window_seconds": 3600, "increment_bytes": inc, "known_increment_bytes": inc, "worst_case_bytes": 0, "estimated_bytes": used + inc, "current_rate_bytes_per_second": 80000, "qualified_for_execution": false, "reasons": []string{"demo_data"}}, "official_bytes": used, "official_as_of": official, "official_status": "ok", "realtime_increment_bytes": inc, "worst_case_bytes": 0, "estimated_bytes": used + inc, "effective_bytes": used + inc, "thresholds_percent": []int{80, 90, 95}, "forecast": nil, "updated_at": stamp})
 		}
 	}
 	for i, id := range []string{"demo-sin", "demo-hkg", "demo-sha"} {

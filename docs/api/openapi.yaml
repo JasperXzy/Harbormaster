@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-18  Dual-path metering: QuotaStatus.estimation is an independently qualified cached result. Trusted period/unit/cutoff uses aligned mode; otherwise a configurable lag window is unverified and rehearsal-only. Unknown coverage stays null; hourly shared traffic is combined before max, with boundary upper allocations explicit. GET/PUT /traffic/estimation-settings is session/CSRF protected, revision fenced, and never calls clouds. Legacy aligned fields remain null for unverified estimates.
 # 2026-11-18  Agent installer command: execute sh directly for uid 0; require sudo only for non-root users, with a fixed installer_requires_root_or_sudo error when unavailable. Registration secrets remain on stdin and download/manifest SHA256 pins remain unchanged. No response fields or agent service privileges change.
 # 2026-11-17  Idle candidate incidents: add enabled-by-default non-urgent idle_resource_detected with empty params. Fresh successful classification records one incident per logical resource, retains it through unknown/failed/stale reads, and recovers only on an explicit known non-candidate observation. Complete disappearance, disabled scope or disabled rule closes silently. Notification.resource_id optionally links EIP/disk/instance evidence independently of instance_id. Current quiet/maintenance suppression and no-backfill policy apply. Messages remain fixed placeholders and no Telegram dispatcher/send is enabled; costs remain unestimated.
 # 2026-11-14  Idle resource candidates: GET /idle-resources reads credential-fenced background evidence for unbound EIP, stopped subscription ECS/SWAS, stopped PostPaid ECS in KeepCharging or explicitly unsupported charge exemption, and unattached/cloud disks whose known attachments are all stopped. Reuse existing complete inventory calls; no new cloud action or GET-triggered query. Each source exposes last successful counts, unclassified rows, failures, age and disabled scope; unknown classification retains prior evidence with its original time. Candidate presence does not establish actual billed waste. monthly_cost/currency stay null pending the separately requested estimation policy and verified prices. No idle alerts, deletion or resource mutation is enabled in this phase.
@@ -161,6 +162,40 @@ security:
   - sessionCookie: []
 
 paths:
+  /traffic/estimation-settings:
+    get:
+      tags: [traffic]
+      operationId: getEstimationSettings
+      summary: 读取估算窗口配置
+      responses:
+        "200":
+          description: 本地估算配置；不表示官方延迟已核实。
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/EstimationSettings"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+    put:
+      tags: [traffic]
+      operationId: putEstimationSettings
+      summary: 保存未核实估算窗口
+      description: 修改会使旧缓存失效；默认 3600 秒是可修改的本地假设。真实云执行永远拒绝 unverified 估算。bandwidth_mode_instance_ids 强制这些实例的离线推算使用公网带宽上限，其他实例使用完整最近 10 分钟峰值，历史不足时回退带宽。
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/EstimationSettings"}
+      responses:
+        "200":
+          description: 已保存；后台重新计算。
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/EstimationSettings"}
+        "409": {description: revision_conflict}
+        "422": {description: validation_failed}
+
   /network/ipdb:
     get:
       tags: [network]
@@ -4682,6 +4717,10 @@ components:
           description: 计入国内还是海外额度；不计入 CDT 为 null。
         agent:
           $ref: "#/components/schemas/Agent"
+        traffic_estimation:
+          allOf: [{$ref: "#/components/schemas/TrafficEstimation"}]
+          nullable: true
+          description: 所在账号与 CDT 区域的共享估算，不是此实例独立的官方用量。前端可据 mode/status/reasons 显示估算状态。
         realtime_protection:
           $ref: "#/components/schemas/RealtimeProtection"
         realtime:
@@ -5093,6 +5132,40 @@ components:
       enum: [ok, unavailable, never_fetched, cutoff_unknown]
       description: unavailable = CDT 官方接口连续取不到数据，正沿用最近一次官方值。
 
+    EstimationSettings:
+      type: object
+      additionalProperties: false
+      required: [revision, lag_window_seconds, bandwidth_mode_instance_ids]
+      properties:
+        revision: {type: integer, format: int64, minimum: 0}
+        lag_window_seconds: {type: integer, minimum: 60, maximum: 604800, default: 3600}
+        bandwidth_mode_instance_ids:
+          type: array
+          maxItems: 1000
+          uniqueItems: true
+          items: {type: string}
+    TrafficEstimation:
+      type: object
+      description: Cached background calculation. Missing full coverage is never zero. Unverified values may double-count or omit billed traffic and are only for display/rehearsal. to_at is the common available sample watermark, not necessarily now. Qualified execution additionally requires all scope/membership/source evidence and execution gates.
+      required: [mode, status, basis_id, from_at, to_at, calculated_at, lag_window_seconds, increment_bytes, known_increment_bytes, worst_case_bytes, estimated_bytes, current_rate_bytes_per_second, qualified_for_execution, reasons]
+      properties:
+        mode: {type: string, enum: [aligned, unverified]}
+        status: {type: string, enum: [ready, incomplete, unavailable, stale]}
+        basis_id: {type: string}
+        from_at: {type: string, format: date-time, nullable: true}
+        to_at: {type: string, format: date-time}
+        calculated_at: {type: string, format: date-time}
+        lag_window_seconds: {type: integer}
+        increment_bytes: {type: integer, format: int64, nullable: true}
+        known_increment_bytes: {type: integer, format: int64}
+        worst_case_bytes: {type: integer, format: int64, nullable: true}
+        estimated_bytes: {type: integer, format: int64, nullable: true}
+        current_rate_bytes_per_second: {type: integer, format: int64, nullable: true}
+        qualified_for_execution: {type: boolean}
+        reasons:
+          type: array
+          items: {type: string}
+
     QuotaStatus:
       type: object
       description: Missing official values are null, never zero. An unknown official cutoff makes the aligned increment, estimate and effective value null; fetched_at must not be substituted for the cutoff.
@@ -5113,6 +5186,10 @@ components:
         - forecast
         - updated_at
       properties:
+        estimation:
+          allOf: [{$ref: "#/components/schemas/TrafficEstimation"}]
+          nullable: true
+          description: 后台尚未计算时为 null；未核实值仅放在这里，旧的严格对齐字段继续为 null。
         account_id:
           type: string
         scope:

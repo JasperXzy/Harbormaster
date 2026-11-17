@@ -131,7 +131,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if p.networkProbes(w, r, path) || p.quietHours(w, r, path) || p.heartbeatSettings(w, r, path) || p.passwordPolicy(w, r, path, token) || p.agentHistory(w, r, path) || p.networkHistory(w, r, path) || p.passkeys(w, r, path, token) || p.instancePower(w, r, path) || p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.systemEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.jobHistory(w, r, path) || p.business(w, r, path) {
+	if p.estimationSettings(w, r, path) || p.networkProbes(w, r, path) || p.quietHours(w, r, path) || p.heartbeatSettings(w, r, path) || p.passwordPolicy(w, r, path, token) || p.agentHistory(w, r, path) || p.networkHistory(w, r, path) || p.passkeys(w, r, path, token) || p.instancePower(w, r, path) || p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.systemEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.jobHistory(w, r, path) || p.business(w, r, path) {
 		return
 	}
 	if r.Method != "GET" {

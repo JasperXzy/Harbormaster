@@ -242,6 +242,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		respond(w, 200, object{"items": paged, "next_cursor": cursor})
+	case "/traffic/estimation-settings":
+		respond(w, 200, map[string]any{"revision": 0, "lag_window_seconds": 3600, "bandwidth_mode_instance_ids": []string{}})
 	case "/traffic/quotas":
 		respond(w, 200, object{"items": filter(f.Quotas, "account_id", r.URL.Query().Get("account_id"))})
 	case "/traffic/observations":

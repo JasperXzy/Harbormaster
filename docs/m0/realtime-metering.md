@@ -21,3 +21,29 @@
 ## 分阶段验证
 
 计量核心：`go test -race ./internal/metering -count=1`。覆盖共享成员方向相反、跨小时、区间边界、未知覆盖、离线回补替换、单调时间、整月流式输入及整数溢出。后续阶段另行记录持久化和接口验证。
+
+## 持久化与双路径（第二阶段）
+
+迁移 046 扩展 CDT 观测的来源、单位质量、明确账期和截止字段；当前 ListCdtInternetTraffic 适配器仍只产生 inferred 值，没有补造可信水位。只有单位、账期、截止均受来源确认的内部观测才进入 aligned 路径。没有允许浏览器上传“官方水位”或把未知 CDT 归属强制设真的接口。
+
+未核实窗口从“该官方观测抓取时间 − 延迟窗口”开始，到当前可共同覆盖的采样时刻；官方失败时继续使用同一基准及其原窗口起点，不能把失败抓取当成新基准。默认 3600 秒是本地假设，可通过 `GET/PUT /api/v1/traffic/estimation-settings` 调整为 60–604800 秒；不表示已验证阿里云的统计延迟。修改使用 revision，失效旧缓存。可指定实例强制使用公网带宽离线推算。
+
+后台每 10 秒在一致 SQLite 事务中重算，GET 只读缓存。账号 revision、凭据版本、配置 revision 和基准观测 ID 隔离旧缓存；超过 30 秒的计算显示 stale。原严格对齐字段只在合格 aligned 结果下填充；未核实展示只读取 `QuotaStatus.estimation` 或 `Instance.traffic_estimation`（后者是所在账号＋区域的共享值）。
+
+已知计费对象成员的完整发现结果存储稳定指纹和连续观测起点；首次发现之前、发现不完整、拓扑变更、间隔超过 15 分钟或已过期都不能声称拥有完整历史。连续观测不是权威的历史绑定时间，当前质量为 observed，真实自动执行资格保持 false。没有成员的对象、实例同时对应多个独立计费对象、缺少 agent 或时钟／计数异常都会留下明确原因与 null 完整总值。已计算部分保留便于诊断。
+
+共同结束时刻选取在线 agent 的最新可用采样最小值；尚未采集到的几秒不虚构成零。离线超过 30 秒且实例仍 Running 时推算到这个共同结束时刻；全部离线时推算到当前计算时刻。原始区间流式读取，仅保留最后 10 分钟峰值需要的数据，回补后重新计算自然替换投影。
+
+### 前端对接
+
+新增字段和配置接口见 OpenAPI 顶部 2026-11-18 记录。Claude 需要按 `estimation.mode/status/reasons` 展示“未核实估算／演练”或缺少覆盖的原因；不能根据 agent online 判断已保护，不能把 `calculated_at` 或 `to_at` 说成官方截止。当前未改前端源文件或文案。官方累计仍显示单位及口径待核实。
+
+### 验证方法与实际结果
+
+- `go test -race ./internal/store -run 'TestDualEstimate|TestTrustedCutoff|TestOfflineProjection|TestEstimateSettings' -count=1`：通过，4.856s。
+- 用同一已持久化累计账本验证 8 Mbps 离线 80 秒投影 80,000,000 字节；回补后投影归零，实际累计替代。可信截止与账期的内部 fixture 可进入 aligned；错误账期、未核实单位、observed 拓扑或未知归属不获真实执行资格。
+- OpenAPI YAML 解析及内部引用检查：74 个路径，无未解析引用。开发模式提供估算设置读接口，不需要阿里云账号。
+
+PRD 修订建议：将“官方累计＋实时增量”的单一路径改为有明确来源质量的双路径，补充“发现时间不是历史绑定时间”和跨小时样本上界分配。真实使用中尚未取得可信官方截止与历史成员证据，因此暂不能宣称精确对齐或已开启真实停机保护。
+
+阶段二检查：`go test -race ./internal/store ./internal/api ./internal/collect ./internal/cli ./internal/devmode ./internal/estimation -count=1` 全部通过，store 240.937s、api 139.099s、collect 14.146s、cli 20.767s、devmode 12.674s。`go build ./... && go vet ./... && git diff --check` 退出 0。
