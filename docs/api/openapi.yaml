@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-18  Agent installer command: execute sh directly for uid 0; require sudo only for non-root users, with a fixed installer_requires_root_or_sudo error when unavailable. Registration secrets remain on stdin and download/manifest SHA256 pins remain unchanged. No response fields or agent service privileges change.
 # 2026-11-17  Idle candidate incidents: add enabled-by-default non-urgent idle_resource_detected with empty params. Fresh successful classification records one incident per logical resource, retains it through unknown/failed/stale reads, and recovers only on an explicit known non-candidate observation. Complete disappearance, disabled scope or disabled rule closes silently. Notification.resource_id optionally links EIP/disk/instance evidence independently of instance_id. Current quiet/maintenance suppression and no-backfill policy apply. Messages remain fixed placeholders and no Telegram dispatcher/send is enabled; costs remain unestimated.
 # 2026-11-14  Idle resource candidates: GET /idle-resources reads credential-fenced background evidence for unbound EIP, stopped subscription ECS/SWAS, stopped PostPaid ECS in KeepCharging or explicitly unsupported charge exemption, and unattached/cloud disks whose known attachments are all stopped. Reuse existing complete inventory calls; no new cloud action or GET-triggered query. Each source exposes last successful counts, unclassified rows, failures, age and disabled scope; unknown classification retains prior evidence with its original time. Candidate presence does not establish actual billed waste. monthly_cost/currency stay null pending the separately requested estimation policy and verified prices. No idle alerts, deletion or resource mutation is enabled in this phase.
 # 2026-11-14  Manual ECS release API: POST /instances/{instance_id}/release requires session+CSRF, one durable Idempotency-Key, exact confirmation_name and the current eligible preview_token. Local enqueue returns 202 only; the separate serve worker runs only with explicit instance_release_enabled=true, independently of the power flag. Default/development mode return 503 instance_release_disabled. SystemInfo.instance_release_enabled and preview.execution_enabled reflect the configured production capability; eligible is still separately required. API Key instance:control does not grant release. run-once/M0 remain read-only and demo refuses submission. No runtime flag was enabled or real cloud write performed during implementation.
@@ -2243,7 +2244,7 @@ paths:
       tags: [instances]
       operationId: createAgentInstallCommand
       summary: 生成一行安装命令（含一次性注册码）
-      description: Requires a complete configured agent release. Creating a new command expires the previous registration code; the running agent token remains valid until a new registration succeeds. Commands contain a secret code valid for 10 minutes and must not be logged or shared. Linux systemd installation only.
+      description: Requires a complete configured agent release. Creating a new command expires the previous registration code; the running agent token remains valid until a new registration succeeds. Commands contain a secret code valid for 10 minutes and must not be logged or shared. Linux systemd installation only. Root executes sh directly without sudo; other users require sudo, otherwise the command exits with installer_requires_root_or_sudo before downloading.
       responses:
         "201":
           description: 安装命令
@@ -5081,7 +5082,7 @@ components:
       properties:
         command:
           type: string
-          description: Installer command; setup may need elevated privileges, but the agent service must run with minimal capabilities.
+          description: Installer command selects sh for root or sudo sh for other users; the agent service still runs with minimal capabilities. Registration code is passed on stdin, never as a sudo argument or environment variable.
         expires_at:
           type: string
           format: date-time

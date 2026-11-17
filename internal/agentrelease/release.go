@@ -130,5 +130,5 @@ func quote(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'")
 // Code is passed through stdin to keep it out of sudo's argument log and the
 // installer's process environment. The copied command itself is still secret.
 func Command(origin, code string, m Manifest) string {
-	return `(umask 077; f=$(mktemp) || exit 1; trap 'rm -f "$f"' EXIT; curl --fail --silent --show-error --proto '=https' --tlsv1.2 ` + quote(strings.TrimSuffix(origin, "/")+"/agent/v1/releases/install.sh") + ` -o "$f" && printf '%s  %s\n' ` + quote(m.Hashes["install.sh"]) + ` "$f" | sha256sum -c - >/dev/null && printf '%s\n' ` + quote(code) + ` | sudo sh "$f" ` + quote(strings.TrimSuffix(origin, "/")) + ` ` + quote(m.Digest) + `)`
+	return `(umask 077; if [ "$(id -u)" = 0 ]; then set -- sh; elif command -v sudo >/dev/null 2>&1; then set -- sudo sh; else printf '%s\n' 'installer_requires_root_or_sudo' >&2; exit 1; fi; f=$(mktemp) || exit 1; trap 'rm -f "$f"' EXIT; curl --fail --silent --show-error --proto '=https' --tlsv1.2 ` + quote(strings.TrimSuffix(origin, "/")+"/agent/v1/releases/install.sh") + ` -o "$f" && printf '%s  %s\n' ` + quote(m.Hashes["install.sh"]) + ` "$f" | sha256sum -c - >/dev/null && printf '%s\n' ` + quote(code) + ` | "$@" "$f" ` + quote(strings.TrimSuffix(origin, "/")) + ` ` + quote(m.Digest) + `)`
 }

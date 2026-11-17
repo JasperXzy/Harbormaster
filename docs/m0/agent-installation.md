@@ -1,5 +1,7 @@
 # agent 发布与安装
 
+2026-11-18 命令兼容修复：root 直接调用 sh，普通用户才使用 sudo sh；不需要为 root 安装 sudo。单次注册码继续走 stdin，agent 发布文件与常驻服务权限不变。见[root 安装修复](root-agent-installer.md)。
+
 2026-11-18 最新部署结果：main-server 的空发布目录曾导致安装命令返回 agent_release_unavailable，现已补齐双架构包、脚本、unit、版本与校验清单，公网六文件下载及哈希核对通过。本轮未在 sg-server-nano 执行安装。见[发布修复记录](agent-release-publication.md)。
 
 2026-11-12。已完成发布目录、安装命令 API、校验下载、systemd 单元和安装回滚脚本。本轮只在本机临时目录中执行模拟系统命令的安装测试；没有在真实机器安装服务或修改防火墙。
