@@ -16,7 +16,7 @@
 | V4 | 每小时按整个共享带宽包合并方向后取较大值已确认；CDT 资格不能只看实例创建日期。[V4](V4-dominant-traffic.md) |
 | V5 | 文档确认增强型 95 的方向/峰值口径；没有将文档结论冒充实际账单对账。[V5](V5-enhanced95.md) |
 | V6 | sha-pro 元数据返回底层 ECS ID，与轻量 API ID 不同；用户已同意注册码预绑定。轻量套餐计量方向仍有验证边界。[V6](V6-swas.md) |
-| V7 | 未安装真实 agent、未跑 24 小时、未证明偏差 ≤5% 或资源占用达标。[V7](V7-agent-metering.md)、[隔离内核测试计划](agent-kernel-test-plan.md) |
+| V7 | 用户已自行完成 sg-server-nano 的 agent 注册，服务端观察到新鲜上报；未跑受控 24 小时对账，未证明偏差 ≤5% 或资源占用达标。基本上报不等于完整口径验收。[V7](V7-agent-metering.md)、[当前上报证据](root-agent-installer.md)、[隔离内核测试计划](agent-kernel-test-plan.md) |
 | V8 | hkg-pro 的 EIP 与 hk-share 关联已真实读取确认。[V8](V8-hkg-network.md) |
 | V9 | 仅文档核对；真实节省停机/开机试验没有授权，未执行。[V9](V9-economical-stop.md) |
 | Go 骨架、配置、日志、WAL/迁移、CLI、健康检查 | 已实现并通过本地构建/测试；后续实现均建立在同一工程上。[初始验证](validation.md) |
@@ -73,7 +73,7 @@
 | F11.2 | CPU 积分百分比告警未实现；四个 t5/t6 的只读规格目录已与官方最大余额表核对，不能直接把 InitialCredit/BaselineCredit 当上限。20% 分母方案已提出待答；真实突发实例余额仍待验证。[上限核对](cpu-credit-specs.md) |
 | F11.3 | ECS/CMS 来源、独立默认 60 秒轮询、持久记录/来源健康及只读分页接口已实现；三地域只读验证通过。预警通知与提前送达验收仍未完成。[事件采集](system-events.md) |
 | F11.4 | 账号连续失败的告警记录已实现；实际发信未接通。 |
-| F12.1 | Linux 双架构发布包、校验下载、一行命令、systemd 单元及模拟安装回滚已实现；2026-11-18 已补齐 main-server 空发布目录，公网六文件与摘要核对通过。未替用户执行 sg-server-nano 安装，真实安装/计量验收仍待完成。[安装](agent-installation.md)、[发布修复](agent-release-publication.md) |
+| F12.1 | Linux 双架构发布包、校验下载、一行命令、systemd 单元及模拟安装回滚已实现；2026-11-18 已补齐发布文件并上线 root 无 sudo 的命令兼容修复。用户自行安装的 sg-server-nano 已正常上报；受控安装/计量验收仍待完成。[安装](agent-installation.md)、[发布修复](agent-release-publication.md)、[root 兼容](root-agent-installer.md) |
 | F12.2 | ECS 元数据匹配及用户批准的轻量预绑定流程已实现；元数据文本不等于远程可信证明。 |
 | F12.3 | Linux nftables 原生代码、规则检查及测试程序已实现；内核隔离测试与 24 小时业务口径验证未运行。 |
 | F12.4 | 10 秒默认/本地可配上报、加密离线队列、批量 ACK、重启计数代际已实现和本地测试。[客户端](production-agent-client.md)、[周期](agent-cadence.md) |

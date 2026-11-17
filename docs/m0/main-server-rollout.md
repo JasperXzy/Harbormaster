@@ -1,5 +1,7 @@
 # main-server 只读试运行部署
 
+2026-11-18 后端兼容修复：已将面板更新到 c4cf7c4，root 生成的 agent 安装命令不再依赖 sudo；agent 发布文件、前端与两个云写开关未改。替换后 sg-server-nano 继续上报，身份未变。见[root 安装修复](root-agent-installer.md)。
+
 2026-11-18 后续修复：补齐首次部署遗漏的 agent 发布包，解决安装命令的 agent_release_unavailable；后端只读挂载内可见，公网六文件下载校验通过，无需重启或安装目标主机服务。见[发布记录](agent-release-publication.md)。
 
 2026-11-17。用户已明确授权实际部署到 main-server、前后端分离、接管 CDT-Monitor 的入口并停用旧服务；电源和释放必须保持关闭。这取代此前并行保留 CDT-Monitor 的计划，不扩大真实云写操作或 agent 安装权限。

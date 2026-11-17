@@ -31,4 +31,25 @@ npm --prefix web run lint:api
 Your API description is valid; exit 0
 ```
 
-线上应用与 Linux 容器验证结果在部署后追加；本修复不重新发布 agent 文件，也不变更云写开关。
+## Linux 验证与线上更新
+
+修复提交 `c4cf7c4e0a4c43896e893d2efdc3941af9f9f8b8` 已构建并部署为 `harbormaster-server:trial-c4cf7c4`，版本 `0.1.0-trial.20261118.1`。镜像 ID 为 `sha256:30763dba0a59f5ee16870eca50e4e828f4b14ce572cbbe926c386f8b725cf6d7`；使用实际构建起点 `2026-11-17T17:41:04Z` 作为版本元数据。
+
+在 Linux 构建镜像内以 network=none、cap-drop=ALL 运行新测试，root/普通用户四个 shell 分支全部通过；临时服务容器的初始化、会话、SSE、空账号与关闭云写开关检查也通过：
+
+```text
+go test ./internal/agentrelease -run '^TestInstallCommandPrivilegeSelectionAndStdin$' -count=1
+ok github.com/JasperXzy/harbormaster/internal/agentrelease 0.052s
+sh deploy/check-container.sh harbormaster-server:trial-c4cf7c4
+container_setup_session_empty_accounts_sse_cloud_writes_disabled_verified
+container_nonroot_ready_proxy_headers_verified_secrets_not_logged
+exit 0
+```
+
+替换前通过 SQLite online backup 生成一致副本并执行 integrity_check，结果 ok。副本和旧 runtime.env 位于 `/var/backups/harbormaster/root-installer-c4cf7c4`，目录 0700、数据库 0600，凭据保留原加密；没有把主密钥复制进备份。
+
+在 `2026-11-17T17:44:16Z` 开始替换后端容器。原 Compose 文件、只读覆盖、数据目录、主密钥、会话和 agent 发布目录均保留，只更新 runtime.env 的镜像引用。健康状态 healthy，版本与提交号一致，电源/释放两个环境开关均 false；没有新增迁移，仍为 45 项，也未使用回滚。回滚只需恢复该备份目录中的 runtime.env 并以同样两个 Compose 文件替换为旧镜像；本次数据库结构未变，不应为了回退二进制而覆盖正在接收新样本的数据库。
+
+在主机内比较替换前后该实例的有效 token_hash，确认身份未变，只输出比较结果，不记录哈希或真实 token。新后端在 `2026-11-17T17:44:22.253394641Z` 收到该 agent 的新报告，说明现有安装继续工作，无需重装。本轮验证没有生成生产注册码，也没有读取或修改目标主机；用户自行完成的安装与受控 V7 计量验收分开记录。
+
+发布文件、校验摘要、前端和云写开关均未变化。运行证据见 [root-installer-runtime-evidence.json](root-installer-runtime-evidence.json)。
