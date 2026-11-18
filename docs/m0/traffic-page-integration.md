@@ -45,3 +45,36 @@
 已有两个空共享带宽包。旧估算器把所有无成员对象都视为未归属，会使已确认空包永久阻断完整估算。现在只对“完整发现中明确为空的成员和公网地址列表”检查新增关系历史；该历史覆盖整个延迟窗口后才能贡献已知零，缺少地址列表或仍有公网地址时保持未知。不会用旧指纹回溯证明空包，也不会把观测历史升级为真实执行资格。新增回归覆盖未记录历史、历史不足、窗口覆盖后的零增量，以及有地址但无成员的未知情形。
 
 生产验证发现另一个既有边界：估算器要求所有已配置地域都有完整历史，导致上海的关系变更也使海外估算失效。将计费适配器、实时估算和日统计统一使用同一地域范围分类，只要求当前国内／海外范围对应的已配置地域；未知计费对象仍保持未知，不放宽源验证或真实执行守卫。回归测试证明香港历史不足时国内完整值可继续展示、海外保持缺口；国内日统计也不依赖香港关系历史。
+
+## 最终发布与实际结果
+
+分阶段提交：`c32fa90` 实时估算展示；`b19bf67` 每日缓存和预测；`6064cf1` 每日图表与预测接入；`e5983f8` 空包已知零；`6db9bb9` 国内／海外覆盖隔离。保留 `be/m0-foundation`，没有 push 或合并 main；`docs/design/` 的既有未提交内容没有纳入。
+
+最终后端镜像 `harbormaster-server:trial-6db9bb9`，版本 `0.1.0-trial.20261118.4`。从已提交的后端路径导出源码，在 main-server 用现有 `deploy/Dockerfile` 构建，前端不进入镜像。前端独立发布 `6064cf1` 的 production dist，新脚本 `assets/index-DpyeGCiB.js`；先复制新静态资源，保留旧资源，再原子替换入口 HTML。
+
+上线前 SQLite 在线备份 `/var/backups/harbormaster/daily-20261118/harbormaster.db`，`PRAGMA integrity_check=ok`；外部主密钥未复制、未改动。旧前端入口保存在 `/var/backups/harbormaster/frontend-6064cf1/index.html`。只更新现有 Compose 的镜像选择，保持 JSON 和环境变量中的电源／释放均为 false、根文件系统只读、前后端独立；没有更新 agent、代理、DNS 或 TLS。
+
+实际执行的验证命令及结果：
+
+```text
+go test ./...                         # 所有包通过
+go build ./...                        # exit 0
+go vet ./...                          # exit 0
+go test -race ./internal/store -run 'Test(Daily|OfficialDaily|Forecast|EmptyPackage|TopologyCoverage)' -count=1
+# ok github.com/JasperXzy/harbormaster/internal/store 8.105s
+npm run typecheck                     # tsc --noEmit，exit 0
+npm test                              # tests 8, pass 8, fail 0
+npm run build                         # TypeScript + production Vite build 通过
+npm run build:mock                    # 独立 mock build 通过
+npm run lint:api                      # Your API description is valid
+npm run gen:api                       # types 生成；git diff --exit-code 无差异
+sudo sh deploy/check-container.sh harbormaster-server:trial-6db9bb9
+# container_setup_session_empty_accounts_sse_cloud_writes_disabled_verified
+# container_nonroot_ready_proxy_headers_verified_secrets_not_logged
+```
+
+生产回读使用临时 Go 检查程序，只以 SQLite `mode=ro` 调用与 API 相同的 `Store.Quotas`、`Store.DailyTraffic`；没有读取解密密钥或发起云请求。检查源码未保留在项目中。07:55 UTC 的生产数据：主账号（现名 JasperXzy）海外估算 ready，约 116.01 GiB（界面沿用 GB 标记）；今日海外已采集 961,470,708 字节，为部分覆盖。其他缺口保持明确，不将局部小计作为完整月用量。近 7 个已结束日期内无完整日样本，生产预测因此为 insufficient_data；预测逻辑已经通过合成数据及浏览器验证，后续有至少一个完整日会自动出数，不补造安装前历史。
+
+容器 healthy，`/healthz` 和 `/readyz` 均 200，迁移 49，日缓存 36 个账号日期、待处理日期 0，有效 agent 2，持续收到上报。电源发送、释放发送、自动动作计数全为 0。公网 `/traffic` 返回 200，HTML 为 `cache-control: no-store`、`cf-cache-status: DYNAMIC`；资源返回 200 且包含新日统计和预测字段。无需用户调整 DNS 或证书。
+
+仍未取得官方 CDT 的可信统计截止时间及完整计费单位证明，未把未核实估算升级为真实保护资格；目前也没有可验证的官方每日账单。当前使用用户批准的本地窗口与采集估算方案。详细生产读取见 `traffic-page-runtime-evidence.json`。截图是显式标识的演示样本，不代表生产补出了过去的每日数据。

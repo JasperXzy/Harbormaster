@@ -1,0 +1,279 @@
+{
+  "at": "2026-11-18T07:55:05.061485889Z",
+  "daily": [
+    {
+      "official_point_count": {
+        "mainland": 0,
+        "overseas": 1
+      },
+      "recent_days": [
+        {
+          "date": "2026-11-17",
+          "mainland_bytes": null,
+          "overseas_bytes": null,
+          "provisional": false,
+          "scopes": {
+            "mainland": {
+              "bytes": null,
+              "known_bytes": 0,
+              "has_data": false,
+              "source": "unavailable",
+              "status": "unavailable",
+              "is_complete_day": false,
+              "from_at": "2026-11-17T00:00:00+08:00",
+              "until_at": "2026-11-18T00:00:00+08:00",
+              "observed_from": null,
+              "observed_until": null,
+              "reasons": [
+                "topology_history_incomplete",
+                "topology_observed_only"
+              ]
+            },
+            "overseas": {
+              "bytes": null,
+              "known_bytes": 0,
+              "has_data": false,
+              "source": "unavailable",
+              "status": "unavailable",
+              "is_complete_day": false,
+              "from_at": "2026-11-17T00:00:00+08:00",
+              "until_at": "2026-11-18T00:00:00+08:00",
+              "observed_from": null,
+              "observed_until": null,
+              "reasons": [
+                "topology_history_incomplete",
+                "topology_observed_only"
+              ]
+            }
+          }
+        },
+        {
+          "date": "2026-11-18",
+          "mainland_bytes": null,
+          "overseas_bytes": null,
+          "provisional": true,
+          "scopes": {
+            "mainland": {
+              "bytes": null,
+              "known_bytes": 0,
+              "has_data": false,
+              "source": "unavailable",
+              "status": "unavailable",
+              "is_complete_day": false,
+              "from_at": "2026-11-18T00:00:00+08:00",
+              "until_at": "2026-11-18T07:54:48.591893128Z",
+              "observed_from": null,
+              "observed_until": null,
+              "reasons": [
+                "day_in_progress",
+                "topology_history_incomplete",
+                "topology_observed_only"
+              ]
+            },
+            "overseas": {
+              "bytes": null,
+              "known_bytes": 0,
+              "has_data": true,
+              "source": "agent_estimate",
+              "status": "partial",
+              "is_complete_day": false,
+              "from_at": "2026-11-18T00:00:00+08:00",
+              "until_at": "2026-11-18T07:54:48.591893128Z",
+              "observed_from": null,
+              "observed_until": null,
+              "reasons": [
+                "cdt_eligibility_unknown",
+                "day_in_progress",
+                "topology_history_incomplete",
+                "topology_observed_only"
+              ]
+            }
+          }
+        }
+      ],
+      "source_status": "partial",
+      "updated_at": "2026-11-18T07:54:48.591893128Z",
+      "account": "WinneMjw"
+    },
+    {
+      "official_point_count": {
+        "mainland": 1,
+        "overseas": 1
+      },
+      "recent_days": [
+        {
+          "date": "2026-11-17",
+          "mainland_bytes": null,
+          "overseas_bytes": null,
+          "provisional": false,
+          "scopes": {
+            "mainland": {
+              "bytes": null,
+              "known_bytes": 0,
+              "has_data": false,
+              "source": "unavailable",
+              "status": "unavailable",
+              "is_complete_day": false,
+              "from_at": "2026-11-17T00:00:00+08:00",
+              "until_at": "2026-11-18T00:00:00+08:00",
+              "observed_from": null,
+              "observed_until": null,
+              "reasons": [
+                "topology_history_incomplete",
+                "topology_observed_only"
+              ]
+            },
+            "overseas": {
+              "bytes": null,
+              "known_bytes": 0,
+              "has_data": false,
+              "source": "unavailable",
+              "status": "unavailable",
+              "is_complete_day": false,
+              "from_at": "2026-11-17T00:00:00+08:00",
+              "until_at": "2026-11-18T00:00:00+08:00",
+              "observed_from": null,
+              "observed_until": null,
+              "reasons": [
+                "topology_history_incomplete",
+                "topology_observed_only"
+              ]
+            }
+          }
+        },
+        {
+          "date": "2026-11-18",
+          "mainland_bytes": null,
+          "overseas_bytes": null,
+          "provisional": true,
+          "scopes": {
+            "mainland": {
+              "bytes": null,
+              "known_bytes": 0,
+              "has_data": true,
+              "source": "agent_estimate",
+              "status": "partial",
+              "is_complete_day": false,
+              "from_at": "2026-11-18T00:00:00+08:00",
+              "until_at": "2026-11-18T07:54:48.591893128Z",
+              "observed_from": null,
+              "observed_until": null,
+              "reasons": [
+                "cdt_eligibility_unknown",
+                "day_in_progress",
+                "topology_history_incomplete",
+                "topology_observed_only"
+              ]
+            },
+            "overseas": {
+              "bytes": null,
+              "known_bytes": 961470708,
+              "has_data": true,
+              "source": "agent_estimate",
+              "status": "partial",
+              "is_complete_day": false,
+              "from_at": "2026-11-18T00:00:00+08:00",
+              "until_at": "2026-11-18T07:54:48.591893128Z",
+              "observed_from": "2026-11-17T20:27:17.837126485Z",
+              "observed_until": "2026-11-18T07:54:44.545049633Z",
+              "reasons": [
+                "boundary_upper_allocation",
+                "cdt_eligibility_unknown",
+                "coverage_gap",
+                "day_in_progress",
+                "partial_hour_upper",
+                "topology_history_incomplete",
+                "topology_observed_only"
+              ]
+            }
+          }
+        }
+      ],
+      "source_status": "partial",
+      "updated_at": "2026-11-18T07:54:48.591893128Z",
+      "account": "JasperXzy"
+    }
+  ],
+  "quotas": [
+    {
+      "forecast_status": "insufficient_data",
+      "official_bytes": null,
+      "scope": "mainland",
+      "account": "WinneMjw"
+    },
+    {
+      "estimate_bytes": null,
+      "forecast_status": "insufficient_data",
+      "known_increment_bytes": 0,
+      "mode": "unverified",
+      "official_bytes": 0,
+      "qualified": false,
+      "reasons": [
+        "cdt_eligibility_unknown",
+        "lag_window_assumption",
+        "official_cutoff_or_unit_unverified",
+        "topology_observed_only",
+        "unattributed_subject"
+      ],
+      "scope": "overseas",
+      "status": "incomplete",
+      "account": "WinneMjw"
+    },
+    {
+      "estimate_bytes": null,
+      "forecast_status": "insufficient_data",
+      "known_increment_bytes": 0,
+      "mode": "unverified",
+      "official_bytes": 1745430210,
+      "qualified": false,
+      "reasons": [
+        "cdt_eligibility_unknown",
+        "lag_window_assumption",
+        "official_cutoff_or_unit_unverified",
+        "topology_history_incomplete",
+        "topology_observed_only",
+        "unattributed_subject"
+      ],
+      "scope": "mainland",
+      "status": "incomplete",
+      "account": "JasperXzy"
+    },
+    {
+      "estimate_bytes": 124564424433,
+      "forecast_status": "insufficient_data",
+      "known_increment_bytes": 207876903,
+      "mode": "unverified",
+      "official_bytes": 124356547530,
+      "qualified": false,
+      "reasons": [
+        "boundary_upper_allocation",
+        "cdt_eligibility_unknown",
+        "lag_window_assumption",
+        "official_cutoff_or_unit_unverified",
+        "partial_hour_upper",
+        "topology_observed_only"
+      ],
+      "scope": "overseas",
+      "status": "ready",
+      "account": "JasperXzy"
+    }
+  ],
+  "timezone": "Asia/Shanghai",
+  "deployment": {
+    "backend_commit": "6db9bb9",
+    "frontend_commit": "6064cf1",
+    "version": "0.1.0-trial.20261118.4",
+    "image": "harbormaster-server:trial-6db9bb9",
+    "container_health": "healthy",
+    "healthz": 200,
+    "readyz": 200,
+    "migrations": 49,
+    "cache_dates": 36,
+    "active_agents": 2,
+    "power_enabled": "false",
+    "release_enabled": "false",
+    "power_sends": 0,
+    "release_sends": 0,
+    "automatic_actions": 0
+  }
+}
