@@ -82,6 +82,12 @@ function tick() {
     q.updated_at = iso(now);
     emit("quota.updated", q);
   }
+  for(const q of db.quotas){
+    const e=q.estimation;if(!e)continue;
+    e.calculated_at=iso(now);e.to_at=iso(now);
+    if(e.status==="ready" && e.increment_bytes!==null && q.official_bytes!==null){e.increment_bytes+=(e.current_rate_bytes_per_second??0)*TICK_SECONDS;e.known_increment_bytes=e.increment_bytes;e.estimated_bytes=q.official_bytes+e.increment_bytes;}
+    emit("quota.updated",q);
+  }
   emit("ping", {});
 }
 
@@ -320,7 +326,7 @@ export async function handle(method: string, fullPath: string, body: unknown): P
     if (!db.telegram.bot_token_set) return fail(409, "telegram_not_configured");
     return ok(startJob("telegram_test", 1500, () => {
       if (scene === "stale") return { error: { code: "telegram_unreachable", message: "mock" } };
-      const n: T.Notification = { id: "ntf_" + Date.now(), created_at: iso(), kind: "test", severity: "info", rule_key: null, title: "测试消息", body: "如果你在 Telegram 里看到这条消息，说明通知已经配置好了。", account_id: null, instance_id: null, delivery_status: "sent" };
+      const n: T.Notification = { id: "ntf_" + Date.now(), created_at: iso(), kind: "test", severity: "info", rule_key: null, title: "测试消息", body: "如果你在 Telegram 里看到这条消息，说明通知已经配置好了。", account_id: null, instance_id: null, probe_plan_id:null, delivery_status: "sent" };
       db.notifications.unshift(n);
       db.telegram.status = "ok";
       db.telegram.last_error = null;

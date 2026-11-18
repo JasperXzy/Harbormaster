@@ -9,10 +9,10 @@ import { QuotaMeter, QuotaUnknownNote } from "../components/QuotaMeter";
 import { TipRow } from "../components/charts/common";
 import { Async, Badge, Card, EmptyState, ErrorState, Fresh, SegToggle, Skeleton } from "../components/ui";
 import { useShared } from "../lib/data";
-import { gb, gbValue, num, shortDate, time, stamp } from "../lib/format";
+import { gb, gbValue, bytes, num, shortDate, time, stamp } from "../lib/format";
 import { Link } from "../lib/router";
 import { useResource } from "../lib/useResource";
-import { cumulativeBytes } from "../lib/usage";
+import { quotaView, quotaState, quotaMissingReasons, cumulativeBytes } from "../lib/usage";
 
 type View = "chart" | "table";
 const VIEW: [View, string][] = [["chart", "图表"], ["table", "表格"]];
@@ -43,7 +43,7 @@ export function Traffic() {
         </select>
       </div>
 
-      <Card title="本月用量" sub="实时估算 = 阿里云官方数据（约晚 1 小时）+ 之后采集程序报上来的增量">
+      <Card title="本月用量" sub="同时保留官方累计和采集估算；未核实的窗口会单独标注">
         {quotas.error ? <ErrorState error={quotas.error} onRetry={quotas.reload} /> : !quotas.data ? <Skeleton /> : !qs.length ? <EmptyState title="这个账号还没有额度数据" /> : <QuotaTable qs={qs} />}
       </Card>
 
@@ -68,22 +68,20 @@ function QuotaTable({ qs }: { qs: QuotaStatus[] }) {
           <tr><th>范围</th><th className="num">实时估算</th><th className="num">免费额度</th><th className="num">预测月底</th><th>更新</th></tr>
         </thead>
         <tbody>
-          {rows.map((q) => (
+          {rows.map((q) => { const v = quotaView(q); return (
             <tr key={q.scope}>
               <td><b>{SCOPE[q.scope]}</b></td>
               <td className="num">
-                <b>{gb(q.estimated_bytes)}</b>
-                <div className="sub">
-                  官方 {gb(q.official_bytes)}{q.official_as_of ? `（截至 ${time(q.official_as_of)}）` : q.official_bytes === null ? "" : "（统计时间不明）"}
-                  {q.estimated_bytes !== null && q.official_bytes !== null && ` + 实时 ${gb(q.estimated_bytes - q.official_bytes)}`}
-                  {q.worst_case_bytes !== null && q.worst_case_bytes > 0 && `，其中推算 ${gb(q.worst_case_bytes)}`}
-                </div>
+                <b>{v.value === null ? "—" : gb(v.value, 2)}</b> <Badge level={v.unverified || !v.usable ? "warning" : "neutral"}>{quotaState(q)}</Badge>
+                <div className="sub">官方 {gb(q.official_bytes)}{q.official_as_of ? `（截至 ${time(q.official_as_of)}）` : "（截止时间未知）"}{v.usable && v.increment !== null && ` + 采集 ${bytes(v.increment)}`}</div>
+                {!v.usable && <div className="sub">{quotaMissingReasons(q)}{v.knownIncrement > 0 && `；已采集部分 ${bytes(v.knownIncrement)}`}</div>}
+                {v.worstCase !== null && v.worstCase > 0 && <div className="sub">含掉线推算 {bytes(v.worstCase)}</div>}
               </td>
-              <td className="num">{gb(q.quota_bytes, 0)}{q.effective_bytes !== null && q.quota_bytes > 0 && <div className="sub">已用 {num((q.effective_bytes / q.quota_bytes) * 100, 0)}%</div>}</td>
-              <td className="num">{q.forecast ? gb(q.forecast.cycle_end_bytes) : "—"}<div className="sub">{!q.forecast ? "暂时无法预测" : q.forecast.exceeds_on ? `预计 ${shortDate(q.forecast.exceeds_on)} 超出` : "不会超额"}</div></td>
-              <td>{q.official_status === "cutoff_unknown" ? <Badge level="warning">统计时间不明</Badge> : q.official_status === "unavailable" ? <Badge level="warning">官方数据取不到</Badge> : <Fresh at={q.updated_at} kind="realtime" prefix="" />}</td>
+              <td className="num">{gb(q.quota_bytes, 0)}{v.usable && v.value !== null && q.quota_bytes > 0 && <div className="sub">{v.unverified ? "估算" : ""}已用 {num(v.value / q.quota_bytes * 100, 1)}%</div>}</td>
+              <td className="num">{q.forecast ? gb(q.forecast.cycle_end_bytes) : "—"}<div className="sub">{!q.forecast ? "完整日样本尚不足" : q.forecast.exceeds_on ? `预计 ${shortDate(q.forecast.exceeds_on)} 超出` : "按当前趋势预测"}</div></td>
+              <td><Fresh at={v.updatedAt} kind="realtime" prefix="" />{q.official_status === "unavailable" && <div className="sub">沿用上次官方基准</div>}</td>
             </tr>
-          ))}
+          ); })}
         </tbody>
       </table>
     </div>

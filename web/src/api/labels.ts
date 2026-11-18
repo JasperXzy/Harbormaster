@@ -54,9 +54,11 @@ export const PROTECTION: Record<T.RealtimeProtection, [Level, string, string]> =
 };
 
 /** 实例的实时保护状态。采集程序在线但额度暂时算不出时，不说“未受保护”，以免和没装的机器混在一起。 */
-export function protectionOf(i: Pick<T.Instance, "realtime_protection" | "agent">): [Level, string, string] {
+export function protectionOf(i: Pick<T.Instance, "realtime_protection" | "agent" | "traffic_estimation">): [Level, string, string] {
+  if(i.traffic_estimation?.status==="ready" && i.traffic_estimation.estimated_bytes!==null)
+    return ["warning",i.traffic_estimation.mode==="unverified" ? "未核实估算" : "估算可用","采集数据已纳入所在账号与区域的共享估算；这不代表已开启真实停机保护。"];
   if (i.realtime_protection === "unprotected" && i.agent.status === "online")
-    return ["warning", "暂无法估算", "采集程序在正常上报，但阿里云官方数据的统计时间还不明确，暂时没法把两者加在一起算出实时用量。"];
+    return ["warning", "暂无法估算", "采集程序在正常上报，所在范围还缺少完整的计量覆盖。请在流量页查看具体原因。"];
   return PROTECTION[i.realtime_protection];
 }
 
@@ -92,6 +94,14 @@ export const DELIVERY: Record<T.Notification["delivery_status"], [Level, string]
 };
 
 export const ALERT_RULE: Record<T.AlertRuleKey, { title: string; desc: string }> = {
+ balance_low:{title:"余额不足",desc:"可用余额低于配置阈值时提醒。"},
+ network_latency:{title:"网络延迟升高",desc:"连续探测超过已配置的延迟阈值时提醒。"},
+ network_loss:{title:"网络连接失败",desc:"探测失败比例超过阈值时提醒。"},
+ network_unreachable:{title:"目标不可达",desc:"连续探测全部失败时提醒。"},
+ network_route_change:{title:"线路变化",desc:"可比较的线路快照发生变化时提醒。"},
+ idle_resource_detected:{title:"闲置资源",desc:"发现已确认的闲置资源候选时提醒。"},
+ quota_protection:{title:"额度保护",desc:"记录额度规则的判定和执行结果。"},
+ cdt_estimation_deviation:{title:"估算偏差",desc:"同一截止时刻的估算与官方值持续相差超过 10% 时提醒。"},
   cdt_usage: { title: "免费额度用量", desc: "每越过一个档位通知一次。" },
   cdt_forecast_exceed: { title: "预计月底超额", desc: "按最近 7 天的日均推算，月底前会超出时通知。" },
   account_api_failure: { title: "账号连接失败", desc: "通常是 AccessKey 失效或权限被改。" },

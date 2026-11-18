@@ -5,6 +5,7 @@ import { useConnState } from "../api/events";
 import { waitForJob } from "../api/jobs";
 import { useShared } from "../lib/data";
 import { isStale } from "../lib/freshness";
+import { quotaView } from "../lib/usage";
 import { stamp } from "../lib/format";
 import { Link, usePath } from "../lib/router";
 import { nextTheme, THEME_LABEL, useTheme } from "../lib/theme";
@@ -60,7 +61,9 @@ export function Shell({ title, version, children, dataMode, readOnly }: { title:
 
   const q = quotas.data ?? [];
   const official = q.map((x) => x.official_as_of).filter((x): x is string => !!x).sort()[0];
-  const realtime = q.filter((x) => x.effective_bytes !== null).map((x) => x.updated_at).filter((x): x is string => !!x).sort().at(-1);
+  const views=q.map((x)=>quotaView(x));
+ const realtime=views.filter((v)=>v.usable).map((v)=>v.updatedAt).filter((x):x is string=>!!x).sort().at(-1);
+ const unverified=views.some((v)=>v.usable&&v.unverified);
 
   // 官方数据只在有问题（过期、统计时间不明）时单独提示；正常时并入“更新于”的悬停说明
   const officialProblem = q.some((x) => x.official_bytes !== null) && isStale(official, "official");
@@ -97,12 +100,12 @@ export function Shell({ title, version, children, dataMode, readOnly }: { title:
           <div className="spacer" />
           {q.length > 0 && officialProblem && (
             <span className="hide-sm">
-              {!official ? <span className="chip stale">官方数据的统计时间不明</span> : <Fresh at={official} kind="official" prefix="官方数据截至" name="官方数据" />}
+              {!official ? <span className="chip stale">官方统计截止未知</span> : <Fresh at={official} kind="official" prefix="官方数据截至" name="官方数据" />}
             </span>
           )}
           {q.length > 0 && (realtime
-            ? <span title={official ? `实时估算的更新时间。阿里云官方数据截至 ${stamp(official)}，大约晚 1 小时。` : "实时估算的更新时间"}><Fresh at={realtime} kind="realtime" prefix="更新于" name="实时数据" /></span>
-            : <span className="chip stale">实时估算待确认</span>)}
+            ? <span title={official ? `实时估算的更新时间。官方数据截至 ${stamp(official)}。` : "实时估算的更新时间"}>{unverified && <span className="chip stale">未核实估算</span>} <Fresh at={realtime} kind="realtime" prefix="估算更新于" name="实时数据" /></span>
+            : <span className="chip stale">估算覆盖待补齐</span>)}
           {conn === "reconnecting" && (
             <span className="chip stale" title="和服务器的实时连接断开了，正在自动重连。页面上的数字可能不是最新的。">
               <span className="dot down" /> 实时连接已断开

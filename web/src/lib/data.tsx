@@ -34,7 +34,7 @@ async function allInstances(): Promise<InstanceList> {
 export function DataProvider({ children }: { children: ReactNode }) {
   const accounts = useResource(api.accounts, [], { refreshMs: 60_000 });
   const instances = useResource(allInstances, [], { refreshMs: 60_000 });
-  const quotas = useResource(() => api.quotas(), [], { refreshMs: 60_000 });
+  const quotas = useResource(() => api.quotas(), [], { refreshMs: 10_000 });
   const reloadAll = () => {
     accounts.reload();
     instances.reload();

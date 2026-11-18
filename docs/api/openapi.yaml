@@ -5,6 +5,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-18  Frontend integration: correct nullable object schemas and quote the quota outcome description so OpenAPI type generation accepts the existing backend contract; no response behavior changes.
 # 2026-11-18  CDT reconciliation: add paginated local /traffic/reconciliations and QuotaStatus.reconciliation. Compare predicted and official usage at the same trusted cutoff/period, using actual fully covered intervals only; boundary upper allocations, projections, unknown topology/eligibility and repeated/regressed cutoffs do not count as precise comparisons. Default deviation trigger needs three distinct comparable >10% observations; recovery also needs three comparable healthy observations by explicit user confirmation, denominator official; 0/0 is healthy and nonzero/0 has no finite ratio. Existing /alert-rules omits the new rule unless include_reconciliation=true to preserve the current frontend fixed dictionary. No GET queries clouds.
 # 2026-11-18  Quota protection: add session-only rule CRUD, expiring account/scope simulations, durable decision history/status and temporary instance exemptions. Rules explicitly choose threshold/action/targets/stop mode/reserve/dry-run. Unverified sources and simulations can only rehearse; disabled power creates terminal local records, never latent cloud jobs. Automatic sends re-evaluate in the dispatch transaction, require known server identity, apply exemptions and a persisted default 3-per-10-minute per-instance budget. Host binding is deployment configuration outside DB backups.
 # 2026-11-18  Dual-path metering: QuotaStatus.estimation is an independently qualified cached result. Trusted period/unit/cutoff uses aligned mode; otherwise a configurable lag window is unverified and rehearsal-only. Unknown coverage stays null; hourly shared traffic is combined before max, with boundary upper allocations explicit. GET/PUT /traffic/estimation-settings is session/CSRF protected, revision fenced, and never calls clouds. Legacy aligned fields remain null for unverified estimates.
@@ -4945,6 +4946,7 @@ components:
           nullable: true
           description: 来自部署绑定或可靠匹配元数据；身份未知时为 null。
         traffic_estimation:
+          type: object
           allOf: [{$ref: "#/components/schemas/TrafficEstimation"}]
           nullable: true
           description: 所在账号与 CDT 区域的共享估算，不是此实例独立的官方用量。前端可据 mode/status/reasons 显示估算状态。
@@ -5432,7 +5434,7 @@ components:
             required: [instance_id, outcome, job_id]
             properties:
               instance_id: {type: string}
-              outcome: {type: string, description: Fixed outcome code (would_stop, power_disabled, self_identity_unknown, self_excluded, exempt, already_stopped, operation_limited, queued, source_unqualified, busy, target_unavailable).}
+              outcome: {type: string, description: "Fixed outcome code (would_stop, power_disabled, self_identity_unknown, self_excluded, exempt, already_stopped, operation_limited, queued, source_unqualified, busy, target_unavailable, restore_quarantine)."}
               job_id: {type: string, nullable: true}
     CDTReconciliation:
       type: object
@@ -5509,10 +5511,12 @@ components:
         - updated_at
       properties:
         reconciliation:
+          type: object
           allOf: [{$ref: "#/components/schemas/CDTReconciliation"}]
           nullable: true
           description: 当前凭据及本地周期的最后一次对账记录，可能明确不可比较。
         estimation:
+          type: object
           allOf: [{$ref: "#/components/schemas/TrafficEstimation"}]
           nullable: true
           description: 后台尚未计算时为 null；未核实值仅放在这里，旧的严格对齐字段继续为 null。

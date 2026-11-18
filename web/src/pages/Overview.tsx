@@ -9,7 +9,7 @@ import { useShared } from "../lib/data";
 import { gb, stamp } from "../lib/format";
 import { Link } from "../lib/router";
 import { useResource } from "../lib/useResource";
-import { quotaPool as pool } from "../lib/usage";
+import { quotaView, quotaPool as pool } from "../lib/usage";
 
 const ORDER: Level[] = ["good", "neutral", "warning", "serious", "critical"];
 const worse = (a: Level, b: Level) => (ORDER.indexOf(a) >= ORDER.indexOf(b) ? a : b);
@@ -59,14 +59,14 @@ export function Overview() {
   const failing = accs.filter((a) => a.sync_status === "failing");
   const worstCase = insts.filter((i) => i.realtime_protection === "worst_case");
   const unprotected = insts.filter((i) => i.realtime_protection === "unprotected" && i.status === "running" && i.agent.status === "not_installed");
-  const usageUnknown = qs.some((q) => q.effective_bytes === null);
+  const usageUnknown = qs.some((q) => !quotaView(q).usable);
   const officialDown = qs.some((q) => q.official_status === "unavailable");
   const po = pool(qs, accs, "overseas"), pm = pool(qs, accs, "mainland");
   const tiles: [string, string, string, string][] = [
     ["阿里云账号", String(accs.length), "个", failing.length ? `${failing.length} 个连接失败` : "全部连接正常"],
     ["实例", String(insts.length), "台", `运行中 ${running} · 其他 ${insts.length - running}`],
-    ["海外免费流量还剩", gb(po.left).replace(" GB", ""), po.left === null ? "" : "GB", po.left === null ? "有账号的用量还没确认，先不合计" : po.over ? `已超出 ${gb(po.over)}` : `共 ${gb(po.quota, 0)}${po.best ? ` · 剩得最多：${po.best}` : ""}`],
-    ["国内免费流量还剩", gb(pm.left).replace(" GB", ""), pm.left === null ? "" : "GB", pm.left === null ? "有账号的用量还没确认，先不合计" : pm.over ? `已超出 ${gb(pm.over)}` : `共 ${gb(pm.quota, 0)}${pm.best ? ` · 剩得最多：${pm.best}` : ""}`],
+    [po.unverified ? "海外估算剩余" : "海外免费流量还剩", gb(po.left).replace(" GB", ""), po.left === null ? "" : "GB", po.left === null ? "有账号的用量还没确认，先不合计" : po.over ? `已超出 ${gb(po.over)}` : `共 ${gb(po.quota, 0)}${po.best ? ` · 剩得最多：${po.best}` : ""}`],
+    [pm.unverified ? "国内估算剩余" : "国内免费流量还剩", gb(pm.left).replace(" GB", ""), pm.left === null ? "" : "GB", pm.left === null ? "有账号的用量还没确认，先不合计" : pm.over ? `已超出 ${gb(pm.over)}` : `共 ${gb(pm.quota, 0)}${pm.best ? ` · 剩得最多：${pm.best}` : ""}`],
   ];
 
   return (
@@ -90,12 +90,12 @@ export function Overview() {
           )}
           {unprotected.length > 0 && (
             <Banner level="warning" action={<Link className="btn sm" to="/instances">去安装</Link>}>
-              <b>{unprotected.map((i) => i.name).join("、")} 未受实时保护。</b> 没装采集程序，用量要晚约 1 小时才看得到。
+              <b>{unprotected.map((i) => i.name).join("、")} 未受实时保护。</b> 没装采集程序，只有延迟的官方累计可参考。
             </Banner>
           )}
           {usageUnknown && (
             <Banner level="warning" action={<Link className="btn sm" to="/traffic">查看流量</Link>}>
-              <b>暂时算不出实时用量。</b> 下面只显示能确认的官方数字。
+              <b>部分范围的估算覆盖还不完整。</b> 可用范围继续显示估算，缺失范围保留官方累计。
             </Banner>
           )}
           {telegram.data?.status === "not_configured" && (

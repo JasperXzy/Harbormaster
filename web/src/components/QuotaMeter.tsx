@@ -1,131 +1,67 @@
-// 额度条：官方已用 + 实时增量（未出账）+ 预测到月底，竖线标出免费额度。
 import type { QuotaStatus } from "../api/types";
 import { SCOPE } from "../api/labels";
-import { GB, gb, pct, shortDate, time, stamp } from "../lib/format";
+import { GB, gb, bytes, pct, shortDate, time, stamp } from "../lib/format";
+import { quotaView, quotaState, quotaMissingReasons } from "../lib/usage";
 import { Badge, type Level } from "./ui";
 
 export function quotaLevel(q: QuotaStatus): [Level, string] {
-  if (q.effective_bytes === null) return ["warning", "用量待确认"];
-  const ratio = q.quota_bytes ? q.effective_bytes / q.quota_bytes : 0;
+  const v = quotaView(q);
+  if (!v.usable || v.value === null) return ["warning", quotaState(q)];
+  const ratio = q.quota_bytes ? v.value / q.quota_bytes : 0;
   const hit = [...q.thresholds_percent].sort((a, b) => b - a).find((t) => ratio * 100 >= t);
-  if (ratio >= 1) return ["critical", "已超出免费额度"];
-  if (hit !== undefined) return [hit >= 95 ? "critical" : "serious", `已用超过 ${hit}%`];
+  if (ratio >= 1) return ["critical", `${v.unverified ? "估算" : ""}已超出本地额度`];
+  if (hit !== undefined) return [hit >= 95 ? "critical" : "serious", `${v.unverified ? "估算" : ""}已用超过 ${hit}%`];
   if (q.forecast?.exceeds_on) return ["warning", "预计会超额"];
-  return ["good", "正常"];
+  return v.unverified ? ["warning", "未核实估算"] : ["good", "正常"];
 }
+export const quotaUnknown = (q: QuotaStatus) => !quotaView(q).usable;
 
-/** 这条额度的用量还不完整，不能显示比例、余量和预测 */
-export const quotaUnknown = (q: QuotaStatus) =>
-  q.official_bytes === null || q.estimated_bytes === null || q.effective_bytes === null || q.realtime_increment_bytes === null || q.worst_case_bytes === null;
-
-/** 未知状态的解释。一张卡片里只放一次，不在每条额度条下重复。 */
 export function QuotaUnknownNote({ quotas }: { quotas: QuotaStatus[] }) {
-  const unknown = quotas.filter(quotaUnknown);
-  if (!unknown.length) return null;
-  const cutoff = unknown.some((q) => q.official_status === "cutoff_unknown");
-  const inferred = unknown.some((q) => q.official_quality === "inferred");
-  const fetched = unknown.map((q) => q.fetched_at).filter((x): x is string => !!x).sort().at(-1);
-  return (
-    <p className="note">
-      {cutoff ? "阿里云给了本月的累计用量，但没有说明统计到几点，所以暂时没法把之后的实时流量加上去。" : "这部分数据还不完整。"}
-      弄清之前，这里不显示已用比例、剩余额度和月底预测。
-      {inferred && "数字的单位也还在核实。"}
-      {fetched && `最近一次读取：${stamp(fetched)}。`}
-    </p>
-  );
+  const unverified = quotas.filter((q) => quotaView(q).unverified && quotaView(q).value !== null);
+  const missing = quotas.filter(quotaUnknown);
+  const inferred = quotas.some((q) => q.official_quality === "inferred");
+  const lag = unverified[0] ? quotaView(unverified[0]).lagSeconds : 0;
+  return <>
+    {unverified.length > 0 && <p className="note">{unverified.some((q) => quotaView(q).assumedWindow) ? `未核实估算按最近官方累计，加上从抓取前 ${Math.round(lag / 60)} 分钟开始的采集增量计算。这个窗口是本地假设，可能重复或漏计。` : "估算仍有尚未核实的计费归属或成员信息。"}只用于展示和演练，未开启真实停机保护。{inferred && "官方累计的单位及计费口径仍待核实。"}</p>}
+    {missing.length > 0 && <p className="note">{missing.map((q) => `${SCOPE[q.scope]}：${quotaView(q).stale ? "估算已过期，保留上次结果" : quotaMissingReasons(q)}`).join("；")}。未知部分不按零处理。</p>}
+  </>;
 }
-
 export function QuotaLegend({ worstCase }: { worstCase?: boolean }) {
-  return (
-    <div className="legend">
-      <span>
-        <i style={{ background: "var(--series-1)" }} />
-        官方已用
-      </span>
-      <span>
-        <i style={{ background: "var(--realtime)" }} />
-        实时增量
-      </span>
-      {worstCase && (
-        <span>
-          <i className="worst" />
-          掉线推算
-        </span>
-      )}
-      <span>
-        <i className="proj" />
-        预测
-      </span>
-      <span>
-        <i className="bar" />
-        免费额度
-      </span>
-    </div>
-  );
+  return <div className="legend">
+    <span><i style={{ background: "var(--series-1)" }} />官方累计</span>
+    <span><i style={{ background: "var(--realtime)" }} />采集增量</span>
+    {worstCase && <span><i className="worst" />掉线推算</span>}
+    <span><i className="proj" />预测</span><span><i className="bar" />本地额度</span>
+  </div>;
 }
-
 export function QuotaMeter({ q }: { q: QuotaStatus }) {
-  if (quotaUnknown(q)) {
-    return <div className="meter">
-      <div className="meter-top">
-        <span className="name">{SCOPE[q.scope]}</span>
-        <span className="val">{q.official_bytes === null ? "还没有数据" : `官方 ${gb(q.official_bytes)}`} / {gb(q.quota_bytes, 0)}</span>
-        <div className="spacer" />
-        <span className="sub">实时用量待确认</span>
-      </div>
-      <div className="track unknown-track" role="img" aria-label="数据不完整，暂不显示使用比例" />
-      {q.official_status === "unavailable" && <div style={{ marginTop: 6 }}><Badge level="warning">官方数据暂时取不到，显示的是上一次的数值</Badge></div>}
-    </div>;
-  }
-  // 上面已排除未知状态；这里收窄类型
-  if (q.official_bytes === null || q.estimated_bytes === null || q.effective_bytes === null || q.realtime_increment_bytes === null || q.worst_case_bytes === null) return null;
+  const v = quotaView(q);
+  if (!v.usable || v.value === null) return <div className="meter">
+    <div className="meter-top"><span className="name">{SCOPE[q.scope]}</span><span className="val">{q.official_bytes === null ? "官方数据尚未取得" : `官方 ${gb(q.official_bytes)}`} / {gb(q.quota_bytes, 0)}</span><div className="spacer" /><Badge level="warning">{quotaState(q)}</Badge></div>
+    <div className="track unknown-track" role="img" aria-label={`${SCOPE[q.scope]}覆盖不完整，暂不显示完整用量比例`} />
+    <div className="meter-foot"><span>{v.stale && v.value !== null ? `上次估算 ${gb(v.value)}` : quotaMissingReasons(q)}</span>{v.knownIncrement > 0 && <span>已采集部分 {bytes(v.knownIncrement)}，不代表完整增量</span>}</div>
+  </div>;
+  const value = v.value;
+  const worst = v.worstCase ?? 0;
   const color = q.scope === "overseas" ? "var(--series-1)" : "var(--series-2)";
-  const proj = q.forecast?.cycle_end_bytes ?? q.estimated_bytes;
-  const max = Math.max(q.quota_bytes, proj, q.estimated_bytes) * 1.04 || 1;
-  const w = (v: number) => (Math.max(0, Math.min(v, max)) / max) * 100;
-  const offW = w(q.official_bytes);
-  const realW = w(q.estimated_bytes - q.worst_case_bytes) - offW;
-  const worstW = w(q.estimated_bytes) - offW - realW;
-  const projW = Math.max(0, w(proj) - w(q.estimated_bytes));
-  const tick = (q.quota_bytes / max) * 100;
-  const ratio = q.quota_bytes ? q.effective_bytes / q.quota_bytes : 0;
-  const name = SCOPE[q.scope];
-  const label = `${name}：官方 ${gb(q.official_bytes)}，实时估算 ${gb(q.estimated_bytes)}，免费额度 ${gb(q.quota_bytes, 0)}${q.forecast ? `，预测月底 ${gb(q.forecast.cycle_end_bytes)}` : ""}`;
-  return (
-    <div className="meter">
-      <div className="meter-top">
-        <span className="name">{name}</span>
-        <span className="val">
-          {gb(q.effective_bytes)} / {gb(q.quota_bytes, 0)}
-        </span>
-        <div className="spacer" />
-        <span className="pct">{pct(ratio)}</span>
-      </div>
-      <div className="track" role="img" aria-label={label}>
-        <div className="used" style={{ width: `${offW}%`, background: color }} />
-        {realW > 0.3 && <div className="rt" style={{ left: `calc(${offW}% + 2px)`, width: `calc(${realW}% - 2px)` }} />}
-        {worstW > 0.3 && <div className="rt worst" style={{ left: `calc(${offW + realW}% + 2px)`, width: `calc(${worstW}% - 2px)` }} />}
-        {projW > 0.3 && <div className="proj" style={{ left: `calc(${offW + realW + worstW}% + 2px)`, width: `calc(${projW}% - 2px)` }} />}
-        <div className="tick" style={{ left: `calc(${tick}% - 1px)` }} />
-      </div>
-      <div className="meter-foot">
-        <span>
-          官方 <b>{gb(q.official_bytes)}</b>{q.official_as_of ? `（截至 ${time(q.official_as_of)}）` : ""} + 实时 <b>{gb(q.realtime_increment_bytes)}</b>
-        </span>
-        {q.forecast ? (
-          <span>
-            月底约 <b>{gb(q.forecast.cycle_end_bytes, q.forecast.cycle_end_bytes >= 100 * GB ? 0 : 1)}</b>
-            {q.forecast.exceeds_on ? <>，预计 <b>{shortDate(q.forecast.exceeds_on)}</b> 超出</> : "，不会超额"}
-          </span>
-        ) : (
-          <span>暂时无法预测</span>
-        )}
-      </div>
-      {q.worst_case_bytes > 0 && (
-        <div style={{ marginTop: 6 }}>
-          <Badge level="critical">其中 {gb(q.worst_case_bytes)} 是采集程序掉线期间按最坏情况推算的</Badge>
-        </div>
-      )}
+  const proj = q.forecast?.cycle_end_bytes ?? value;
+  const max = Math.max(q.quota_bytes, proj, value) * 1.04 || 1;
+  const w = (n: number) => Math.max(0, Math.min(n, max)) / max * 100;
+  const offW = w(q.official_bytes ?? 0), realW = Math.max(0, w(value - worst) - offW), worstW = Math.max(0, w(value) - offW - realW);
+  const projW = Math.max(0, w(proj) - w(value));
+  return <div className="meter">
+    <div className="meter-top"><span className="name">{SCOPE[q.scope]}</span><span className="val">{gb(value)} / {gb(q.quota_bytes, 0)}</span><Badge level={v.unverified ? "warning" : "neutral"}>{quotaState(q)}</Badge><div className="spacer" /><span className="pct">{v.unverified ? "估算 " : ""}{pct(q.quota_bytes ? value / q.quota_bytes : 0)}</span></div>
+    <div className="track" role="img" aria-label={`${SCOPE[q.scope]}${quotaState(q)} ${gb(value)}，本地额度 ${gb(q.quota_bytes, 0)}`}>
+      <div className="used" style={{ width: `${offW}%`, background: color }} />
+      {realW > 0.3 && <div className="rt" style={{ left: `${offW}%`, width: `${realW}%` }} />}
+      {worstW > 0.3 && <div className="rt worst" style={{ left: `${offW + realW}%`, width: `${worstW}%` }} />}
+      {projW > 0.3 && <div className="proj" style={{ left: `${offW + realW + worstW}%`, width: `${projW}%` }} />}
+      <div className="tick" style={{ left: `calc(${q.quota_bytes / max * 100}% - 1px)` }} />
     </div>
-  );
+    <div className="meter-foot"><span>官方 <b>{gb(q.official_bytes)}</b>{q.official_as_of ? `（截至 ${time(q.official_as_of)}）` : "（截止时间未知）"} + 采集 <b>{v.increment === null ? "—" : bytes(v.increment)}</b></span>
+      <span>{q.forecast ? <>月底约 <b>{gb(q.forecast.cycle_end_bytes, q.forecast.cycle_end_bytes >= 100 * GB ? 0 : 1)}</b>{q.forecast.exceeds_on ? `，预计 ${shortDate(q.forecast.exceeds_on)} 超出` : ""}</> : "日样本不足，暂不预测"}</span>
+    </div>
+    <div className="sub" style={{ marginTop: 5 }}>估算更新于 {v.updatedAt ? stamp(v.updatedAt) : "—"}</div>
+    {worst > 0 && <div style={{ marginTop: 6 }}><Badge level="warning">其中 {gb(worst)} 为掉线推算，回补后替换为实际采集数据</Badge></div>}
+  </div>;
 }

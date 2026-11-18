@@ -7,7 +7,7 @@ export type Scene = "normal" | "slow" | "empty" | "error" | "stale" | "agent_off
 
 export const SCENES: [Scene, string, string][] = [
   ["normal", "正常运行", "两个账号、六台实例，其中一台未受实时保护"],
-  ["cutoff_unknown", "截止时间未知", "官方有累计用量，但不能与实时增量对齐；日数据包含缺口"],
+  ["cutoff_unknown", "截止时间未知", "海外显示未核实估算，国内覆盖不完整；日数据保留缺口"],
   ["slow", "加载很慢", "每个请求等 4 秒，用来看加载中的样子"],
   ["empty", "空数据", "刚装好，还没有添加账号"],
   ["error", "接口出错", "数据接口全部返回错误"],
@@ -65,6 +65,7 @@ export function buildDb(scene: Scene, now = Date.now()): Db {
 
   const settings: T.Settings = {
     business_timezone: "Asia/Shanghai",
+ retention: {latency_probe_days:30},
     collection: { cdt_poll_interval_seconds: 300, agent_report_interval_seconds: 10, agent_offline_after_seconds: 30, resource_scan_interval_seconds: 600 },
   };
   const rules: T.AlertRule[] = [
@@ -213,7 +214,7 @@ export function buildDb(scene: Scene, now = Date.now()): Db {
   base.telegram = { bot_token_set: true, chat_id: "-1000000000000", proxy_mode: "none", proxy_url: "", status: stale ? "failing" : "ok", last_error: stale ? { code: "telegram_unreachable", message: "dial tcp: i/o timeout" } : null, last_success_at: iso(now - (stale ? 5 : 0.6) * 3600_000) };
   let nid = 100;
   const note = (minsAgo: number, severity: T.Severity, rule: T.AlertRuleKey | null, title: string, body: string, kind: T.Notification["kind"] = "alert", account: string | null = null, instance: string | null = null, delivery: T.Notification["delivery_status"] = "sent"): T.Notification => ({
-    id: "ntf_" + nid--, created_at: iso(now - minsAgo * 60_000), kind, severity, rule_key: rule, title, body, account_id: account, instance_id: instance, delivery_status: delivery,
+    id: "ntf_" + nid--, created_at: iso(now - minsAgo * 60_000), kind, severity, rule_key: rule, title, body, account_id: account, instance_id: instance, probe_plan_id:null, delivery_status: delivery,
   });
   base.notifications = [
     ...(offline ? [note(4, "critical", "agent_offline", "hkg-pro 的采集程序掉线了", "已经 30 秒没有收到上报。掉线期间按之前 10 分钟的最高速度（182 Mbps）估算用量。", "alert", a1.id, "ins_hkg")] : []),
@@ -241,9 +242,13 @@ export function buildDb(scene: Scene, now = Date.now()): Db {
   base.instances = instances;
   base.instancesUpdatedAt = iso(scanAt);
   if (scene === "cutoff_unknown") {
-    for (const q of base.quotas) Object.assign(q, { official_as_of: null, official_status: "cutoff_unknown", official_quality: "inferred", fetched_at: iso(Date.now()), realtime_increment_bytes: null, worst_case_bytes: null, estimated_bytes: null, effective_bytes: null, forecast: null });
+    for (const q of base.quotas) {
+      const complete=q.scope==="overseas";
+      q.estimation={mode:"unverified",status:complete?"ready":"incomplete",basis_id:"demo-basis",from_at:iso(now-3600_000),to_at:iso(realtimeAt),calculated_at:iso(realtimeAt),lag_window_seconds:3600,increment_bytes:complete?q.realtime_increment_bytes:null,known_increment_bytes:complete?q.realtime_increment_bytes??0:150_000_000,worst_case_bytes:complete?q.worst_case_bytes:null,estimated_bytes:complete?q.estimated_bytes:null,current_rate_bytes_per_second:100000,qualified_for_execution:false,reasons:complete?["lag_window_assumption","official_cutoff_or_unit_unverified"]:["coverage_gap","unattributed_subject"]};
+      Object.assign(q,{official_as_of:null,official_status:"cutoff_unknown",official_quality:"inferred",fetched_at:iso(now),realtime_increment_bytes:null,worst_case_bytes:null,estimated_bytes:null,effective_bytes:null,forecast:null});
+    }
     for (const d of Object.values(base.daily)) { d.source_status = "daily_source_unverified"; for (const day of d.days) { day.mainland_bytes = null; day.overseas_bytes = null; } }
-    for (const i of base.instances) if (i.counts_toward_cdt) i.realtime_protection = "unprotected";
+    for (const i of base.instances) if (i.counts_toward_cdt) { i.realtime_protection = "unprotected"; i.traffic_estimation=base.quotas.find((q)=>q.account_id===i.account_id&&q.scope===i.cdt_scope)?.estimation; }
   }
   return base;
 }

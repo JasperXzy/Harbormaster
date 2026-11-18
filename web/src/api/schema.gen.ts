@@ -4,6 +4,482 @@
  */
 
 export interface paths {
+    "/traffic/reconciliations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取同截止时刻的估算对账 */
+        get: operations["listCDTReconciliations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/protection/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取保护执行开关与服务自身绑定 */
+        get: operations["getProtectionStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/protection/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取额度保护规则 */
+        get: operations["listQuotaProtectionRules"];
+        put?: never;
+        /**
+         * 新建额度保护规则
+         * @description 创建时 revision=0。试运行和禁用电源的判定只保留演练结果，不会稍后重放。确认自身实例字段仅接受当前已知绑定实例 ID，表示显式允许该规则停止面板所在机器。
+         */
+        post: operations["createQuotaProtectionRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/protection/rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 替换额度保护规则
+         * @description revision 必须匹配；变更取消尚未发送的旧电源任务，已发送动作保留证据。编辑后重新判断当前条件。
+         */
+        put: operations["updateQuotaProtectionRule"];
+        post?: never;
+        /** 停用并删除规则，保留历史 */
+        delete: operations["deleteQuotaProtectionRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/protection/simulations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取尚未到期的模拟用量 */
+        get: operations["listQuotaSimulations"];
+        /**
+         * 注入临时模拟用量
+         * @description 强制只演练；到期自动失效，不能产生真实电源任务。expires_at 必须晚于当前时间且不超过 24 小时。每个账号＋范围（轻量还包含 source_instance_id）只有一份，替换有独立 revision。新建或替换已经过期的模拟可用 revision=0；服务端修订号持续递增。
+         */
+        put: operations["setQuotaSimulation"];
+        post?: never;
+        /** 提前清除模拟用量 */
+        delete: operations["clearQuotaSimulation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/protection/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取持久化保护判定历史 */
+        get: operations["listQuotaDecisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{instance_id}/protection-exemption": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 设置临时额度保护豁免
+         * @description duration_seconds 为 1–86400 秒，仅影响额度停机，不影响普通手动电源操作。额度停机后手动开机默认自动豁免 3600 秒。
+         */
+        put: operations["setProtectionExemption"];
+        post?: never;
+        /** 清除临时额度保护豁免 */
+        delete: operations["clearProtectionExemption"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/traffic/estimation-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取估算窗口配置 */
+        get: operations["getEstimationSettings"];
+        /**
+         * 保存未核实估算窗口
+         * @description 修改会使旧缓存失效；默认 3600 秒是可修改的本地假设。真实云执行永远拒绝 unverified 估算。bandwidth_mode_instance_ids 强制这些实例的离线推算使用公网带宽上限，其他实例使用完整最近 10 分钟峰值，历史不足时回退带宽。
+         */
+        put: operations["putEstimationSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/ipdb": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read offline IP database versions and resources
+         * @description Local status only; no download or online IP lookup. Default bundled ASN+country datasets, optional downloaded city. DB-IP Lite attribution must be displayed with data-derived results. Memory values describe the process; mapped file bytes are not resident RAM. City mode can exceed the default memory budget.
+         */
+        get: operations["getOfflineIPDatabaseStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/plans/{id}/trace-schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a plan's daily trace settings
+         * @description Default is disabled with revision 0. Active requires both schedule and probe plan enabled. Timezone is the business timezone last applied by the scheduler; next_run_at is null while inactive.
+         */
+        get: operations["getTraceSchedule"];
+        /**
+         * Configure a daily trace snapshot
+         * @description Session and CSRF required. Inherit the probe plan source, target, family and method; use the target's TCP port. Enabling requires an enabled plan. New or edited settings and plan edits start at the next daily time; downtime misses schedule one current trace and advance to the next daily time. Pausing, deletion or edits cancel queued old traces; running measurements can finish without stale alerts. No synchronous DNS or packets. Demo is read-only.
+         */
+        put: operations["saveTraceSchedule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/plans/{id}/trace-snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List scheduled trace snapshots and comparisons
+         * @description At most 31 days by actual scheduling time; inclusive from and exclusive to, no future to. Newest sequence first, cursor bound to plan and range. Includes skipped opportunities; never fabricate missed history. Retired plans retain history. Comparisons and notifications are generated in the background, never by GET. A comparison is with the immediately preceding opportunity, including gaps; manual traces do not enter this sequence.
+         */
+        get: operations["listTraceSnapshots"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/duplex-traces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Atomically enqueue traces from both managed endpoints
+         * @description Session and CSRF required. Select two distinct managed ECS/SWAS instances with current trace-capable agents. Both must have one fresh public address in the selected family. Validate and enqueue both directions in one transaction; either unavailable or full queue leaves neither job. After acceptance each direction executes independently under its own lease. Start times can differ; a later failure never fabricates or replays the other result. The request_key namespace is specific to this endpoint; identical decoded retries return the original pair even after endpoint changes, changed input conflicts. TCP ports are explicit per destination direction. No foreground DNS/cloud/packets. Demo writes return 501.
+         */
+        post: operations["submitDuplexTrace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/duplex-traces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read both saved trace directions
+         * @description Frozen managed endpoint names and address observations plus each current trace detail. Queued legs are cancelled if either endpoint's selected address changes or discovery becomes incomplete/stale/unavailable. Already running legs preserve their pinned request and independent result. Agent availability for the other direction is not a reason to replay a completed leg. No cloud, DNS or probe work starts on GET.
+         */
+        get: operations["getDuplexTrace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/duplex-traces/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Export both stored directions as text */
+        get: operations["exportDuplexTrace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/traces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List stored traceroute summaries
+         * @description At most 31 days by submission time, inclusive from/exclusive to, no future to. Newest sequence first. Cursor bound to range and filters. Summary only; raw hops are read from detail. Missing results remain null. Deleted targets and disabled accounts retain history. No retention guarantee is implied by query bounds.
+         */
+        get: operations["listNetworkTraces"];
+        put?: never;
+        /**
+         * Enqueue a fixed traceroute
+         * @description Session and CSRF required. Checks local snapshots only; DNS and packets run in the background. Select exactly one saved target (with revision) or direct public host. Port is explicit, overriding the saved target TCP port. Same request_key and decoded input after defaults return the same job, including after completion; changed input conflicts. Unavailable point/target or unsupported method returns 409 without a job. Running tasks may finish after target edits; queued tasks are cancelled on target edits or changed/incomplete managed address evidence.
+         */
+        post: operations["submitNetworkTrace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/traces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a stored traceroute and raw hops */
+        get: operations["getNetworkTrace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/traces/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export stored trace as plain text
+         * @description Includes state, request, individual responses and any saved enrichment with dataset versions and attribution. Export starts no lookups. Pending traces export their current state with no fabricated hops or metadata.
+         */
+        get: operations["exportNetworkTrace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List cached network targets */
+        get: operations["listNetworkTargets"];
+        put?: never;
+        /**
+         * Create a network target
+         * @description Local creation only. revision must be 0. New enabled plans are due immediately; no synchronous probe.
+         */
+        post: operations["createNetworkTargets"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/targets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Get a network target */
+        get: operations["getNetworkTarget"];
+        /**
+         * Replace a network target
+         * @description Replace configuration with matching revision. Queued runs using old configuration are cancelled; already running measurements may finish. Enabled plans become due now. Optional numeric plan fields reset to documented defaults when omitted.
+         */
+        put: operations["updateNetworkTarget"];
+        post?: never;
+        /**
+         * Retire a network target
+         * @description Retire with history retained; body revision is required. A target referenced by an undeleted plan returns target_in_use. Queued runs are cancelled; running measurements may finish.
+         */
+        delete: operations["deleteNetworkTarget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List cached probe plans */
+        get: operations["listNetworkPlans"];
+        put?: never;
+        /**
+         * Create a probe plan
+         * @description Local creation only. revision must be 0. New enabled plans are due immediately; no synchronous probe.
+         */
+        post: operations["createNetworkPlans"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        /** Get a probe plan */
+        get: operations["getNetworkProbePlan"];
+        /**
+         * Replace a probe plan
+         * @description Replace configuration with matching revision. Queued runs using old configuration are cancelled; already running measurements may finish. Enabled plans become due now. Optional numeric plan fields reset to documented defaults when omitted.
+         */
+        put: operations["updateNetworkProbePlan"];
+        post?: never;
+        /**
+         * Retire a probe plan
+         * @description Retire with history retained; body revision is required. A target referenced by an undeleted plan returns target_in_use. Queued runs are cancelled; running measurements may finish.
+         */
+        delete: operations["deleteNetworkProbePlan"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/points": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List cached probe point availability */
+        get: operations["listNetworkPoints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/network/plans/{id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read probe runs and skipped attempts
+         * @description Cached individual measurements and explicit skipped attempts. No backfilled data or zero-fill for missing periods; does not aggregate different resolved addresses. Retired plan history remains readable.
+         */
+        get: operations["listProbeRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/setup/status": {
         parameters: {
             query?: never;
@@ -58,6 +534,323 @@ export interface paths {
         post: operations["login"];
         /** 退出登录 */
         delete: operations["logout"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/session/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 开关密码登录
+         * @description 只影响后续密码认证，保留现有会话。重新开启使用原密码，不修改密码。 关闭前要求至少一个已注册且 RP 与当前 HTTPS public_url 匹配的 Passkey， 与凭据删除在事务中防止竞态；不满足时返回 409 passkey_required。 丢失设备后使用 CLI reset-password，重新启用密码、清除所有会话和挑战、保留 Passkey。
+         */
+        patch: operations["setPasswordLoginEnabled"];
+        trace?: never;
+    };
+    "/session/methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 可用登录方式 */
+        get: operations["getLoginMethods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/passkeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 已注册 Passkey */
+        get: operations["listPasskeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/passkeys/{passkey_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passkey_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * 删除 Passkey
+         * @description 立即阻止后续使用该凭据完成登录；不删除已建立的会话。关闭密码登录时，不能删除当前 RP 的最后一个可用 Passkey（409 last_passkey）。
+         */
+        delete: operations["deletePasskey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/passkeys/registration/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 开始 Passkey 注册
+         * @description 生产要求同源 HTTPS。挑战有效期五分钟、单次使用，验证失败也消耗挑战。 注册绑定当前管理员会话；登录绑定 Secure/HttpOnly/SameSite=Strict 的 hm_passkey cookie， 同一浏览器再次开始登录会替换绑定 cookie。登录开始与完成各计入已有登录限速。 注册要求 discoverable credential 和 userVerification=required；不允许跨源 iframe。 503 passkey_unavailable 表示 HTTPS public_url 未配置；401 invalid_passkey 表示挑战或凭据无效。
+         */
+        post: operations["beginPasskeyRegistration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/passkeys/registration/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 完成 Passkey 注册
+         * @description 生产要求同源 HTTPS。挑战有效期五分钟、单次使用，验证失败也消耗挑战。 注册绑定当前管理员会话；登录绑定 Secure/HttpOnly/SameSite=Strict 的 hm_passkey cookie， 同一浏览器再次开始登录会替换绑定 cookie。登录开始与完成各计入已有登录限速。 注册要求 discoverable credential 和 userVerification=required；不允许跨源 iframe。 503 passkey_unavailable 表示 HTTPS public_url 未配置；401 invalid_passkey 表示挑战或凭据无效。
+         */
+        post: operations["finishPasskeyRegistration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/session/passkey/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 开始 Passkey 登录
+         * @description 生产要求同源 HTTPS。挑战有效期五分钟、单次使用，验证失败也消耗挑战。 注册绑定当前管理员会话；登录绑定 Secure/HttpOnly/SameSite=Strict 的 hm_passkey cookie， 同一浏览器再次开始登录会替换绑定 cookie。登录开始与完成各计入已有登录限速。 注册要求 discoverable credential 和 userVerification=required；不允许跨源 iframe。 503 passkey_unavailable 表示 HTTPS public_url 未配置；401 invalid_passkey 表示挑战或凭据无效。
+         */
+        post: operations["beginPasskeyLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/session/passkey/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 完成 Passkey 登录
+         * @description 生产要求同源 HTTPS。挑战有效期五分钟、单次使用，验证失败也消耗挑战。 注册绑定当前管理员会话；登录绑定 Secure/HttpOnly/SameSite=Strict 的 hm_passkey cookie， 同一浏览器再次开始登录会替换绑定 cookie。登录开始与完成各计入已有登录限速。 注册要求 discoverable credential 和 userVerification=required；不允许跨源 iframe。 503 passkey_unavailable 表示 HTTPS public_url 未配置；401 invalid_passkey 表示挑战或凭据无效。
+         */
+        post: operations["finishPasskeyLogin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{instance_id}/cloud-network-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * 云监控公网速率原始历史
+         * @description 仅查询本地已采集样本，支持 24h/7d 范围；不现场回查云接口。 from 包含、to 不包含，范围最多 7 天且 to 不得晚于当前时间。 结果按 sampled_at 降序、同一时间按内部序号降序；cursor 必须与相同范围和过滤条件一起使用。 页面间新到达的旧时间样本可能出现在后续页，提供方修订可更新已有样本；不是冻结快照。 每个 IP/方向独立，不补零、不插值、不跨 IP 求和，不将速率积分为计费字节。 启用前、停采、失败或超过查询窗口的离线时段可能缺失；空结果不代表零流量。
+         */
+        get: operations["getCloudNetworkHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{instance_id}/agent-network-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Agent 原始采样与区间流量历史
+         * @description 本地只读，按 sampled_at、counter_epoch、sequence 降序分页；from 包含，to 不包含。 范围最多七天，to 不晚于当前时间。历史保留撤销前和重注册前的数据，不代表 agent 当前在线。 每条保留累计计数与接收时质量；可比较的同代际相邻已存样本提供完整区间差值与平均 bytes/s。 缺序列或长间隔标 gap，不能用连线或插值伪造瞬时变化；补报 stale 不等于区间差值无效。 首个样本的前序可能早于 from，返回的是整个跨界区间，不能直接相加当作查询范围或小时总量。 重启、新基线、规则变化、时钟倒退、缺少元数据、非法计数或速率溢出时 interval=null，附原因。 不将 agent 与云监控相加，不产生 CDT 实时估算或保护判断。
+         */
+        get: operations["getAgentNetworkHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the configured panel name and Logo metadata
+         * @description Local read only; session and the panel access restrictions apply. The default is Harbormaster with logo=null. No cloud requests or external image downloads.
+         */
+        get: operations["getBranding"];
+        /**
+         * Update the panel name
+         * @description Trims surrounding whitespace. Preserves the current Logo. Send the latest revision; stale edits return branding_changed. Saving the same normalized name is a no-op. Use Harbormaster to restore the default name. Demo writes return 501.
+         */
+        put: operations["putBrandingName"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/branding/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the current custom Logo
+         * @description Session-protected current normalized PNG, or 404 when no custom Logo exists. The returned metadata URL contains the current revision to refresh the image after a change; this endpoint does not retain historical image versions. Responses use no-store.
+         */
+        get: operations["getBrandingLogo"];
+        /**
+         * Upload a custom Logo
+         * @description Send raw PNG or JPEG bytes with its matching Content-Type and the latest shared revision query value. Maximum input 2 MiB, width and height each 1–512 pixels. Decodes locally, strips source metadata/trailing data, converts to 8-bit and stores static PNG. No external URL fetch. Invalid content/dimensions return validation_failed with fields.logo; oversized bodies return branding_logo_too_large. Identical normalized images are a no-op. Demo writes return 501.
+         */
+        put: operations["putBrandingLogo"];
+        post?: never;
+        /**
+         * Remove the custom Logo
+         * @description Preserves the configured name. Requires the latest shared revision; already absent is a no-op. Demo writes return 501.
+         */
+        delete: operations["deleteBrandingLogo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 外部心跳配置和最近结果
+         * @description URL 可能自带密钥，永不回读；不调用外部服务。
+         */
+        get: operations["getHeartbeatSettings"];
+        /**
+         * 保存外部心跳
+         * @description 配置保存在本地，不同步发送。URL 完整 AES-GCM 加密；省略 url 保留，空字符串清除（仅 disabled 时允许）。 使用 HTTPS GET，不携带日志或其他凭据，不跟随重定向、不读取环境代理。默认 60 秒，范围 15–86400 秒。 revision 必须匹配；修改清除旧结果、取消未完成测试并隔离旧 worker 回写。 已开始的网络请求不能撤回。只在生产 serve 启用；run-once 和开发模式不发心跳。
+         */
+        put: operations["putHeartbeatSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/heartbeat/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 排队测试已配置的心跳地址
+         * @description 接受空 JSON 对象；允许测试已配置但 disabled 的目标。需要通过与定时心跳相同的健康条件， 不绕过健康检查发送假成功。相同配置的活动测试去重；结果经通用 jobs 查询。进程中断后的运行中测试失败，不重放。
+         */
+        post: operations["testHeartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notify/quiet-hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 每日静默与临时维护期 */
+        get: operations["getQuietHours"];
+        /**
+         * 保存静默策略
+         * @description enabled 只控制每日时段，maintenance 非空时独立生效。 每日 start 包含、end 不包含，允许跨午夜，二者不得相同；每日按业务时区的墙钟时间判断。 maintenance 为 UTC/RFC3339 起止时刻（含起点不含终点），null 表示清除。 用户确认非紧急告警仅记录，不在静默结束后补发。紧急告警、额度类、保护执行、agent 掉线及显式测试不静默。 保存时处理当前到期且尚未领取的非紧急通知，发送前也会重查；已经授权或开始的网络请求无法撤回。
+         */
+        put: operations["putQuietHours"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -127,6 +920,46 @@ export interface paths {
          * @description 按抓取时间倒序返回。单位按字节暂解释，账期与统计截止时间均未由来源确认；不得对相邻记录求差冒充每日真实流量。
          */
         get: operations["listTrafficObservations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/audit-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List stored administrative change records
+         * @description Admin session only. Append-only change evidence from this implementation onward; existing state is not retroactively described as historical user actions. Newest sequence first. Cursor binds all filters. Optional from/to must be supplied together with a maximum 31-day range and no future to; omitting both paginates existing history without a retention guarantee. Reads never execute tasks or cloud queries. Summary is placeholder text until frontend wording is finalized. Configuration before/after values are not included pending the user's detail-policy answer.
+         */
+        get: operations["listAuditLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 任务记录
+         * @description Newest persisted enqueue sequence first, including completed/failed tasks and disabled accounts. Cursor order remains stable when new jobs arrive. Existing records receive a stable migration order; their trigger is unknown. No cloud calls or task creation.
+         */
+        get: operations["listJobs"];
         put?: never;
         post?: never;
         delete?: never;
@@ -307,6 +1140,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/system-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 云端系统事件与来源状态
+         * @description Read persisted ECS history and CMS spot signals, newest first-seen record first. Updates do not move the cursor order.
+         *     A provider's Executed status is not proof of instance reclamation. Missing from a successful query is not resolution.
+         *     Events from the two sources remain separate. Sources is empty before any scan is recorded, not proof that no events exist.
+         *     Disabled accounts retain history. No GET-triggered cloud queries, notifications or resource actions.
+         */
+        get: operations["listSystemEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/instance-events": {
         parameters: {
             query?: never;
@@ -344,6 +1200,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/instances/{instance_id}/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。 */
+                instance_id: components["parameters"]["InstanceId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enqueue explicitly confirmed stopped PostPaid ECS release
+         * @description Requires instance_release_enabled=true in production. This capability is independent of instance_power_enabled; default/demo refuse submission.
+         *     Read release-preview first and display its impact. Submit the exact provider instance name and token while the preview remains eligible.
+         *     Generate one Idempotency-Key per confirmation and retain it on retries. Same key/same confirmation returns the original job even after preview expiry, completion or restore; changed parameters conflict.
+         *     Release/power operations on one instance exclude each other. Enqueue preserves existing power intent. The worker re-reads and compares current impact before its committed one-time dispatch marker.
+         *     Force=false, TerminateSubscription=false; no automatic stop, deletion-protection edit, disk-attribute edit, EIP or manual-snapshot deletion.
+         *     API acceptance is not completion. Inspect the durable job outcome and confirmation basis; no retries after unknown delivery.
+         *     No bearer API Key consumer is provided for release.
+         */
+        post: operations["releaseECSInstance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{instance_id}/power": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。 */
+                instance_id: components["parameters"]["InstanceId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 提交实例电源操作
+         * @description Local enqueue only; the enabled power worker executes asynchronously. Save desired state at enqueue time and retain intent on failure.
+         *     Generate one Idempotency-Key per user action and reuse it on retries, including after a lost response or completed job.
+         *     Same-key different target/action/mode returns 409. Same active request can reuse an existing job; conflicting active requests return 409.
+         *     ECS stop requires explicit stop_mode; SWAS and start/reboot reject it. API acceptance does not imply actual state or economical mode.
+         *     Production requires instance_power_enabled=true; default and development mode return 503 instance_power_disabled without enqueueing.
+         */
+        post: operations["controlInstancePower"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/instances/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * API Key 异步刷新资源与官方数据
+         * @description Requires instance:control and a single Authorization Bearer header; cookies and URL/body tokens are not accepted.
+         *     Local enqueue only. The existing collector performs read-only queries in the background, independently of the power execution switch.
+         *     A required JSON object may select one enabled account; {} captures all currently enabled accounts. Unknown/disabled explicit accounts are rejected.
+         *     Requests may join an equal active refresh scope, including work created by the panel or another key. Its original trigger is retained.
+         *     Each joining key gains access only to that refresh task through /integrations/jobs/{job_id}; this does not grant visibility into other jobs.
+         *     If an existing all-account task captured a different membership, return 409 refresh_scope_changed; retry after it finishes or select one account.
+         *     After a task completes, a new request schedules a new refresh. This endpoint does not accept Idempotency-Key as a durable operation identity.
+         *     Revocation prevents further API access but does not cancel independently authorized account collection, which may serve other requests or monitoring.
+         *     Development mode has no bearer integration consumer. No desired-state or cloud-resource writes occur.
+         */
+        post: operations["refreshInstancesWithAPIKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/instances/{instance_id}/power": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。 */
+                instance_id: components["parameters"]["InstanceId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * API Key 提交实例电源操作
+         * @description Requires instance:control. Bearer authentication only; cookies and query/body tokens are not accepted.
+         *     Keys are independent principals: active jobs from another key or the panel return 409 even for the same action.
+         *     Local enqueue only; the enabled power worker executes asynchronously. Save desired state at enqueue time and retain intent on failure.
+         *     Generate one Idempotency-Key per user action and reuse it on retries, including after a lost response or completed job.
+         *     Same-key different target/action/mode returns 409. Same active request can reuse an existing job; conflicting active requests return 409.
+         *     ECS stop requires explicit stop_mode; SWAS and start/reboot reject it. API acceptance does not imply actual state or economical mode.
+         *     Production requires instance_power_enabled=true; when disabled, validly authenticated requests return 503 instance_power_disabled without enqueueing. Development mode has no bearer integration consumer.
+         */
+        post: operations["controlInstancePowerWithAPIKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查询该 API Key 的控制或刷新任务
+         * @description Requires instance:control. Power jobs must be created by this key. Refresh jobs must have an explicit membership established by this key's accepted refresh request, including shared tasks originally created by another caller. Other jobs return 404. No cloud calls or membership changes on GET. Key revocation also blocks history access; administrators retain full history. The existing operationId is retained for generated-client compatibility.
+         */
+        get: operations["getIntegrationPowerJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/instances/{instance_id}/agent/install-command": {
         parameters: {
             query?: never;
@@ -358,7 +1347,7 @@ export interface paths {
         put?: never;
         /**
          * 生成一行安装命令（含一次性注册码）
-         * @description Requires a complete configured agent release. Creating a new command expires the previous registration code; the running agent token remains valid until a new registration succeeds. Commands contain a secret code valid for 10 minutes and must not be logged or shared. Linux systemd installation only.
+         * @description Requires a complete configured agent release. Creating a new command expires the previous registration code; the running agent token remains valid until a new registration succeeds. Commands contain a secret code valid for 10 minutes and must not be logged or shared. Linux systemd installation only. Root executes sh directly without sudo; other users require sudo, otherwise the command exits with installer_requires_root_or_sudo before downloading.
          */
         post: operations["createAgentInstallCommand"];
         delete?: never;
@@ -469,6 +1458,70 @@ export interface paths {
         };
         /** 共享带宽今日各计费周期的入 / 出方向流量 */
         get: operations["getBandwidthPackageHourly"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{instance_id}/release-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Read cached ECS release eligibility and resource impact
+         * @description No cloud queries or writes on GET. Background discovery reads complete regional ECS and disk lists, including multi-attach ownership. Only stopped PostPaid ECS is eligible; locks, deletion protection, incomplete facts, disabled accounts/regions, absent resources and stale observations block eligibility. No automatic attribute edits, stopping, snapshot deletion or EIP release. The token binds the displayed impact, source time and current account configuration; it is not an Alibaba Cloud idempotency token or permission grant. Refresh through the existing asynchronous instance refresh API. Submission also requires execution_enabled=true; this flag alone does not imply eligibility or verified write permission.
+         */
+        get: operations["getECSReleasePreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{instance_id}/finance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Cached current-month bill rows attributable to this instance
+         * @description Background account-wide DescribeInstanceBill collection, MONTHLY and IsBillingItem=false. Exact cloud instance ID plus ECS/SWAS product family matching; no shared bandwidth, EIP or CDT costs allocated to instances. Current business month only; no previous-month substitution. Data can lag consumption by 24 hours and omits unbilled usage. No cloud calls on GET. Credential rotation hides predecessor data; disabled accounts retain current-credential cache.
+         */
+        get: operations["getInstanceFinance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/idle-resources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read cached idle resource candidates and source coverage
+         * @description Background inventory only. Sources with unknown classification fields expose unclassified_count; an empty candidate page alone cannot establish that every resource is non-idle. Failed refreshes retain dated evidence, while complete successful reads replace it. Credential rotation hides predecessor cache; disabled accounts/removed regions retain clearly disabled history. Results use live keyset pagination ordered by candidate ID; cursors bind account/region/kind filters. No costs are calculated or summed, and no alerts or cloud operations are triggered by this endpoint.
+         */
+        get: operations["listIdleResourceCandidates"];
         put?: never;
         post?: never;
         delete?: never;
@@ -589,7 +1642,7 @@ export interface paths {
         };
         /**
          * 内置告警规则
-         * @description Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient and instance_public_ip_changed. Usage/forecast rules are not returned until their metering source and policy are available.
+         * @description Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable, network_route_change idle_resource_detected and cdt_estimation_deviation. quota_protection events are configured through separate protection rules, not this alert-rule endpoint. Usage/forecast rules are not returned until their metering source and policy are available.
          */
         get: operations["listAlertRules"];
         put?: never;
@@ -640,6 +1693,607 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        NetworkTargetInput: {
+            /** Format: int64 */
+            revision: number;
+            name: string;
+            /** @enum {string} */
+            kind: "custom" | "instance";
+            /** @description Public IP or IDNA domain for custom targets; null for instance targets. No URL, port or credentials. DNS is checked only during execution. */
+            host: string | null;
+            /** @description Required only for instance targets. Follow the selected family's unique public address from complete discovery of the current credential version, at most ten minutes old; never choose arbitrarily. */
+            instance_id: string | null;
+            tcp_port: number | null;
+            enabled: boolean;
+        };
+        NetworkTarget: components["schemas"]["NetworkTargetInput"] & {
+            id: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ProbePlanInput: {
+            /** Format: int64 */
+            revision: number;
+            name: string;
+            /** @enum {string} */
+            point_kind: "server" | "agent";
+            /** @description Source managed instance for agent point; null for server. */
+            instance_id: string | null;
+            target_id: string;
+            /** @enum {string} */
+            family: "ipv4" | "ipv6";
+            /**
+             * @description TCP uses the target's explicit tcp_port; missing port skips execution.
+             * @enum {string}
+             */
+            method: "icmp" | "tcp";
+            /** @default 300 */
+            frequency_seconds?: number;
+            /** @default 5 */
+            count?: number;
+            /** @default 2000 */
+            timeout_ms?: number;
+            /**
+             * @description Wait after each completed attempt; total worst-case measurement budget must not exceed 60 seconds.
+             * @default 1000
+             */
+            interval_ms?: number;
+            enabled: boolean;
+        };
+        ProbePlan: components["schemas"]["ProbePlanInput"] & {
+            id: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            next_run_at: string | null;
+            last_run: components["schemas"]["ProbeRun"] | null;
+        };
+        ProbePoint: {
+            /** @description server or managed instance ID. */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            point_kind: "server" | "agent";
+            instance_id: string | null;
+            available: boolean;
+            unavailable_reason: string | null;
+            /** Format: date-time */
+            updated_at: string | null;
+            trace: components["schemas"]["TraceCapability"];
+        };
+        IPDatabaseDataset: {
+            name: string;
+            /** @description Release month YYYY-MM */
+            edition: string;
+            /** Format: date-time */
+            built_at: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /** @enum {string} */
+            origin: "bundled" | "downloaded";
+            /** @enum {string} */
+            storage: "memory" | "mmap";
+            /** Format: uri */
+            source_url: string;
+        };
+        IPDatabaseStatus: {
+            /** @enum {string} */
+            mode: "country" | "city";
+            city_enabled: boolean;
+            auto_update: boolean;
+            asn: components["schemas"]["IPDatabaseDataset"];
+            country: components["schemas"]["IPDatabaseDataset"];
+            city: components["schemas"]["IPDatabaseDataset"] | null;
+            /** Format: date-time */
+            last_check_at: string | null;
+            /** Format: date-time */
+            last_update_at: string | null;
+            last_error: {
+                code?: string;
+                message?: string;
+            } | null;
+            attribution: {
+                name: string;
+                /** Format: uri */
+                url: string;
+                license: string;
+                /** Format: uri */
+                license_url: string;
+            }[];
+            /**
+             * Format: int64
+             * @description Current total Go heap; excludes mmap.
+             */
+            go_heap_alloc_bytes: number;
+            /**
+             * Format: int64
+             * @description OS peak process resident memory; not component-only or current RSS. Null if unavailable.
+             */
+            process_peak_rss_bytes: number | null;
+            /**
+             * Format: int64
+             * @description Total sizes of mapped dataset files; not a resident-memory measurement.
+             */
+            mapped_file_bytes: number;
+        };
+        AuditEntry: {
+            id: string;
+            /** Format: date-time */
+            created_at: string;
+            actor: {
+                /** @enum {string} */
+                kind: "admin" | "api_key" | "cli" | "telegram" | "system";
+                /** @description Validated internal API-key ID when applicable; never the token. Null for the single administrator and system/CLI sources. */
+                id: string | null;
+            };
+            /** @description Stable codes include account_created/account_updated/account_disabled; alert_rule_updated; quiet_hours_updated; branding_updated; probe_target_created/updated/deleted; probe_plan_created/updated/deleted; trace_schedule_updated; api_key_created/revoked; agent_registration_issued/agent_registered/agent_revoked; instance_power_requested/started/dispatch_started/dispatch_recorded/finished. */
+            action: string;
+            /** @description account / alert_rule / quiet_hours / branding / probe_target / probe_plan / trace_schedule / api_key / instance */
+            target_type: string;
+            target_id: string;
+            account_id: string | null;
+            /** @description Links operation evidence to its persistent task; not proof of cloud success. */
+            job_id: string | null;
+            /** @description Placeholder action text; frontend owns final wording. */
+            summary: string;
+            /** @description Fixed safe metadata only. No values from credentials or arbitrary configuration/provider payloads. A credential replacement is a boolean marker. */
+            details: {
+                changed_fields: string[];
+                credentials_changed: boolean;
+                /** Format: int64 */
+                revision?: number;
+                /** @enum {string} */
+                operation?: "start" | "stop" | "reboot";
+                /** @enum {string} */
+                stop_mode?: "keep_charging" | "stop_charging";
+                /** @enum {string} */
+                status?: "queued" | "running" | "succeeded" | "failed";
+                /** @enum {string} */
+                dispatch_outcome?: "not_sent" | "dispatching" | "accepted" | "rejected" | "unknown";
+                /** @description Fixed local error code only. */
+                error_code?: string;
+                confirmation_basis?: string;
+            };
+        };
+        /** @description Same total packet budget as a manual TraceSubmission. A daily civil time uses its first occurrence; when absent at a timezone transition use the first valid minute after it. Never run twice in a repeated hour. */
+        TraceScheduleInput: {
+            /** Format: int64 */
+            revision: number;
+            enabled: boolean;
+            /** @description Explicit opt-in to change events; also requires the global network_route_change rule. No recovery event is invented. */
+            notify_changes: boolean;
+            /** @default 03:00 */
+            time_of_day?: string;
+            /** @default 30 */
+            max_hops?: number;
+            /** @default 3 */
+            count?: number;
+            /** @default 1000 */
+            timeout_ms?: number;
+        };
+        TraceSchedule: {
+            plan_id: string;
+            /** Format: int64 */
+            revision: number;
+            enabled: boolean;
+            notify_changes: boolean;
+            time_of_day: string;
+            max_hops: number;
+            count: number;
+            timeout_ms: number;
+            active: boolean;
+            timezone: string;
+            /** Format: date-time */
+            updated_at: string | null;
+            /** Format: date-time */
+            next_run_at: string | null;
+        };
+        TraceSnapshot: {
+            id: string;
+            plan_id: string;
+            /** @description Frozen at scheduling. */
+            plan_name: string;
+            /** Format: int64 */
+            plan_revision: number;
+            /** Format: int64 */
+            schedule_revision: number;
+            target_id: string;
+            /** Format: int64 */
+            target_revision: number;
+            /**
+             * Format: date-time
+             * @description Original due opportunity; not a fabricated measurement timestamp.
+             */
+            due_at: string;
+            /**
+             * Format: date-time
+             * @description Actual scheduling time.
+             */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @enum {string} */
+            status: "queued" | "running" | "succeeded" | "failed" | "skipped";
+            skip_reason: string | null;
+            /** @description Read raw result/enrichment/export through the existing trace endpoints. */
+            trace_id: string | null;
+            job_id: string | null;
+            /** @description Frozen opt-in when this opportunity was created. */
+            notify_changes: boolean;
+            comparison: components["schemas"]["TraceComparison"];
+        };
+        TraceComparison: {
+            /** @enum {string} */
+            status: "waiting_result" | "waiting_enrichment" | "baseline" | "unchanged" | "changed" | "not_comparable";
+            /** @description Stable reason: first_snapshot, snapshot_skipped, measurement_failed, enrichment_unavailable, incomplete_responses, unknown_asn, multiple_asns, previous_not_comparable, configuration_changed, target_changed, asn_database_changed, or backup_restored. */
+            reason: string | null;
+            previous_snapshot_id: string | null;
+            previous_trace_id: string | null;
+            address: string | null;
+            previous_address: string | null;
+            /** @description Complete observed-IP ASN sequence with adjacent equal values coalesced; never claimed as BGP AS path. Empty if evidence is insufficient. */
+            asns: number[];
+            previous_asns: number[];
+            asn_database: components["schemas"]["IPDatabaseDataset"] | null;
+            previous_asn_database: components["schemas"]["IPDatabaseDataset"] | null;
+            /** @description Linked event record when current settings authorize it; not proof of delivery. Stale completed observations are recorded without new delivery. */
+            notification_id: string | null;
+        };
+        /** @description Separate trace protocol evidence for the current token, requiring fresh agent traffic and trace polling. Methods describe implementation support, not verified raw socket permission or reachability. Server TCP tracing currently requires Linux. Server last_poll_at is null. */
+        TraceCapability: {
+            available: boolean;
+            unavailable_reason: string | null;
+            methods: ("icmp" | "tcp")[];
+            /** Format: date-time */
+            last_poll_at: string | null;
+        };
+        /** @description Per-leg packet/DNS budget matches TraceSubmission. Public addresses must be different. TCP requires both ports 1–65535; endpoints can use different ports. */
+        DuplexTraceSubmission: {
+            request_key: string;
+            from_instance_id: string;
+            to_instance_id: string;
+            /** @enum {string} */
+            family: "ipv4" | "ipv6";
+            /** @enum {string} */
+            method: "icmp" | "tcp";
+            /** @description Destination port on to_instance_id; zero for ICMP. */
+            forward_port: number;
+            /** @description Destination port on from_instance_id; zero for ICMP. */
+            reverse_port: number;
+            /** @default 30 */
+            max_hops?: number;
+            /** @default 3 */
+            count?: number;
+            /** @default 1000 */
+            timeout_ms?: number;
+        };
+        DuplexTraceAccepted: {
+            duplex_id: string;
+            forward: {
+                job_id: string;
+                trace_id: string;
+            };
+            reverse: {
+                job_id: string;
+                trace_id: string;
+            };
+        };
+        DuplexTraceEndpoint: {
+            instance_id: string;
+            name: string;
+            /** @enum {string} */
+            kind: "ecs" | "swas";
+            /** @description Pinned unique address from cached discovery; never updated in this historical snapshot. */
+            public_address: string;
+            /** Format: date-time */
+            observed_at: string;
+        };
+        DuplexTrace: {
+            id: string;
+            /** Format: date-time */
+            created_at: string;
+            from: components["schemas"]["DuplexTraceEndpoint"];
+            to: components["schemas"]["DuplexTraceEndpoint"];
+            forward: components["schemas"]["TraceDetail"];
+            reverse: components["schemas"]["TraceDetail"];
+        };
+        /** @description Exactly one target_id+target_revision or host. Max_hops × count × timeout_ms plus fixed 100ms gaps must not exceed 120 seconds. DNS has a five-second budget and pins one checked public address. Demo submission remains read-only (501). */
+        TraceSubmission: {
+            request_key: string;
+            /** @enum {string} */
+            point_kind: "server" | "agent";
+            /** @description Required for agent; null for server. */
+            instance_id: string | null;
+            target_id: string | null;
+            /** Format: int64 */
+            target_revision: number | null;
+            /** @description Public IP or hostname only; null when using target_id. */
+            host: string | null;
+            /** @enum {string} */
+            family: "ipv4" | "ipv6";
+            /** @enum {string} */
+            method: "icmp" | "tcp";
+            /** @description Zero for ICMP; 1–65535 for TCP. */
+            port: number;
+            /** @default 30 */
+            max_hops?: number;
+            /** @default 3 */
+            count?: number;
+            /** @default 1000 */
+            timeout_ms?: number;
+        };
+        TraceRequest: {
+            host: string;
+            /** @enum {string} */
+            family: "ipv4" | "ipv6";
+            /** @enum {string} */
+            method: "icmp" | "tcp";
+            port: number;
+            max_hops: number;
+            count: number;
+            timeout_ms: number;
+        };
+        TraceOutcome: {
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at: string;
+            /** @description Empty when failed before address selection. */
+            address: string;
+            /** @description At least one matching target reply; TCP reset does not imply service availability. */
+            reached: boolean;
+            /** @enum {string} */
+            stop_reason: "reached" | "unreachable" | "max_hops" | "incomplete";
+            hop_count: number;
+            sample_count: number;
+        };
+        TraceRun: {
+            id: string;
+            job_id: string;
+            point_id: string;
+            /** @description Source name at submission. */
+            point_name: string;
+            /** @enum {string} */
+            point_kind: "server" | "agent";
+            instance_id: string | null;
+            /** @description Saved target snapshot at submission; null for direct host. */
+            target: components["schemas"]["NetworkTarget"] | null;
+            request: components["schemas"]["TraceRequest"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /**
+             * @description succeeded means complete execution; connectivity is described by outcome.
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
+            /**
+             * @description Independent background processing. Complete can include missing database coverage or absent PTR; partial means a lookup failed or timed out. No lookups are started by a GET.
+             * @enum {string}
+             */
+            enrichment_status: "waiting_result" | "not_available" | "queued" | "running" | "complete" | "partial" | "failed";
+            /** @description Backlink to a paired query; null for ordinary manual/scheduled traces. */
+            duplex_id: string | null;
+            /** @enum {string|null} */
+            duplex_direction: "forward" | "reverse" | null;
+            outcome: components["schemas"]["TraceOutcome"] | null;
+            error: {
+                code?: string;
+                message?: string;
+            } | null;
+        };
+        TraceDetail: components["schemas"]["TraceRun"] & {
+            enrichment: components["schemas"]["TraceEnrichment"] | null;
+            enrichment_error: {
+                code?: string;
+                message?: string;
+            } | null;
+            result: components["schemas"]["TraceResult"] | null;
+        };
+        /** @description Frozen at enrichment time, not silently rewritten by database updates. IP ownership/geolocation and PTR do not prove the forwarding path, physical location or verified host identity. Only observed responding addresses are enriched. Hop candidate sets preserve multipath and gaps instead of claiming a unique BGP AS path. */
+        TraceEnrichment: {
+            /** Format: date-time */
+            enriched_at: string;
+            /** @enum {string} */
+            status: "complete" | "partial";
+            asn_database: components["schemas"]["IPDatabaseDataset"] | null;
+            location_database: components["schemas"]["IPDatabaseDataset"] | null;
+            addresses: components["schemas"]["TraceAddressInfo"][];
+            hops: components["schemas"]["TraceHopInfo"][];
+            labels: components["schemas"]["TraceNetworkLabel"][];
+            /**
+             * @description Estimated location sequence alone cannot establish detour.
+             * @enum {string}
+             */
+            detour_status: "unconfirmed";
+            /** @description Show the DB-IP attribution link wherever these data are displayed; retain it in exports. */
+            attribution: {
+                name: string;
+                /** Format: uri */
+                url: string;
+                license: string;
+                /** Format: uri */
+                license_url: string;
+            }[];
+        };
+        TraceAddressInfo: {
+            address: string;
+            /** @enum {string} */
+            asn_status: "ok" | "not_found" | "not_public" | "unavailable";
+            /** @enum {string} */
+            location_status: "ok" | "not_found" | "not_public" | "unavailable";
+            asn: {
+                /** Format: int64 */
+                number: number;
+                organization: string | null;
+                /** @description Matched offline database network. */
+                prefix: string;
+                dataset: components["schemas"]["IPDatabaseDataset"];
+            } | null;
+            location: {
+                country_code: string | null;
+                country_name: string | null;
+                region: string | null;
+                city: string | null;
+                latitude: number | null;
+                longitude: number | null;
+                prefix: string;
+                /** @enum {string} */
+                granularity: "country" | "city";
+                dataset: components["schemas"]["IPDatabaseDataset"];
+            } | null;
+            ptr: {
+                /** @enum {string} */
+                status: "ok" | "not_found" | "not_public" | "timeout" | "unavailable" | "invalid_response";
+                names: string[];
+                truncated: boolean;
+            };
+        };
+        TraceHopInfo: {
+            ttl: number;
+            /** @description Actually recorded attempts, including timeouts; never fabricate missing attempts. */
+            attempts: number;
+            responses: number;
+            /** @description Fraction of recorded attempts without a response; not forwarding packet loss. Null when no attempts were recorded. */
+            no_response_percent: number | null;
+            minimum_ms: number | null;
+            maximum_ms: number | null;
+            average_ms: number | null;
+            addresses: string[];
+            asn_candidates: number[];
+            /** @description Any unanswered attempt or response lacking ASN coverage; also true for a TTL without recorded attempts. */
+            unknown_asn: boolean;
+            country_codes: string[];
+            unknown_location: boolean;
+        };
+        TraceNetworkLabel: {
+            /** @enum {string} */
+            code: "cn2" | "chinanet_163" | "cu_9929" | "cu_4837" | "cmi" | "alibaba_network";
+            /** Format: int64 */
+            asn: number;
+            /** @description Responding IPs actually assigned this ASN by the frozen database. No prefix guesses. */
+            addresses: string[];
+            ttls: number[];
+            /**
+             * @description CN2 GIA/GT remains unconfirmed; null for other networks.
+             * @enum {string|null}
+             */
+            service_tier: "unconfirmed" | null;
+            /**
+             * @description Alibaba cross-border use remains unconfirmed; null for other networks.
+             * @enum {string|null}
+             */
+            cross_border: "unconfirmed" | null;
+            /**
+             * Format: uri
+             * @description ASN registry reference for the label, not a live lookup or route verification.
+             */
+            reference_url: string;
+        };
+        TraceResult: {
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at: string;
+            address: string;
+            resolved_addresses: string[];
+            reached: boolean;
+            /** @enum {string} */
+            stop_reason: "reached" | "unreachable" | "max_hops" | "incomplete";
+            hops: {
+                ttl: number;
+                samples: {
+                    sequence: number;
+                    /** Format: date-time */
+                    started_at: string;
+                    /** @description Responding router; can be private. Not a new probe target. */
+                    address: string | null;
+                    rtt_ms: number | null;
+                    /** @enum {string|null} */
+                    reply: "echo_reply" | "tcp_syn_ack" | "tcp_reset" | "time_exceeded" | "destination_unreachable" | "packet_too_big" | "parameter_problem" | null;
+                    icmp_type: number | null;
+                    icmp_code: number | null;
+                    /** @description probe_timeout means no observed response; never assume intermediate forwarding loss. */
+                    error_code: string | null;
+                }[];
+            }[];
+        };
+        ProbeRun: {
+            id: string;
+            plan_id: string;
+            /** Format: int64 */
+            plan_revision: number;
+            target_id: string;
+            /** Format: int64 */
+            target_revision: number;
+            /** @enum {string} */
+            point_kind: "server" | "agent";
+            instance_id: string | null;
+            /**
+             * Format: date-time
+             * @description Current scheduling attempt, never a fabricated missed-period sample.
+             */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /**
+             * @description succeeded means measurement completed; inspect summary loss_percent for reachability.
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed" | "skipped";
+            /** @description Stable reason such as target_disabled, target_discovery_incomplete, target_discovery_stale, target_no_public_address, target_ambiguous_address, agent_offline, previous_run_pending or probe_queue_full. No RTT is fabricated for skips. */
+            skip_reason: string | null;
+            job_id: string | null;
+            request: components["schemas"]["ProbeRequest"] | null;
+            result: components["schemas"]["ProbeResult"] | null;
+            error: {
+                code?: string;
+                message?: string;
+            } | null;
+        };
+        ProbeRequest: {
+            host: string;
+            /** @enum {string} */
+            family: "ipv4" | "ipv6";
+            /** @enum {string} */
+            method: "icmp" | "tcp";
+            /** @description Zero for ICMP; explicit destination port for TCP. */
+            port: number;
+            count: number;
+            timeout_ms: number;
+            interval_ms: number;
+        };
+        ProbeResult: {
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            finished_at: string;
+            /** @description Selected address; empty if execution failed before resolution. */
+            address: string;
+            resolved_addresses: string[];
+            samples: {
+                sequence: number;
+                /** Format: date-time */
+                started_at: string;
+                rtt_ms: number | null;
+                error_code: string | null;
+            }[];
+            /** @description Recomputed from raw attempts. Local failure has no summary; complete 100% failure has null RTT statistics. Jitter uses only adjacent successful samples, never across failures. TCP loss_percent is failed connection attempts, not measured IP packet loss. */
+            summary: {
+                attempts: number;
+                succeeded: number;
+                loss_percent: number;
+                minimum_ms: number | null;
+                maximum_ms: number | null;
+                average_ms: number | null;
+                jitter_ms: number | null;
+            } | null;
+        };
         ErrorResponse: {
             error: {
                 /**
@@ -661,13 +2315,23 @@ export interface components {
         JobAccepted: {
             job_id: string;
         };
-        /** @enum {string} */
-        JobType: "refresh" | "permission_check" | "telegram_test";
+        /**
+         * @description network_probe 包含固定测速及线路追踪任务。
+         * @enum {string}
+         */
+        JobType: "refresh" | "permission_check" | "telegram_test" | "instance_power" | "instance_release" | "heartbeat_test" | "network_probe";
         /** @enum {string} */
         JobStatus: "queued" | "running" | "succeeded" | "failed";
+        /** @enum {string} */
+        JobTrigger: "panel" | "cli" | "api" | "telegram" | "schedule" | "system" | "unknown";
         Job: {
             id: string;
             type: components["schemas"]["JobType"];
+            /** @description Account scope captured at enqueue time; an empty list means this task has no account target. */
+            account_ids?: string[];
+            /** @description Specific instance target, or null for current collection and Telegram-test tasks. Never inferred from scope strings. */
+            instance_id?: string | null;
+            trigger?: components["schemas"]["JobTrigger"];
             status: components["schemas"]["JobStatus"];
             /** Format: date-time */
             created_at: string;
@@ -681,11 +2345,67 @@ export interface components {
             } | null;
             /**
              * @description 成功时的结果，结构取决于 type：`permission_check` 为 PermissionCheck；
-             *     `refresh`、`telegram_test` 为 null。
+             *     `refresh`、`telegram_test`、`heartbeat_test` 为 null。`network_probe` 通常为 null；延迟测速原始结果到期清理后，可为 `{action: "probe", result_expired: true, result_expired_at: "<UTC timestamp>"}`，其任务状态及原错误仍保留。
+             *     保留期内的测速结果见 `/network/plans/{id}/runs`，线路追踪详情见 `/network/traces/{id}`；此清理不作用于线路追踪。
+             *     `instance_power` 为 PowerJobResult（任务未完成时也保留请求与执行阶段）。
+             *     `instance_release` 为 ECSReleaseJobResult；生产仅显式开启独立释放开关后接受提交并启动 worker，递送未知结果不重放。
              */
             result: {
                 [key: string]: unknown;
             } | null;
+        };
+        ECSReleaseJobResult: {
+            /** @enum {string} */
+            action: "release";
+            confirmed_name: string;
+            /** Format: date-time */
+            preview_fetched_at: string;
+            /** @enum {string} */
+            dispatch_outcome: "not_sent" | "dispatching" | "accepted" | "rejected" | "unknown";
+            observation: {
+                instance_present: boolean;
+                /** Format: date-time */
+                observed_at: string;
+            } | null;
+            /**
+             * @description A complete targeted read no longer returned the instance after accepted dispatch; no assertion about provider-side physical cleanup.
+             * @enum {string|null}
+             */
+            confirmation_basis: "not_found_after_accept" | null;
+        };
+        PowerJobResult: {
+            /** @enum {string} */
+            action: "start" | "stop" | "reboot";
+            /**
+             * @description Required only for ECS stop; null for other operations.
+             * @enum {string|null}
+             */
+            stop_mode: "keep_charging" | "stop_charging" | null;
+            /**
+             * @description Acceptance is not proof of the final instance state. Unknown outcomes must not be automatically replayed.
+             * @enum {string}
+             */
+            dispatch_outcome: "not_sent" | "dispatching" | "accepted" | "rejected" | "unknown";
+            baseline?: components["schemas"]["PowerObservation"] | null;
+            observation?: components["schemas"]["PowerObservation"] | null;
+            /** @enum {string|null} */
+            confirmation_basis?: "target_state" | "start_time_changed" | "state_transition" | null;
+        };
+        PowerObservation: {
+            /** @enum {string} */
+            status: "pending" | "starting" | "running" | "stopping" | "stopped" | "resetting" | "upgrading" | "disabled";
+            /**
+             * @description ECS observation only. Null means unavailable, never inferred from the requested mode.
+             * @enum {string|null}
+             */
+            stopped_mode: "keep_charging" | "stop_charging" | "not_applicable" | null;
+            /**
+             * Format: date-time
+             * @description ECS most recent start time when supplied; the provider may only resolve minutes. SWAS has no verified equivalent.
+             */
+            started_at: string | null;
+            /** Format: date-time */
+            observed_at: string;
         };
         SetupStatus: {
             initialized: boolean;
@@ -702,6 +2422,39 @@ export interface components {
         LoginRequest: {
             password: string;
         };
+        EmptyObject: Record<string, never>;
+        PasskeyRegistrationBegin: {
+            /** @description 去除首尾空白后为 1–80 UTF-8 字节。 */
+            name: string;
+        };
+        PasskeyFinish: {
+            ceremony_id: string;
+            /** @description 浏览器 PublicKeyCredential.toJSON() 或等价序列化；二进制字段为无填充 base64url。注册含 attestationObject/clientDataJSON；登录含 authenticatorData/clientDataJSON/signature/userHandle。整个请求上限 16 KiB。 */
+            credential: {
+                [key: string]: unknown;
+            };
+        };
+        PasskeyOptions: {
+            ceremony_id: string;
+            /** Format: date-time */
+            expires_at: string;
+            options: {
+                /** @description WebAuthn JSON options；用 parseCreationOptionsFromJSON 或 parseRequestOptionsFromJSON 转换后传入 navigator.credentials。旧浏览器须自行还原 ArrayBuffer。 */
+                publicKey: {
+                    [key: string]: unknown;
+                };
+            } & {
+                [key: string]: unknown;
+            };
+        };
+        Passkey: {
+            id: string;
+            name: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            last_used_at: string | null;
+        };
         Session: {
             csrf_token: string;
             /** Format: date-time */
@@ -715,6 +2468,10 @@ export interface components {
             data_mode: "demo" | "live";
             /** @description Resource/configuration mutations are unavailable; session login/logout remain available. */
             read_only: boolean;
+            /** @description Whether this server accepts manual power jobs. Independent of configuration-write availability; false by default and in demo mode. */
+            instance_power_enabled?: boolean;
+            /** @description Whether this production serve process accepts release jobs and starts the separate worker. False by default and in demo; independent of power capability and not proof of cloud write permission. */
+            instance_release_enabled?: boolean;
             version: string;
             commit: string;
             /**
@@ -725,11 +2482,39 @@ export interface components {
             /** @description Verified local agent release version, using the same cache as Agent.available_version. Null when unavailable. Use Agent.update_available for upgrade decisions, not string inequality against this field. */
             latest_agent_version: string | null;
         };
+        Branding: {
+            /** Format: int64 */
+            revision: number;
+            /** @default Harbormaster */
+            name: string;
+            /**
+             * Format: date-time
+             * @description Last effective change; null for the untouched default.
+             */
+            updated_at: string | null;
+            logo: {
+                /** @description Same-origin authenticated API path including the current shared revision. */
+                url: string;
+                /** @enum {string} */
+                media_type: "image/png";
+                width: number;
+                height: number;
+                /** @description Stored normalized PNG size in bytes. */
+                bytes: number;
+            } | null;
+        };
         Settings: {
             /** @description IANA 时区名，面板按它显示时间、切分"今天"。 */
             business_timezone: string;
+            /** @description Read-only process configuration, not a guarantee that cleanup has already completed. Production serve runs bounded cleanup; development fixtures are synthetic. Agent raw/hourly and traceroute retention are separate. */
+            retention: {
+                /** @default 30 */
+                latency_probe_days: number;
+            };
             /** @description 采集周期，只读，用于在界面上解释数据有多新。 */
             collection: {
+                /** @description Independent event polling interval; default 60 seconds. Queueing and provider latency can delay observation. */
+                system_event_poll_interval_seconds?: number;
                 cdt_poll_interval_seconds: number;
                 /** @description Default agent sampling interval (10 seconds). Individual agents may override it locally; see Agent.report_interval_seconds. */
                 agent_report_interval_seconds: number;
@@ -952,6 +2737,59 @@ export interface components {
             status?: components["schemas"]["InstanceStatus"];
             addresses?: string[];
         };
+        SystemEventSource: {
+            account_id: string;
+            region_id: string;
+            /** @enum {string} */
+            source: "ecs_history" | "cms_spot";
+            /**
+             * @description Paused for disabled accounts/removed regions; stale after configuration changes or two polling intervals without a check; error for a recent failed query.
+             * @enum {string}
+             */
+            status: "ok" | "stale" | "error" | "paused";
+            /** Format: date-time */
+            checked_at: string;
+            /** Format: date-time */
+            last_success_at: string | null;
+            last_error: {
+                code?: string;
+                message?: string;
+            } | null;
+        };
+        SystemEvent: {
+            id: string;
+            account_id: string;
+            region_id: string;
+            /** @enum {string} */
+            source: "ecs_history" | "cms_spot";
+            /** @description Matched local ECS instance ID; null if inventory has not discovered or retained that resource. */
+            instance_id: string | null;
+            cloud_event_id: string;
+            cloud_instance_id: string;
+            /** @enum {string} */
+            category: "maintenance" | "spot_interruption" | "other";
+            /** @description Original provider event name. */
+            event_type: string;
+            event_type_code: number | null;
+            /** @description Original event lifecycle/status, not the observed instance state. */
+            provider_status: string;
+            provider_status_code: number | null;
+            /** Format: date-time */
+            published_at: string | null;
+            /** Format: date-time */
+            not_before: string | null;
+            /** Format: date-time */
+            finished_at: string | null;
+            /** Format: date-time */
+            first_seen_at: string;
+            /**
+             * Format: date-time
+             * @description Latest successful query that returned this event; failed queries never advance it.
+             */
+            observed_at: string;
+            /** @description Presence in the last successful scan of this source. Consult source health; false does not imply resolution. */
+            seen_in_latest_scan: boolean;
+        };
         InstanceEvent: {
             id: string;
             account_id: string;
@@ -994,6 +2832,209 @@ export interface components {
                 message: string;
             } | null;
         };
+        MaintenanceWindow: {
+            /** Format: date-time */
+            start_at: string;
+            /**
+             * Format: date-time
+             * @description 必须晚于 start_at。
+             */
+            end_at: string;
+        };
+        QuietHours: {
+            /** Format: int64 */
+            revision: number;
+            /** @description 每日时段开关。 */
+            enabled: boolean;
+            /** @example 23:00 */
+            start: string;
+            /** @example 08:00 */
+            end: string;
+            /** @description 当前业务 IANA 时区，非本接口可写字段。 */
+            timezone: string;
+            /** Format: date-time */
+            updated_at: string | null;
+            active: boolean;
+            /** @enum {string|null} */
+            active_reason: "daily" | "maintenance" | null;
+            maintenance: components["schemas"]["MaintenanceWindow"] | null;
+        };
+        HeartbeatSettings: {
+            enabled: boolean;
+            url_configured: boolean;
+            interval_seconds: number;
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            updated_at: string | null;
+            /**
+             * Format: date-time
+             * @description 最近一次尝试的开始时刻，包含健康门槛检查，并不表示网络请求已发送。
+             */
+            last_attempt_at: string | null;
+            /** Format: date-time */
+            last_success_at: string | null;
+            /** @description 固定错误码；不包含 URL、提供方响应正文或原始网络错误。成功仅表示健康门槛通过且 HTTP 为 2xx，不证明外部告警已送达。 */
+            last_error: {
+                code?: string;
+                message?: string;
+            } | null;
+        };
+        AgentNetworkSample: {
+            counter_epoch: string;
+            /** Format: int64 */
+            sequence: number;
+            /** Format: date-time */
+            sampled_at: string;
+            /** Format: date-time */
+            received_at: string;
+            /** Format: int64 */
+            uptime_ms: number;
+            /**
+             * Format: int64
+             * @description 当前代际累计入字节。
+             */
+            rx_bytes: number;
+            /**
+             * Format: int64
+             * @description 当前代际累计出字节。
+             */
+            tx_bytes: number;
+            /** @enum {string} */
+            quality: "baseline" | "ok" | "clock_skew" | "counter_reset" | "stale" | "gap" | "unknown";
+            rules_version: string | null;
+            report_interval_seconds: number | null;
+            /** Format: int64 */
+            dropped_samples: number | null;
+            /** @enum {string} */
+            interval_status: "continuous" | "gap" | "unavailable";
+            /** @enum {string|null} */
+            interval_unavailable_reason: "no_previous_sample" | "metadata_unknown" | "rules_changed" | "clock_skew" | "invalid_counter" | "rate_overflow" | null;
+            interval: components["schemas"]["AgentNetworkInterval"] | null;
+        };
+        AgentNetworkInterval: {
+            /** Format: int64 */
+            previous_sequence: number;
+            /** Format: date-time */
+            start_at: string;
+            /** Format: date-time */
+            end_at: string;
+            /**
+             * Format: int64
+             * @description 单调 uptime 差；不等同于墙钟时间差，不能据此假定小时分配。
+             */
+            duration_ms: number;
+            /** Format: int64 */
+            rx_bytes: number;
+            /** Format: int64 */
+            tx_bytes: number;
+            /**
+             * Format: int64
+             * @description 完整区间的平均 bytes/s，整数向下取整。
+             */
+            rx_bytes_per_second: number;
+            /** Format: int64 */
+            tx_bytes_per_second: number;
+        };
+        CloudNetworkSample: {
+            /** @enum {string} */
+            source: "cms" | "swas_describe_monitor_data";
+            /** @enum {string} */
+            network_type: "classic" | "vpc" | "swas";
+            /** Format: ipv4 */
+            ip: string | null;
+            /** @enum {string} */
+            direction: "ingress" | "egress";
+            metric_name: string;
+            /** @enum {string} */
+            unit: "bit/s";
+            /** @enum {integer} */
+            period_seconds: 60;
+            /** @description 提供方该分钟的 Average；非计费字节。 */
+            value: number;
+            /** Format: date-time */
+            sampled_at: string;
+            /**
+             * Format: date-time
+             * @description 最近一次完整查询观察到该样本的时间。
+             */
+            checked_at: string;
+        };
+        CloudNetwork: {
+            /** @enum {string} */
+            source: "cms" | "swas_describe_monitor_data";
+            /**
+             * @description Last verified network type; may be retained when current topology is incomplete.
+             * @enum {string}
+             */
+            network_type: "classic" | "vpc" | "swas" | "unknown";
+            /** @description False means streams may be retained from earlier topology and must not be presented as current coverage. */
+            topology_complete: boolean;
+            /** Format: date-time */
+            checked_at: string;
+            /** @description VPC uses distinct public IPv4 streams; classic/SWAS use one instance stream with ip=null. Empty does not imply zero traffic. Never sum asynchronous samples or duplicate these with EIP metrics. */
+            streams: {
+                /** Format: ipv4 */
+                ip: string | null;
+                ingress: components["schemas"]["CloudNetworkRate"];
+                egress: components["schemas"]["CloudNetworkRate"];
+            }[];
+        };
+        CloudNetworkRate: {
+            /** @enum {string} */
+            metric_name: "InternetInRate" | "InternetOutRate" | "VPC_PublicIP_InternetInRate" | "VPC_PublicIP_InternetOutRate" | "VPC_PUBLICIP_INTERNETIN_RATE" | "VPC_PUBLICIP_INTERNETOUT_RATE";
+            /** @enum {string} */
+            unit: "bit/s";
+            /** @enum {integer} */
+            period_seconds: 60;
+            /** @description Latest provider Average; one-minute bandwidth, not a byte counter or link capacity. */
+            value: number | null;
+            /** @enum {string} */
+            status: "ok" | "stale" | "unknown";
+            /** Format: date-time */
+            observed_at: string | null;
+            /** Format: date-time */
+            checked_at: string;
+            last_error: {
+                code?: string;
+                message?: string;
+            } | null;
+        };
+        InstanceCPU: {
+            /** @enum {string} */
+            source: "cms" | "swas_describe_monitor_data";
+            /** @enum {string|null} */
+            namespace: "acs_ecs_dashboard" | null;
+            usage: components["schemas"]["CPUMetric"];
+            /** @description ECS absolute credits; null for SWAS, whose CPU endpoint does not expose this metric. */
+            credit_balance: components["schemas"]["CPUMetric"] | null;
+        };
+        CPUMetric: {
+            /** @enum {string} */
+            metric_name: "CPUUtilization" | "TotalCredit" | "CPU_UTILIZATION";
+            /** @enum {string} */
+            unit: "percent" | "count";
+            /** @enum {integer} */
+            period_seconds: 60;
+            /** @description Latest Average sample; CPU utilization is 0–100 percent, credit balance is an absolute count, not a percent. */
+            value: number | null;
+            /** @enum {string} */
+            status: "ok" | "stale" | "unknown";
+            /**
+             * Format: date-time
+             * @description Provider sample timestamp, preserved across failures.
+             */
+            observed_at: string | null;
+            /**
+             * Format: date-time
+             * @description Last background query attempt, not the metric timestamp.
+             */
+            checked_at: string;
+            last_error: {
+                code?: string;
+                message?: string;
+            } | null;
+        };
         Instance: {
             id: string;
             /** @description 阿里云实例 ID。 */
@@ -1006,6 +3047,22 @@ export interface components {
             /** @description ECS 为实例规格（如 ecs.e-c4m1.large）；轻量为套餐描述。 */
             spec: string;
             status: components["schemas"]["InstanceStatus"];
+            /**
+             * @description Recorded intent, not observed cloud state. Null before the first recorded intent; quota_stopped is recorded at a qualified automatic dispatch boundary; dry-runs and disabled actions do not alter intent.
+             * @enum {string|null}
+             */
+            desired_state?: "running" | "stopped" | "quota_stopped" | null;
+            /**
+             * Format: date-time
+             * @description Time the latest distinct intent was enqueued. Replaying an event key does not change this time or overwrite newer intent.
+             */
+            desired_state_updated_at?: string | null;
+            /** @description Cloud rate fallback for instances without agent; separate from realtime agent values. Collected in background, aged stale after ten minutes; GET never queries clouds. No history or byte aggregation yet. */
+            cloud_network?: components["schemas"]["CloudNetwork"] | null;
+            /** @description Cached CPU samples from ECS CMS or SWAS DescribeMonitorData. GET performs no cloud calls. */
+            cpu?: components["schemas"]["InstanceCPU"] | null;
+            /** @description Null for ECS. SWAS source state is overlaid from a credential/plan-scoped cache; older instances start with never_fetched until a background scan completes. */
+            swas_traffic_package?: components["schemas"]["SWASTrafficPackage"] | null;
             /** @description 公网 IPv4。 */
             public_ips: {
                 address: string;
@@ -1038,6 +3095,15 @@ export interface components {
             /** @description 计入国内还是海外额度；不计入 CDT 为 null。 */
             cdt_scope: (string & components["schemas"]["QuotaScope"]) | null;
             agent: components["schemas"]["Agent"];
+            /**
+             * Format: date-time
+             * @description 当前有效的额度保护临时豁免截止时间；手动开机默认一小时。
+             */
+            quota_exemption_until?: string | null;
+            /** @description 来自部署绑定或可靠匹配元数据；身份未知时为 null。 */
+            is_server_self?: boolean | null;
+            /** @description 所在账号与 CDT 区域的共享估算，不是此实例独立的官方用量。前端可据 mode/status/reasons 显示估算状态。 */
+            traffic_estimation?: components["schemas"]["TrafficEstimation"] | null;
             realtime_protection: components["schemas"]["RealtimeProtection"];
             /** @description 最近一次 agent 上报算出的公网速率；没有 agent 或掉线为 null。 */
             realtime: components["schemas"]["InstanceRealtime"] | null;
@@ -1109,6 +3175,174 @@ export interface components {
             /** @description Last successful payload; remains present with its original fetched_at on later failure. */
             data: Record<string, never> | null;
         };
+        IdleResourceCandidate: {
+            id: string;
+            account_id: string;
+            region_id: string;
+            /** @enum {string} */
+            kind: "ecs" | "swas" | "disk" | "eip";
+            cloud_id: string;
+            name: string;
+            /** @enum {string} */
+            reason: "unbound_eip" | "stopped_subscription" | "stopped_keep_charging" | "stopped_not_charge_exempt" | "unattached_cloud_disk" | "disk_on_stopped_instances";
+            /** @enum {string} */
+            charge_type: "subscription" | "pay_as_you_go" | "spot" | "unknown";
+            /** @description Provider status observed during the source read. */
+            cloud_status: string;
+            /** @description Local instance links supported by the same complete source read. Empty for an unbound EIP or unattached disk. */
+            instance_ids: string[];
+            public_ip: string | null;
+            /**
+             * Format: int64
+             * @description Cloud disk size in provider GiB; null for other resource types or an unknown size.
+             */
+            size_gib: number | null;
+            /**
+             * Format: date-time
+             * @description Conservative local regional query start time; no provider atomic snapshot or billing cutoff is claimed.
+             */
+            observed_at: string;
+            /** @enum {string} */
+            source_status: "ok" | "partial" | "failing" | "stale" | "disabled";
+            /**
+             * @description Retained evidence keeps its original time when classification becomes unknown or the source is failed/stale/disabled.
+             * @enum {string}
+             */
+            evidence_status: "current" | "retained";
+            /**
+             * @description Always null until estimation policy and reliable pricing are implemented.
+             * @enum {string|null}
+             */
+            monthly_cost: null;
+            /**
+             * @description Unknown currency is preserved; no site-based currency inference.
+             * @enum {string|null}
+             */
+            currency: null;
+        };
+        IdleResourceSource: {
+            account_id: string;
+            region_id: string;
+            /** @enum {string} */
+            kind: "ecs" | "swas" | "disk" | "eip";
+            /** @enum {string} */
+            source: "ecs_describe_instances" | "swas_list_instances" | "ecs_describe_disks" | "vpc_describe_eip_addresses";
+            enabled: boolean;
+            /** @enum {string} */
+            status: "never_fetched" | "ok" | "partial" | "failing" | "stale" | "disabled";
+            /** Format: date-time */
+            fetched_at: string | null;
+            /** Format: date-time */
+            last_attempt_at: string | null;
+            last_error: {
+                code: string;
+                message: string;
+            } | null;
+            /** @description Count from the last complete successful resource list. */
+            scanned_count: number | null;
+            /** @description Rows missing evidence required to decide candidacy; unknown rows are not silently treated as non-idle. */
+            unclassified_count: number | null;
+            /** @description Cached candidate count after the last successful list; includes explicitly retained evidence for unclassified rows. */
+            candidate_count: number | null;
+        };
+        ECSReleasePreview: {
+            instance_id: string;
+            account_id: string;
+            /** @enum {string} */
+            status: "never_fetched" | "unavailable" | "stale" | "blocked" | "eligible";
+            block_reasons: ("unsupported_instance_kind" | "account_disabled" | "region_not_enabled" | "instance_not_present" | "release_information_unavailable" | "release_information_stale" | "instance_name_unavailable" | "instance_not_stopped" | "instance_charge_type_unsupported" | "instance_deletion_protected" | "instance_locked" | "release_information_incomplete" | "release_disk_information_incomplete")[];
+            /**
+             * Format: date-time
+             * @description Successful local query time, not a provider atomic snapshot timestamp.
+             */
+            fetched_at: string | null;
+            /** Format: date-time */
+            last_attempt_at: string | null;
+            last_error: {
+                code: string;
+                message: string;
+            } | null;
+            /** Format: date-time */
+            expires_at: string | null;
+            /** @description Present only for an eligible preview. This is a content fingerprint, not a secret or cloud ClientToken. */
+            preview_token: string | null;
+            /** @description Production release capability configured for this server; false by default and in demo. Eligibility is a separate required condition. */
+            execution_enabled: boolean;
+            impact: components["schemas"]["ECSReleaseImpact"] | null;
+        };
+        ECSReleaseImpact: {
+            cloud_instance_id: string;
+            /** @description Exact provider name; never synthesized from the instance ID for confirmation. */
+            instance_name: string;
+            cloud_status: string;
+            /** @description Provider InstanceChargeType; only PostPaid is eligible. */
+            instance_charge_type: string;
+            spot_strategy: string;
+            deletion_protection: boolean | null;
+            /** @description Any provider operation lock blocks release; missing lock information is unknown. */
+            locked: boolean | null;
+            /** @enum {string} */
+            instance_data_action: "delete";
+            /** @enum {string} */
+            fixed_public_ip_action: "release_if_present";
+            /** @enum {string} */
+            manual_snapshots_action: "retain";
+            /** @enum {string} */
+            eips_action: "retain";
+            disks: components["schemas"]["ECSReleaseDisk"][];
+        };
+        ECSReleaseDisk: {
+            cloud_disk_id: string;
+            name: string;
+            category: string;
+            disk_type: string;
+            /** @enum {string} */
+            storage_kind: "cloud" | "local" | "ephemeral" | "unknown";
+            attached_instance_ids: string[];
+            attachments_known: boolean;
+            delete_with_instance: boolean | null;
+            delete_auto_snapshot: boolean | null;
+            /** @enum {string} */
+            action: "delete" | "retain" | "unknown";
+            /**
+             * @description Applies to automatic snapshots of a disk that is deleted; retained disks retain their snapshots. Snapshot IDs are not enumerated.
+             * @enum {string}
+             */
+            auto_snapshot_action: "delete" | "retain" | "unknown" | "not_applicable";
+        };
+        InstanceFinance: {
+            instance_id: string;
+            account_id: string;
+            /** @description Whether the owning account is enabled for collection. */
+            enabled: boolean;
+            billing_cycle: string;
+            /**
+             * Format: date-time
+             * @description Latest attempt; not a provider billing cutoff.
+             */
+            updated_at: string | null;
+            bill: components["schemas"]["FinanceSource"] & {
+                data?: {
+                    billing_cycle: string;
+                    /** @description Original provider rows matched to this instance, with at most 15000 account rows scanned. Subscription orders reflect this month's bills, not amortized monthly cost. Payment and outstanding amounts are unavailable from this source. */
+                    items: components["schemas"]["InstanceBillItem"][];
+                } | null;
+            };
+        };
+        InstanceBillItem: {
+            cloud_instance_id: string;
+            /** @description Unmodified provider Item, e.g. SubscriptionOrder, PayAsYouGoBill, Refund, Adjustment. Do not infer refund/adjustment signs or sum unlike currencies. */
+            bill_type: string;
+            product_code: string;
+            /** @description Provider normalized product code; SWAS can have ProductCode=ace_eweb and PipCode=swas. */
+            pip_code: string;
+            product_name: string;
+            currency: string;
+            /** @description Exact provider payable amount, not paid cash. */
+            pretax_amount: string;
+            /** @description Exact amount after discount, before coupon deductions; not an additional charge to add to pretax_amount. */
+            after_discount_amount: string;
+        };
         AccountFinance: {
             account_id: string;
             enabled: boolean;
@@ -1168,7 +3402,7 @@ export interface components {
             revoked_at: string | null;
         };
         AgentInstallCommand: {
-            /** @description Installer command; setup may need elevated privileges, but the agent service must run with minimal capabilities. */
+            /** @description Installer command selects sh for root or sudo sh for other users; the agent service still runs with minimal capabilities. Registration code is passed on stdin, never as a sudo argument or environment variable. */
             command: string;
             /**
              * Format: date-time
@@ -1181,8 +3415,178 @@ export interface components {
          * @enum {string}
          */
         OfficialDataStatus: "ok" | "unavailable" | "never_fetched" | "cutoff_unknown";
+        QuotaProtectionRuleInput: {
+            /** Format: int64 */
+            revision: number;
+            name: string;
+            enabled: boolean;
+            account_id: string;
+            /** @enum {string} */
+            scope: "mainland" | "overseas" | "swas";
+            /** @description 轻量范围必须填写；CDT 范围为空字符串。 */
+            source_instance_id: string;
+            /** @enum {string} */
+            threshold_kind: "bytes" | "percent";
+            /**
+             * Format: int64
+             * @description bytes 是字节；percent 是 1–100 的整数。
+             */
+            threshold: number;
+            /** @enum {string} */
+            action: "notify" | "stop_notify";
+            target_instance_ids: string[];
+            /**
+             * @description CDT 停机指定 ECS 模式，轻量为空；预付费不允许 stop_charging。
+             * @enum {string}
+             */
+            stop_mode: "" | "keep_charging" | "stop_charging";
+            /** @default 60 */
+            reserve_seconds: number;
+            /** @default true */
+            dry_run: boolean;
+            /** @description 默认空；显式确认当前服务自身绑定实例才能填写。 */
+            confirmed_self_instance_id: string;
+        };
+        /** @description 规则配置加上持久 ID 与创建、更新时间。 */
+        QuotaProtectionRule: {
+            /** Format: int64 */
+            revision?: number;
+            name?: string;
+            enabled?: boolean;
+            account_id?: string;
+            /** @enum {string} */
+            scope?: "mainland" | "overseas" | "swas";
+            /** @description 轻量范围必须填写；CDT 范围为空字符串。 */
+            source_instance_id?: string;
+            /** @enum {string} */
+            threshold_kind?: "bytes" | "percent";
+            /**
+             * Format: int64
+             * @description bytes 是字节；percent 是 1–100 的整数。
+             */
+            threshold?: number;
+            /** @enum {string} */
+            action?: "notify" | "stop_notify";
+            target_instance_ids?: string[];
+            /**
+             * @description CDT 停机指定 ECS 模式，轻量为空；预付费不允许 stop_charging。
+             * @enum {string}
+             */
+            stop_mode?: "" | "keep_charging" | "stop_charging";
+            /** @default 60 */
+            reserve_seconds?: number;
+            /** @default true */
+            dry_run?: boolean;
+            /** @description 默认空；显式确认当前服务自身绑定实例才能填写。 */
+            confirmed_self_instance_id?: string;
+            id?: string;
+            /** Format: date-time */
+            created_at?: string;
+            /** Format: date-time */
+            updated_at?: string;
+        };
+        QuotaSimulation: {
+            /** Format: int64 */
+            revision: number;
+            account_id: string;
+            /** @enum {string} */
+            scope: "mainland" | "overseas" | "swas";
+            source_instance_id: string;
+            /** Format: int64 */
+            usage_bytes: number;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        QuotaDecision: {
+            /** Format: int64 */
+            id: number;
+            rule_id: string;
+            /** Format: int64 */
+            rule_revision: number;
+            account_id: string;
+            scope: string;
+            /** Format: date-time */
+            evaluated_at: string;
+            /** @enum {string} */
+            state: "below" | "triggered" | "unknown" | "inactive";
+            simulation: boolean;
+            /** Format: int64 */
+            threshold_bytes: number | null;
+            /** Format: int64 */
+            evaluated_bytes: number | null;
+            reasons: string[];
+            targets: {
+                instance_id: string;
+                /** @description Fixed outcome code (would_stop, power_disabled, self_identity_unknown, self_excluded, exempt, already_stopped, operation_limited, queued, source_unqualified, busy, target_unavailable, restore_quarantine). */
+                outcome: string;
+                job_id: string | null;
+            }[];
+        };
+        CDTReconciliation: {
+            /** Format: int64 */
+            id: number;
+            account_id: string;
+            scope: components["schemas"]["QuotaScope"];
+            observation_id: string;
+            previous_observation_id: string | null;
+            /** Format: date-time */
+            covered_until: string | null;
+            /** Format: date-time */
+            checked_at: string;
+            /** @enum {string} */
+            status: "comparable" | "not_comparable" | "duplicate_cutoff";
+            reason: string;
+            /** Format: int64 */
+            predicted_bytes: number | null;
+            /** Format: int64 */
+            official_bytes: number | null;
+            /** @description 绝对差除以官方值，0.1=10%；官方为0且估算非0时为null。 */
+            relative_error: number | null;
+            exceeds_ten_percent: boolean | null;
+            bad_streak: number;
+            healthy_streak: number;
+            alert_active: boolean;
+        };
+        EstimationSettings: {
+            /** Format: int64 */
+            revision: number;
+            /** @default 3600 */
+            lag_window_seconds: number;
+            bandwidth_mode_instance_ids: string[];
+        };
+        /** @description Cached background calculation. Missing full coverage is never zero. Unverified values may double-count or omit billed traffic and are only for display/rehearsal. to_at is the common available sample watermark, not necessarily now. Qualified execution additionally requires all scope/membership/source evidence and execution gates. */
+        TrafficEstimation: {
+            /** @enum {string} */
+            mode: "aligned" | "unverified";
+            /** @enum {string} */
+            status: "ready" | "incomplete" | "unavailable" | "stale";
+            basis_id: string;
+            /** Format: date-time */
+            from_at: string | null;
+            /** Format: date-time */
+            to_at: string;
+            /** Format: date-time */
+            calculated_at: string;
+            lag_window_seconds: number;
+            /** Format: int64 */
+            increment_bytes: number | null;
+            /** Format: int64 */
+            known_increment_bytes: number;
+            /** Format: int64 */
+            worst_case_bytes: number | null;
+            /** Format: int64 */
+            estimated_bytes: number | null;
+            /** Format: int64 */
+            current_rate_bytes_per_second: number | null;
+            qualified_for_execution: boolean;
+            reasons: string[];
+        };
         /** @description Missing official values are null, never zero. An unknown official cutoff makes the aligned increment, estimate and effective value null; fetched_at must not be substituted for the cutoff. */
         QuotaStatus: {
+            /** @description 当前凭据及本地周期的最后一次对账记录，可能明确不可比较。 */
+            reconciliation?: components["schemas"]["CDTReconciliation"] | null;
+            /** @description 后台尚未计算时为 null；未核实值仅放在这里，旧的严格对齐字段继续为 null。 */
+            estimation?: components["schemas"]["TrafficEstimation"] | null;
             account_id: string;
             scope: components["schemas"]["QuotaScope"];
             /**
@@ -1292,6 +3696,14 @@ export interface components {
             updated_at: string | null;
         };
         TrafficObservation: {
+            /** @description 官方数据适配器标识，不是凭据。 */
+            source?: string;
+            /** Format: date-time */
+            covered_until?: string | null;
+            /** Format: date-time */
+            period_start?: string | null;
+            /** Format: date-time */
+            period_end?: string | null;
             id: string;
             account_id: string;
             /** Format: date-time */
@@ -1301,7 +3713,7 @@ export interface components {
             /** Format: int64 */
             overseas_bytes: number | null;
             /** @enum {string} */
-            official_quality: "inferred" | "unknown";
+            official_quality: "verified" | "inferred" | "unknown";
             error: {
                 code: string;
                 message: string;
@@ -1341,6 +3753,64 @@ export interface components {
             today_metered_bytes: number | null;
             /** Format: date-time */
             updated_at: string | null;
+        };
+        SWASTrafficPackage: {
+            /** @enum {string} */
+            source: "swas_list_instances_traffic_packages";
+            /**
+             * @description ok requires a successful fetch at most ten minutes old. A failed latest attempt is unavailable and can retain older values with their original fetched_at. Account disable or region removal is disabled. No data from a different credential version or known plan ID is reused.
+             * @enum {string}
+             */
+            status: "never_fetched" | "ok" | "unavailable" | "stale" | "disabled";
+            /** @description Whether the last successful response included a usage row for this instance. Null before success; false preserves an empty result without manufacturing usage. Package classification remains in billing_subject_kind. */
+            entry_present: boolean | null;
+            /** @description Literal provider fields from the current month at query time. No recomputation or addition of overflow to another field; no percentage or forecast is inferred. */
+            usage: {
+                /** Format: int64 */
+                total_bytes: number;
+                /** Format: int64 */
+                used_bytes: number;
+                /**
+                 * Format: int64
+                 * @description Preserve the signed provider value; its behavior after overage has not been verified on a real fixed-quota plan.
+                 */
+                remaining_bytes: number;
+                /** Format: int64 */
+                overflow_bytes: number;
+            } | null;
+            /**
+             * Format: date-time
+             * @description Last successful retrieval time.
+             */
+            fetched_at: string | null;
+            /** Format: date-time */
+            last_attempt_at: string | null;
+            /**
+             * Format: date-time
+             * @description Most recent source attempt time.
+             */
+            updated_at: string | null;
+            last_error: {
+                code: string;
+                message: string;
+            } | null;
+            /** @enum {string} */
+            direction: "outbound";
+            /**
+             * @description Documented first day of each calendar month; exact reset timezone is unverified.
+             * @enum {integer}
+             */
+            reset_day: 1;
+            /**
+             * Format: date-time
+             * @description Currently null; retrieval time is not a provider cutoff.
+             */
+            official_as_of: string | null;
+            /**
+             * Format: date-time
+             * @description Currently null; no reset timestamp is provided and the billing timezone has not been verified.
+             */
+            next_reset_at: string | null;
         };
         /** @enum {string} */
         TrafficDirection: "inbound" | "outbound";
@@ -1426,16 +3896,46 @@ export interface components {
          * @description 内置规则；仅返回当前已实现且有可用来源的规则。
          * @enum {string}
          */
-        AlertRuleKey: "cdt_usage" | "cdt_forecast_exceed" | "account_api_failure" | "agent_offline" | "cdt_official_unavailable" | "instance_expiring" | "spec_bandwidth_insufficient" | "instance_public_ip_changed";
+        AlertRuleKey: "cdt_usage" | "cdt_forecast_exceed" | "account_api_failure" | "agent_offline" | "cdt_official_unavailable" | "instance_expiring" | "spec_bandwidth_insufficient" | "instance_public_ip_changed" | "balance_low" | "network_latency" | "network_loss" | "network_unreachable" | "network_route_change" | "idle_resource_detected" | "quota_protection" | "cdt_estimation_deviation";
         /** @enum {string} */
         Severity: "info" | "warning" | "serious" | "critical";
-        /** @description 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient 和 instance_public_ip_changed 使用空对象，无额外阈值。公网 IP 变化按每次有效事件记录，不产生恢复通知。 */
+        /** @description 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient、instance_public_ip_changed、network_route_change 和 idle_resource_detected 使用空对象，无额外阈值。公网 IP 和线路变化按每次有效事件记录，不产生恢复通知；线路还需要组合中明确开启 notify_changes。闲置候选依据新采集的明确状态去重与恢复，未估算金额。 */
         AlertRuleParams: {
+            /** @description Latency/loss/unreachable rules only. network_latency evaluates only listed plans with an explicit latency_ms; no latency limit is guessed. network_loss and network_unreachable apply to all enabled plans by default; entries override or disable individual plans. Empty list uses those defaults. Retired plan entries remain dormant. Threshold edits restart evidence windows without reinterpreting old runs. Disabling monitoring or replacing a point/target/protocol closes the old condition silently; it is not a recovery. */
+            probe_thresholds?: {
+                plan_id: string;
+                /** @default true */
+                enabled?: boolean;
+                /** @description network_latency only; required for enabled listed plans. Compare average RTT with strict greater-than. */
+                latency_ms?: number;
+                /**
+                 * @description network_loss only; omitted value means 5 percent. TCP counts failed connection attempts.
+                 * @default 5
+                 */
+                loss_percent?: number;
+            }[];
+            /**
+             * @description network_latency only. Successive valid above-threshold measurements must span this duration, with at least two results; elapsed wall time alone cannot fire an alert.
+             * @default 600
+             */
+            duration_seconds?: number;
+            /**
+             * @description Network latency/loss/unreachable use consecutive valid healthy measurements for recovery (default 3). cdt_estimation_deviation also uses this field; trigger and recovery both default to 3 by confirmed policy, and enabled rules require a recovery value. Missing or incomparable evidence interrupts counters and never implies recovery.
+             * @default 3
+             */
+            recovery_samples?: number;
+            /** @description balance_low only, required for this rule. Empty means no accounts configured. One entry per existing account; disabled accounts retain configuration but are not evaluated. Uses available_amount, not cash-only balance. Changes are evaluated on the next successful fetch. */
+            balance_thresholds?: {
+                account_id: string;
+                currency: string;
+                /** @description Exact signed decimal threshold, at most 12 fractional digits and 256 bits after scaling by 10^12; no exponent or thousands separators. Zero is valid; no default amount is inferred. */
+                amount: string;
+            }[];
             /** @description instance_expiring only. Default 7; compare freshly collected expiry against now plus this many 24-hour days. Missing expiry is unknown. Stopped subscription instances remain applicable. */
             before_days?: number;
             /** @description cdt_usage 的默认档位（账号可以单独覆盖）。 */
             thresholds_percent?: number[];
-            /** @description account_api_failure、cdt_official_unavailable：连续失败多少次后告警。 */
+            /** @description account_api_failure、cdt_official_unavailable 为连续失败次数；cdt_estimation_deviation 为不同可信截止的连续精确偏差次数（默认 3）；network_unreachable 为完整测速全部失败的连续次数，默认 3。 */
             consecutive_failures?: number;
             /** @description agent_offline：连续多少秒无新鲜上报视为掉线，默认 30。实例状态和 settings 使用同一值；关闭告警不关闭状态监测。尚未收到首次有效上报的注册不触发掉线告警。 */
             offline_after_seconds?: number;
@@ -1444,7 +3944,7 @@ export interface components {
             key: components["schemas"]["AlertRuleKey"];
             enabled: boolean;
             params: components["schemas"]["AlertRuleParams"];
-            /** @description 紧急告警不受静默时段影响（静默时段在 M2 提供）。 */
+            /** @description 紧急告警不受每日静默或临时维护期影响。 */
             urgent: boolean;
         };
         AlertRuleUpdate: {
@@ -1454,7 +3954,7 @@ export interface components {
         /** @enum {string} */
         NotificationKind: "alert" | "recovery" | "test";
         /**
-         * @description not_sent = 没有配置渠道，只记录不发送。
+         * @description not_sent = 只记录不发送（未配置渠道、静默或规则取消等）；不会自动补发，结合 suppression_reason 与 last_error 判断。
          * @enum {string}
          */
         DeliveryStatus: "pending" | "sent" | "failed" | "not_sent";
@@ -1470,7 +3970,17 @@ export interface components {
             body: string;
             account_id: string | null;
             instance_id: string | null;
+            /** @description Network alert combination identity; null for other notifications. */
+            probe_plan_id: string | null;
+            /** @description Logical idle resource identity, including EIP/disk candidates that have no single instance link. Existing notification types return null. */
+            resource_id?: string | null;
             delivery_status: components["schemas"]["DeliveryStatus"];
+            /** @description 服务端判定并持久保存，前端不能编辑单条通知的紧急性。 */
+            urgent?: boolean;
+            /** @enum {string|null} */
+            suppression_reason?: "daily" | "maintenance" | null;
+            /** Format: date-time */
+            suppressed_at?: string | null;
             attempts?: number;
             last_error?: {
                 code: string;
@@ -1582,6 +4092,1117 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    listCDTReconciliations: {
+        parameters: {
+            query?: {
+                account_id?: string;
+                scope?: "mainland" | "overseas";
+                before?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 倒序本地历史，未知／不可比较不会变成 0% 偏差。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["CDTReconciliation"][];
+                        /** Format: int64 */
+                        next_before?: number | null;
+                    };
+                };
+            };
+        };
+    };
+    getProtectionStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 身份未知时自动停机被阻止；实例 ID 绑定不随数据库迁移。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        power_enabled: boolean;
+                        release_enabled: boolean;
+                        self_identity_known: boolean;
+                        self_instance_id: string | null;
+                        /** @example 3 */
+                        automatic_limit: number;
+                        /** @example 600 */
+                        automatic_window_seconds: number;
+                    };
+                };
+            };
+        };
+    };
+    listQuotaProtectionRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 本地规则，GET 不查询云端。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["QuotaProtectionRule"][];
+                    };
+                };
+            };
+        };
+    };
+    createQuotaProtectionRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuotaProtectionRuleInput"];
+            };
+        };
+        responses: {
+            /** @description 已保存 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuotaProtectionRule"];
+                };
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateQuotaProtectionRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuotaProtectionRuleInput"];
+            };
+        };
+        responses: {
+            /** @description 已保存 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuotaProtectionRule"];
+                };
+            };
+            /** @description revision_conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteQuotaProtectionRule: {
+        parameters: {
+            query: {
+                revision: number;
+            };
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除，未发送任务已取消 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description revision_conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listQuotaSimulations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 模拟不会写入官方观测或真实流量账本。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["QuotaSimulation"][];
+                    };
+                };
+            };
+        };
+    };
+    setQuotaSimulation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuotaSimulation"];
+            };
+        };
+        responses: {
+            /** @description 已保存 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuotaSimulation"];
+                };
+            };
+            /** @description revision_conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    clearQuotaSimulation: {
+        parameters: {
+            query: {
+                account_id: string;
+                scope: "mainland" | "overseas" | "swas";
+                source_instance_id?: string;
+                revision: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已失效，保留修订号 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description revision_conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listQuotaDecisions: {
+        parameters: {
+            query?: {
+                rule_id?: string;
+                before?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 倒序历史，按 before 游标继续；演练结果不会改写实际期望状态。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items?: components["schemas"]["QuotaDecision"][];
+                        /** Format: int64 */
+                        next_before?: number | null;
+                    };
+                };
+            };
+        };
+    };
+    setProtectionExemption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    duration_seconds: number;
+                };
+            };
+        };
+        responses: {
+            /** @description 已保存，返回 instance_id/expires_at */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    clearProtectionExemption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已清除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEstimationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 本地估算配置；不表示官方延迟已核实。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstimationSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    putEstimationSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EstimationSettings"];
+            };
+        };
+        responses: {
+            /** @description 已保存；后台重新计算。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstimationSettings"];
+                };
+            };
+            /** @description revision_conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getOfflineIPDatabaseStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Loaded dataset metadata and most recent update attempt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IPDatabaseStatus"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description ipdb_unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getTraceSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cached schedule with no network operations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraceSchedule"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    saveTraceSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TraceScheduleInput"];
+            };
+        };
+        responses: {
+            /** @description Saved settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraceSchedule"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description network_configuration_changed or plan_disabled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    listTraceSnapshots: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored opportunities and comparisons */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["TraceSnapshot"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    submitDuplexTrace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DuplexTraceSubmission"];
+            };
+        };
+        responses: {
+            /** @description Both directions accepted atomically */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplexTraceAccepted"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description request_conflict, probe_queue_full, duplex_same_address, or fixed point/target unavailable reason from the manual trace API */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    getDuplexTrace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Independent forward and reverse state/results */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplexTrace"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    exportDuplexTrace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description UTF-8 text with frozen endpoints and both trace exports including available attribution */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listNetworkTraces: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                /** @description server or managed source instance ID */
+                point_id?: string;
+                /** @description Saved target ID */
+                target_id?: string;
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored summaries, never performs network operations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["TraceRun"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    submitNetworkTrace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TraceSubmission"];
+            };
+        };
+        responses: {
+            /** @description Accepted without synchronous network work */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        job_id: string;
+                        trace_id: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description network_configuration_changed, request_conflict, probe_queue_full, trace_method_unavailable, or a fixed point/target unavailable reason */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    getNetworkTrace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current task status and accepted result; partial results remain incomplete */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraceDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    exportNetworkTrace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description UTF-8 text attachment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listNetworkTargets: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cached rows ordered by ID ascending; live keyset pagination. No cloud, DNS or network probe on GET. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["NetworkTarget"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    createNetworkTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NetworkTargetInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkTarget"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description network_configuration_changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    getNetworkTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current cached record */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkTarget"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateNetworkTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NetworkTargetInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NetworkTarget"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description network_configuration_changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    deleteNetworkTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    revision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Retired */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description network_configuration_changed or target_in_use */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listNetworkPlans: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cached rows ordered by ID ascending; live keyset pagination. No cloud, DNS or network probe on GET. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ProbePlan"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    createNetworkPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProbePlanInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProbePlan"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description network_configuration_changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    getNetworkProbePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current cached record */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProbePlan"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateNetworkProbePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProbePlanInput"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProbePlan"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description network_configuration_changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    deleteNetworkProbePlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    revision: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Retired */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description network_configuration_changed or target_in_use */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listNetworkPoints: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Server plus managed instances, cached availability only. Agent availability requires fresh traffic heartbeat and a recent authenticated probe poll for the current token; it does not prove raw socket permissions or reachability. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ProbePoint"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    listProbeRuns: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Up to seven days, inclusive from/exclusive to, to no later than now. Newest run sequence first; cursor bound to plan and range. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["ProbeRun"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
     getSetupStatus: {
         parameters: {
             query?: never;
@@ -1682,7 +5303,7 @@ export interface operations {
                     "application/json": components["schemas"]["Session"];
                 };
             };
-            /** @description 密码不正确（`invalid_credentials`） */
+            /** @description 密码不正确或密码登录已关闭（`invalid_credentials`） */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -1714,6 +5335,668 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    setPasswordLoginEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enabled: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description 已持久保存开关。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        password_enabled: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    getLoginMethods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 密码开关为持久设置；Passkey 需配置 HTTPS public_url 且已注册当前 RP 的凭据。未初始化时两项均为 false。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        password_enabled: boolean;
+                        passkey_enabled: boolean;
+                    };
+                };
+            };
+        };
+    };
+    listPasskeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 最多 20 个；不返回公钥、凭据原文或用户句柄。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Passkey"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    deletePasskey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                passkey_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    beginPasskeyRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyRegistrationBegin"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyOptions"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
+            /** @description Passkey 不可用或数据库暂不可用。 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    finishPasskeyRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyFinish"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Passkey"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
+            /** @description Passkey 不可用或数据库暂不可用。 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    beginPasskeyLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmptyObject"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyOptions"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
+            /** @description Passkey 不可用或数据库暂不可用。 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    finishPasskeyLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyFinish"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
+            /** @description Passkey 不可用或数据库暂不可用。 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getCloudNetworkHistory: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                direction?: "ingress" | "egress";
+                /** @description 可选公网 IPv4，仅筛选有 IP 维度的 VPC 序列。 */
+                ip?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 原始样本；当前账号停用或实例消失不删除历史。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: date-time */
+                        from: string;
+                        /** Format: date-time */
+                        to: string;
+                        next_cursor: string | null;
+                        items: components["schemas"]["CloudNetworkSample"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    getAgentNetworkHistory: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 原始样本；未安装 agent 或窗口无数据时为空数组。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: date-time */
+                        from: string;
+                        /** Format: date-time */
+                        to: string;
+                        next_cursor: string | null;
+                        items: components["schemas"]["AgentNetworkSample"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    getBranding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current configuration */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branding"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    putBrandingName: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    revision: number;
+                    /** @description Plain Unicode text without control characters. */
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Current configuration after the update */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branding"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
+            /** @description Development fixtures do not persist configuration writes. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getBrandingLogo: {
+        parameters: {
+            query?: {
+                /** @description Optional image refresh hint; the current image is returned. */
+                revision?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Normalized custom image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    putBrandingLogo: {
+        parameters: {
+            query: {
+                revision: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "image/png": string;
+                "image/jpeg": string;
+            };
+        };
+        responses: {
+            /** @description Current configuration including normalized image dimensions and size */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branding"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            /** @description branding_logo_too_large; the configuration is unchanged. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
+            /** @description Development fixtures do not persist configuration writes. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteBrandingLogo: {
+        parameters: {
+            query: {
+                revision: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current configuration with logo=null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Branding"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            /** @description Development fixtures do not persist configuration writes. */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getHeartbeatSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 初始为 disabled、未配置地址、60 秒周期。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartbeatSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    putHeartbeatSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    revision: number;
+                    enabled: boolean;
+                    interval_seconds: number;
+                    url?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 已加密保存；尚不代表外部送达。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HeartbeatSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
+            /** @description 主密钥或生产写入能力不可用。 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    testHeartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmptyObject"];
+            };
+        };
+        responses: {
+            /** @description 已入队。 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        job_id: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
+            /** @description 生产发送能力不可用。 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getQuietHours: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 业务时区来自全局设置；active 按查询时刻计算。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuietHours"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    putQuietHours: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    revision: number;
+                    enabled: boolean;
+                    start: string;
+                    end: string;
+                    maintenance: components["schemas"]["MaintenanceWindow"] | null;
+                };
+            };
+        };
+        responses: {
+            /** @description 已保存；旧的静默记录不会重新入队。 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuietHours"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
         };
     };
     getSystemInfo: {
@@ -1836,6 +6119,75 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    listAuditLog: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                from?: string;
+                to?: string;
+                actor?: "admin" | "api_key" | "cli" | "telegram" | "system";
+                /** @description Exact stable action code */
+                action?: string;
+                target_type?: string;
+                target_id?: string;
+                account_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Stored records only */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["AuditEntry"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    listJobs: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                account_id?: string;
+                instance_id?: string;
+                type?: components["schemas"]["JobType"];
+                status?: components["schemas"]["JobStatus"];
+                trigger?: components["schemas"]["JobTrigger"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching tasks; unknown account/instance filters produce an empty page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["Job"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
             422: components["responses"]["ValidationFailed"];
         };
     };
@@ -2116,6 +6468,40 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    listSystemEvents: {
+        parameters: {
+            query?: {
+                account_id?: string;
+                instance_id?: string;
+                region_id?: string;
+                source?: "ecs_history" | "cms_spot";
+                category?: "maintenance" | "spot_interruption" | "other";
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cached events and health of sources matching account/region/source/instance filters. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["SystemEvent"][];
+                        sources: components["schemas"]["SystemEventSource"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
     listInstanceEvents: {
         parameters: {
             query?: {
@@ -2165,6 +6551,250 @@ export interface operations {
         responses: {
             202: components["responses"]["JobAccepted"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    releaseECSInstance: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。 */
+                instance_id: components["parameters"]["InstanceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Exact provider name as displayed in the preview; case and whitespace matter. */
+                    confirmation_name: string;
+                    preview_token: string;
+                };
+            };
+        };
+        responses: {
+            202: components["responses"]["JobAccepted"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description release_preview_changed, instance_release_busy or idempotency_key_conflict; fetch current preview before starting a different confirmation. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            /** @description instance_release_disabled or internal_error; no synchronous cloud call. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    controlInstancePower: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique action event key, for example a UUID. Retained across task completion and backup restore. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。 */
+                instance_id: components["parameters"]["InstanceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    action: "start" | "stop" | "reboot";
+                    /** @enum {string} */
+                    stop_mode?: "keep_charging" | "stop_charging";
+                };
+            };
+        };
+        responses: {
+            202: components["responses"]["JobAccepted"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description Instance is absent from managed discovery. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description instance_power_busy, idempotency_key_conflict, account_disabled or account_changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            /** @description instance_power_disabled or internal_error; no synchronous cloud call. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    refreshInstancesWithAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Omit or use an empty string to refresh all enabled accounts. */
+                    account_id?: string;
+                };
+            };
+        };
+        responses: {
+            202: components["responses"]["JobAccepted"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description account_disabled or refresh_scope_changed; no new task membership is granted on failure. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description unsupported_media_type; request body must be application/json. */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            /** @description collector_unavailable or internal_error; no synchronous cloud call. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    controlInstancePowerWithAPIKey: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique action event key, for example a UUID. Retained across task completion and backup restore. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。 */
+                instance_id: components["parameters"]["InstanceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    action: "start" | "stop" | "reboot";
+                    /** @enum {string} */
+                    stop_mode?: "keep_charging" | "stop_charging";
+                };
+            };
+        };
+        responses: {
+            202: components["responses"]["JobAccepted"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description Instance is absent from managed discovery. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description instance_power_busy, idempotency_key_conflict, account_disabled or account_changed. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            /** @description instance_power_disabled or internal_error; no synchronous cloud call. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getIntegrationPowerJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Persisted power or authorized refresh task. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description insufficient_scope or forbidden transport/source. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     createAgentInstallCommand: {
@@ -2354,6 +6984,86 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    getECSReleasePreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cached impact or an explicit unavailable/blocked state; a successful response does not authorize or perform release. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ECSReleasePreview"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getInstanceFinance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instance_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Last successful matching rows or null if never obtained. Empty items mean no matching bill rows, not zero cost. No total or refund netting is inferred. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceFinance"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listIdleResourceCandidates: {
+        parameters: {
+            query?: {
+                account_id?: string;
+                region_id?: string;
+                kind?: "ecs" | "swas" | "disk" | "eip";
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Last successful candidates with original observation times and explicit current source health; financial estimates remain unknown. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["IdleResourceCandidate"][];
+                        sources: components["schemas"]["IdleResourceSource"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
     getAccountFinance: {
         parameters: {
             query?: never;
@@ -2534,7 +7244,10 @@ export interface operations {
     };
     listAlertRules: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description 显式返回新偏差规则；当前前端未接入新字典时保持省略。 */
+                include_reconciliation?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
