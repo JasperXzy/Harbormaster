@@ -43,6 +43,7 @@ type QuotaStatus struct {
 	EstimatedBytes    *int64             `json:"estimated_bytes"`
 	EffectiveBytes    *int64             `json:"effective_bytes"`
 	Thresholds        []int              `json:"thresholds_percent"`
-	Forecast          any                `json:"forecast"`
+	Forecast          *TrafficForecast   `json:"forecast"`
+	ForecastStatus    string             `json:"forecast_status"`
 	UpdatedAt         *time.Time         `json:"updated_at"`
 }

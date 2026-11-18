@@ -3643,24 +3643,9 @@ export interface components {
              */
             effective_bytes: number | null;
             thresholds_percent: number[];
-            /** @description 数据不足以预测时为 null。 */
-            forecast: {
-                /**
-                 * Format: int64
-                 * @description 近 7 天日均用量。
-                 */
-                daily_average_bytes: number;
-                /**
-                 * Format: int64
-                 * @description 按日均线性推算到周期结束时的用量。
-                 */
-                cycle_end_bytes: number;
-                /**
-                 * Format: date
-                 * @description 预计超出免费额度的日期（业务时区）；不会超额为 null。
-                 */
-                exceeds_on: string | null;
-            } | null;
+            /** @enum {string} */
+            forecast_status?: "ready" | "insufficient_data" | "baseline_missing";
+            forecast: components["schemas"]["TrafficForecast"] | null;
             /**
              * Format: date-time
              * @description 这份数据最近的实际检查时间；未抓取时为 null，不是官方统计截止时间。
@@ -3670,10 +3655,10 @@ export interface components {
         /** @description Aggregate in the returned data_timezone. Do not relabel provider daily totals as a different business timezone. */
         DailyTraffic: {
             /**
-             * @description 没有可靠日用量来源时返回空缺，不以累计抓取差值代替日用量。
+             * @description Only exact verified boundary pairs can be official daily data; agent estimates and missing coverage remain explicit.
              * @enum {string}
              */
-            source_status?: "available" | "daily_source_unverified";
+            source_status?: "available" | "partial" | "unavailable" | "daily_source_unverified";
             /** @description IANA timezone used to partition the returned daily values. */
             data_timezone: string;
             account_id: string;
@@ -3689,11 +3674,83 @@ export interface components {
                 mainland_bytes: number | null;
                 /** Format: int64 */
                 overseas_bytes: number | null;
-                /** @description true 表示这一天含尚未出账的实时增量（通常只有今天）。 */
+                scopes?: {
+                    mainland: components["schemas"]["DailyScope"];
+                    overseas: components["schemas"]["DailyScope"];
+                };
+                /** @description True for agent estimates or an unfinished business day; partial subtotals are only in scopes.known_bytes. */
                 provisional: boolean;
             }[];
+            /** @description Last successful monthly official reading per capture date. The date is not a billing cutoff; never use differences as daily usage. */
+            official_points?: {
+                mainland: components["schemas"]["UsagePoint"][];
+                overseas: components["schemas"]["UsagePoint"][];
+            };
             /** Format: date-time */
             updated_at: string | null;
+        };
+        DailyScope: {
+            /**
+             * Format: int64
+             * @description Full requested window only; null when coverage is incomplete.
+             */
+            bytes: number | null;
+            /** Format: int64 */
+            known_bytes: number;
+            /** @description Distinguishes measured zero from no observations. */
+            has_data: boolean;
+            /** @enum {string} */
+            source: "official" | "agent_estimate" | "unavailable";
+            /** @enum {string} */
+            status: "complete" | "partial" | "unavailable" | "pending";
+            /** @description Ended business day with complete temporal and membership coverage. Only these enter forecasts. */
+            is_complete_day: boolean;
+            /** Format: date-time */
+            from_at: string;
+            /** Format: date-time */
+            until_at: string;
+            /** Format: date-time */
+            observed_from: string | null;
+            /**
+             * Format: date-time
+             * @description First/last observations do not assert continuity between them.
+             */
+            observed_until: string | null;
+            reasons: string[];
+        };
+        UsagePoint: {
+            /** Format: date-time */
+            at: string;
+            /** Format: date */
+            date: string;
+            /** Format: int64 */
+            bytes: number;
+        };
+        /** @description Display-only linear estimate using complete samples among the previous 7 calendar days. Never authorizes protective writes. */
+        TrafficForecast: {
+            /** Format: int64 */
+            daily_average_bytes: number;
+            /** Format: int64 */
+            cycle_end_bytes: number;
+            /** Format: date */
+            exceeds_on: string | null;
+            already_exceeded?: boolean;
+            sample_days?: number;
+            sample_dates?: string[];
+            /** @enum {string} */
+            source?: "official" | "agent_estimate" | "mixed";
+            unverified?: boolean;
+            /** Format: int64 */
+            baseline_bytes?: number;
+            /** Format: date-time */
+            baseline_at?: string;
+            /** @enum {string} */
+            baseline_source?: "realtime_estimate" | "official";
+            baseline_at_assumed?: boolean;
+            /** Format: date-time */
+            calculated_at?: string;
+            points?: components["schemas"]["UsagePoint"][];
+            reasons?: string[];
         };
         TrafficObservation: {
             /** @description 官方数据适配器标识，不是凭据。 */

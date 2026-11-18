@@ -135,7 +135,7 @@ func TestAccountAPIUsesEncryptedTasksAndSnapshotReads(t *testing.T) {
 		Days    []map[string]any `json:"days"`
 		Updated any              `json:"updated_at"`
 	}
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &daily) != nil || daily.Source != "daily_source_unverified" || daily.Updated != nil || len(daily.Days) == 0 {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &daily) != nil || daily.Source != "unavailable" || daily.Updated != nil || len(daily.Days) == 0 {
 		t.Fatal("daily source status incorrect")
 	}
 	for _, d := range daily.Days {

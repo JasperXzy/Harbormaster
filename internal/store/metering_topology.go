@@ -57,6 +57,16 @@ func saveMeteringTopology(ctx context.Context, tx *sql.Tx, a model.Account, resu
 		if err == nil && complete && oldComplete && fingerprint == oldHash && credential == a.CredentialVersion && !lastAt.After(now) && now.Sub(lastAt) <= meteringTopologyFreshness {
 			since = oldSince
 		}
+		full := []map[string]any{}
+		for _, v := range result.Snapshots {
+			if v.Kind == "subject" && v.Region == region {
+				full = append(full, v.Payload)
+			}
+		}
+		from, _ := time.Parse(time.RFC3339Nano, since)
+		if err = saveDailyTopology(ctx, tx, a, region, full, complete, from, now); err != nil {
+			return err
+		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO metering_topology(account_id,region,credential_version,fingerprint,observed_since,last_seen,complete) VALUES(?,?,?,?,?,?,?)
  ON CONFLICT(account_id,region) DO UPDATE SET credential_version=excluded.credential_version,fingerprint=excluded.fingerprint,observed_since=excluded.observed_since,last_seen=excluded.last_seen,complete=excluded.complete,quality='observed'`, a.ID, region, a.CredentialVersion, fingerprint, since, timestamp(now), complete)
 		if err != nil {

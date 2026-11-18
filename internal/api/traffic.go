@@ -98,21 +98,22 @@ func (p *productionPanel) traffic(w http.ResponseWriter, r *http.Request, path s
 			fieldError(w, "account_id", "required")
 			return true
 		}
-		if _, err := p.s.Account(r.Context(), id); err != nil {
-			businessError(w, err)
-			return true
-		}
 		loc, err := p.businessLocation(r.Context())
 		if err != nil {
 			businessError(w, err)
 			return true
 		}
-		start, end := store.ReferenceCycle(p.now(), loc)
-		days := []map[string]any{}
-		for day := start.In(loc); !day.After(p.now().In(loc)) && day.Before(end); day = day.AddDate(0, 0, 1) {
-			days = append(days, map[string]any{"date": day.Format("2006-01-02"), "mainland_bytes": nil, "overseas_bytes": nil, "provisional": false})
+		a, err := p.s.Account(r.Context(), id)
+		if err != nil {
+			businessError(w, err)
+			return true
 		}
-		writeJSON(w, 200, map[string]any{"account_id": id, "cycle_start": start, "cycle_end": end, "data_timezone": loc.String(), "days": days, "updated_at": nil, "source_status": "daily_source_unverified"})
+		data, err := p.s.DailyTraffic(r.Context(), a, loc, p.now())
+		if err != nil {
+			businessError(w, err)
+		} else {
+			writeJSON(w, 200, data)
+		}
 	case strings.HasPrefix(path, "/bandwidth-packages/") && strings.HasSuffix(path, "/hourly"):
 		id := strings.TrimSuffix(strings.TrimPrefix(path, "/bandwidth-packages/"), "/hourly")
 		items, err := p.s.Snapshots(r.Context(), []string{"package"}, "")

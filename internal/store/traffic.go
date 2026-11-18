@@ -214,6 +214,9 @@ func (s *Store) Quotas(ctx context.Context, accounts []model.Account, loc *time.
 			if err != nil {
 				return nil, err
 			}
+			if err = s.forecastQuota(ctx, a, &q, loc, now); err != nil {
+				return nil, err
+			}
 			items = append(items, q)
 		}
 	}

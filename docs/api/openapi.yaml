@@ -1,3 +1,4 @@
+# 2026-11-18  Daily metering and forecasts: cached business-day scopes distinguish verified official boundary differences from observed-topology agent estimates, partial coverage and genuine zero. Recovered cumulative reports invalidate affected days. Forecasts use complete samples among the previous 7 business calendar days, never today; sample count/dates and assumed baseline remain explicit. Official reading points are capture-time monthly observations, never fabricated daily bills. All forecasts are display-only.
 # Harbormaster 面板接口契约（面板 <-> hm-server）
 #
 # 状态：M1 草稿，待后端评审，尚未冻结。
@@ -5580,25 +5581,14 @@ components:
           type: array
           items:
             type: integer
+        forecast_status:
+          type: string
+          enum: [ready, insufficient_data, baseline_missing]
         forecast:
           type: object
           nullable: true
-          description: 数据不足以预测时为 null。
-          required: [daily_average_bytes, cycle_end_bytes, exceeds_on]
-          properties:
-            daily_average_bytes:
-              type: integer
-              format: int64
-              description: 近 7 天日均用量。
-            cycle_end_bytes:
-              type: integer
-              format: int64
-              description: 按日均线性推算到周期结束时的用量。
-            exceeds_on:
-              type: string
-              format: date
-              nullable: true
-              description: 预计超出免费额度的日期（业务时区）；不会超额为 null。
+          allOf:
+            - $ref: "#/components/schemas/TrafficForecast"
         updated_at:
           type: string
           format: date-time
@@ -5612,8 +5602,8 @@ components:
       properties:
         source_status:
           type: string
-          enum: [available, daily_source_unverified]
-          description: 没有可靠日用量来源时返回空缺，不以累计抓取差值代替日用量。
+          enum: [available, partial, unavailable, daily_source_unverified]
+          description: Only exact verified boundary pairs can be official daily data; agent estimates and missing coverage remain explicit.
         data_timezone:
           type: string
           description: IANA timezone used to partition the returned daily values.
@@ -5643,13 +5633,69 @@ components:
                 type: integer
                 format: int64
                 nullable: true
+              scopes:
+                type: object
+                required: [mainland, overseas]
+                properties:
+                  mainland: {$ref: "#/components/schemas/DailyScope"}
+                  overseas: {$ref: "#/components/schemas/DailyScope"}
               provisional:
                 type: boolean
-                description: true 表示这一天含尚未出账的实时增量（通常只有今天）。
+                description: True for agent estimates or an unfinished business day; partial subtotals are only in scopes.known_bytes.
+        official_points:
+          type: object
+          description: Last successful monthly official reading per capture date. The date is not a billing cutoff; never use differences as daily usage.
+          required: [mainland, overseas]
+          properties:
+            mainland: {type: array, items: {$ref: "#/components/schemas/UsagePoint"}}
+            overseas: {type: array, items: {$ref: "#/components/schemas/UsagePoint"}}
         updated_at:
           type: string
           format: date-time
           nullable: true
+
+    DailyScope:
+      type: object
+      required: [bytes, known_bytes, has_data, source, status, is_complete_day, from_at, until_at, observed_from, observed_until, reasons]
+      properties:
+        bytes: {type: integer, format: int64, nullable: true, description: Full requested window only; null when coverage is incomplete.}
+        known_bytes: {type: integer, format: int64, minimum: 0}
+        has_data: {type: boolean, description: Distinguishes measured zero from no observations.}
+        source: {type: string, enum: [official, agent_estimate, unavailable]}
+        status: {type: string, enum: [complete, partial, unavailable, pending]}
+        is_complete_day: {type: boolean, description: Ended business day with complete temporal and membership coverage. Only these enter forecasts.}
+        from_at: {type: string, format: date-time}
+        until_at: {type: string, format: date-time}
+        observed_from: {type: string, format: date-time, nullable: true}
+        observed_until: {type: string, format: date-time, nullable: true, description: First/last observations do not assert continuity between them.}
+        reasons: {type: array, items: {type: string}}
+    UsagePoint:
+      type: object
+      required: [at, date, bytes]
+      properties:
+        at: {type: string, format: date-time}
+        date: {type: string, format: date}
+        bytes: {type: integer, format: int64, minimum: 0}
+    TrafficForecast:
+      type: object
+      description: Display-only linear estimate using complete samples among the previous 7 calendar days. Never authorizes protective writes.
+      required: [daily_average_bytes, cycle_end_bytes, exceeds_on]
+      properties:
+        daily_average_bytes: {type: integer, format: int64, minimum: 0}
+        cycle_end_bytes: {type: integer, format: int64, minimum: 0}
+        exceeds_on: {type: string, format: date, nullable: true}
+        already_exceeded: {type: boolean}
+        sample_days: {type: integer, minimum: 1, maximum: 7}
+        sample_dates: {type: array, items: {type: string, format: date}}
+        source: {type: string, enum: [official, agent_estimate, mixed]}
+        unverified: {type: boolean}
+        baseline_bytes: {type: integer, format: int64}
+        baseline_at: {type: string, format: date-time}
+        baseline_source: {type: string, enum: [realtime_estimate, official]}
+        baseline_at_assumed: {type: boolean}
+        calculated_at: {type: string, format: date-time}
+        points: {type: array, items: {$ref: "#/components/schemas/UsagePoint"}}
+        reasons: {type: array, items: {type: string}}
 
     TrafficObservation:
       type: object

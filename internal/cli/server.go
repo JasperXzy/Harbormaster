@@ -307,7 +307,7 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 	if engine != nil {
 		workerCtx, cancel := context.WithCancel(ctx)
 		var workers sync.WaitGroup
-		workers.Add(6)
+		workers.Add(7)
 		go func() { defer workers.Done(); engine.Run(workerCtx) }()
 		go func() {
 			defer workers.Done()
@@ -316,6 +316,10 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 		go func() {
 			defer workers.Done()
 			(estimation.Runner{Store: s, Timezone: c.Timezone, Log: log}).Run(workerCtx)
+		}()
+		go func() {
+			defer workers.Done()
+			(estimation.Runner{Store: s, Timezone: c.Timezone, Log: log}).RunDaily(workerCtx)
 		}()
 		go func() { defer workers.Done(); (probes.Runner{Store: s, Log: log}).Run(workerCtx) }()
 		go func() { defer workers.Done(); (notify.Evaluator{Store: s, Log: log}).Run(workerCtx) }()
