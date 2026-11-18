@@ -92,11 +92,14 @@ export const DELIVERY: Record<T.Notification["delivery_status"], [Level, string]
 };
 
 export const ALERT_RULE: Record<T.AlertRuleKey, { title: string; desc: string }> = {
-  cdt_usage: { title: "免费额度用量", desc: "国内或海外用量每越过一个档位通知一次；同一档位每个计费周期只通知一次。" },
-  cdt_forecast_exceed: { title: "预计月底超额", desc: "按最近 7 天的日均用量推算，月底前会超出免费额度时通知。" },
-  account_api_failure: { title: "账号连接失败", desc: "连续多次调用阿里云接口失败时通知，通常是 AccessKey 失效或权限被改。" },
-  agent_offline: { title: "采集程序掉线", desc: "实例上的采集程序停止上报时立刻通知，并开始按最坏情况推算用量。" },
-  cdt_official_unavailable: { title: "官方数据取不到", desc: "连续多次取不到阿里云的官方流量数据时通知；期间沿用最近一次官方值继续估算。" },
+  cdt_usage: { title: "免费额度用量", desc: "每越过一个档位通知一次。" },
+  cdt_forecast_exceed: { title: "预计月底超额", desc: "按最近 7 天的日均推算，月底前会超出时通知。" },
+  account_api_failure: { title: "账号连接失败", desc: "通常是 AccessKey 失效或权限被改。" },
+  agent_offline: { title: "采集程序掉线", desc: "立刻通知，并开始按最坏情况估算用量。" },
+  cdt_official_unavailable: { title: "官方数据取不到", desc: "期间沿用上一次的官方数值继续估算。" },
+  instance_expiring: { title: "实例快到期", desc: "包年包月的机器到期前提醒，避免忘记续费。" },
+  spec_bandwidth_insufficient: { title: "规格带宽不足", desc: "买的公网带宽超过了机器规格能跑的上限时通知。" },
+  instance_public_ip_changed: { title: "公网 IP 变了", desc: "每次发现实例的公网 IP 变化都通知。" },
 };
 
 // 常见地域的中文名；不认识的直接显示地域 ID。
@@ -142,6 +145,7 @@ const ERROR: Record<string, string> = {
   telegram_chat_not_found: "找不到这个 Chat ID。请确认机器人已被加入该对话。",
   telegram_unreachable: "连不上 Telegram。如果服务器在中国内地，需要设置代理。",
   aliyun_unreachable: "连不上阿里云接口，请稍后再试。",
+  backup_unavailable: "备份没有生成成功，请稍后再试。",
   job_timeout: "操作等待超时，结果未知。请稍后刷新查看。",
 };
 export const errorText = (code: string) => ERROR[code] ?? `操作没有成功（${code}）。`;
@@ -153,3 +157,42 @@ const FIELD_ERROR: Record<string, string> = {
   out_of_range: "数值超出允许的范围",
 };
 export const fieldErrorText = (code: string) => FIELD_ERROR[code] ?? "填写有误";
+
+export const RENEWAL: Record<T.InstanceRenewal["status"], [Level, string]> = {
+  auto_renewal: ["good", "自动续费"],
+  manual_renewal: ["warning", "需要手动续费"],
+  no_renewal: ["serious", "到期不续"],
+  unknown: ["neutral", "续费方式未知"],
+  not_applicable: ["neutral", "不需要续费"],
+};
+
+export const INSTANCE_EVENT: Record<T.InstanceEvent["kind"], string> = {
+  discovered: "发现了这台实例",
+  disappeared: "实例不见了（可能已释放）",
+  reappeared: "实例重新出现",
+  status_changed: "状态变了",
+  public_ipv4_changed: "公网 IP 变了",
+  ipv6_changed: "IPv6 地址变了",
+};
+
+export const API_SCOPE: Record<T.APIKeyScope, [string, string]> = {
+  "summary:read": ["读取概况", "只能看用量和实例概况，适合手机小组件。"],
+  "instance:control": ["控制实例", "可以开机、关机、重启。请只给信得过的程序。"],
+  "cron:run": ["触发定时任务", "可以从外部触发一次检查。"],
+};
+
+export const RAM_POLICY: Record<T.RAMPolicyDraft["id"], [string, string]> = {
+  readonly: ["只读", "只能查看实例、流量和账单。看用量和收告警用这个就够。"],
+  instance_power: ["只读 + 开关机", "在只读的基础上，允许开机、关机、重启。"],
+  resource_management: ["只读 + 开关机 + 资源管理", "再加上换公网 IP、创建和释放实例。权限最大。"],
+};
+export const RAM_LIMITATION: Record<T.RAMPolicyDraft["limitations"][number], string> = {
+  cdt_action_unverified: "读取 CDT 流量所需的权限名还没有在真实账号上核对过。",
+  public_metadata_actions_unverified: "部分公共信息查询的权限名还没有核对过。",
+  resource_scope_not_account_bound: "策略没有限定到你的账号或某几台机器，范围比实际需要的大。",
+  runtime_writes_unimplemented: "面板目前还不会真的执行这些写操作，现在授予没有用处。",
+  creation_dependencies_pending: "创建实例还需要的其他权限没有列全。",
+};
+
+const BILL_TYPE: Record<string, string> = { SubscriptionOrder: "包年包月", PayAsYouGoBill: "按量付费", Refund: "退款", Adjustment: "调账" };
+export const billTypeName = (t: string) => BILL_TYPE[t] ?? t;

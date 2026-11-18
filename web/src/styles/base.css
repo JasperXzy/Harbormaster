@@ -40,6 +40,7 @@ button, input, select, textarea { font: inherit; }
 .btn.primary:hover { filter: brightness(1.06); background: var(--accent); }
 .btn.danger { color: var(--critical); }
 .btn.sm { padding: 3px 9px; font-size: var(--fs-sm); }
+.btn.icon { width: 32px; height: 32px; padding: 0; }
 .btn.block { width: 100%; padding: 9px 12px; }
 .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
 .btn .spin { width: 12px; height: 12px; }
@@ -54,6 +55,10 @@ button, input, select, textarea { font: inherit; }
 .card h3 { font-size: var(--fs-md); margin: 14px 0 6px; font-weight: 650; color: var(--text-2); }
 .sub { color: var(--muted); font-size: var(--fs-sm); }
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+/* 一行四个数字，共用一张卡片 */
+.statstrip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; padding: 0; }
+.statstrip .stat { padding: 16px 20px; border-left: 1px solid var(--border); }
+.statstrip .stat:first-child { border-left: 0; }
 .stat .label { color: var(--text-2); font-size: var(--fs-md); }
 .stat .value { font-size: var(--fs-stat); font-weight: 650; margin-top: 4px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
 .stat .value small { font-size: var(--fs-base); font-weight: 600; color: var(--text-2); margin-left: 4px; }
@@ -255,6 +260,10 @@ input[aria-invalid="true"] { border-color: var(--critical); }
   .g3 { grid-template-columns: 1fr; }
   .card { padding: 14px 14px; }
   .stat .value { font-size: 22px; }
+  .statstrip { grid-template-columns: 1fr 1fr; }
+  .statstrip .stat { padding: 12px 14px; }
+  .statstrip .stat:nth-child(odd) { border-left: 0; }
+  .statstrip .stat:nth-child(n + 3) { border-top: 1px solid var(--border); }
   .form { grid-template-columns: 1fr; gap: 4px 0; }
   .form > label { padding-top: 8px; }
   .aitem { grid-template-columns: auto 1fr; }
@@ -272,3 +281,9 @@ input[aria-invalid="true"] { border-color: var(--critical); }
 /* Preview status remains visible on narrow screens as well as desktop. */
 .preview-note { padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); color: var(--text-2); font-size: var(--fs-sm); line-height: 1.6; }
 .unknown-track { background: repeating-linear-gradient(135deg, var(--surface-2), var(--surface-2) 6px, var(--border) 6px, var(--border) 7px); }
+
+/* 可折叠的卡片：次要内容默认收起 */
+.fold > summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; cursor: pointer; list-style: none; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary h2 { font-size: var(--fs-lg); margin: 0; font-weight: 650; }
+.fold[open] > summary > span:last-child { visibility: hidden; }

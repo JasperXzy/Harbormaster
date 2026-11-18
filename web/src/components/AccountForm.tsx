@@ -14,17 +14,18 @@ export function PermissionList({ check, pending }: { check: PermissionCheck | nu
       </span>
     );
   if (!check) return <span className="sub">还没有测试过</span>;
+  // 只列出有问题的项；全部通过时一句话带过
+  const issues = check.items.filter((it) => it.result !== "passed");
+  const passed = check.items.length - issues.length;
+  const passedNames = check.items.filter((it) => it.result === "passed").map((it) => PERMISSION[it.key]).join("、");
+  if (!issues.length) return <div className="perm"><Badge level="good" title={passedNames}>{passed} 项权限都通过</Badge></div>;
   return (
     <div className="perm">
-      {check.items.map((it) => {
+      {issues.map((it) => {
         const [level, text] = PERMISSION_RESULT[it.result];
-        return (
-          <Badge key={it.key} level={level} title={text}>
-            {PERMISSION[it.key]}
-            {it.result === "passed" ? "" : ` · ${text}`}
-          </Badge>
-        );
+        return <Badge key={it.key} level={level}>{PERMISSION[it.key]} · {text}</Badge>;
       })}
+      {passed > 0 && <span className="sub" title={passedNames} style={{ alignSelf: "center" }}>其余 {passed} 项通过</span>}
     </div>
   );
 }

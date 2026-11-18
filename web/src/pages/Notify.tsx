@@ -29,7 +29,7 @@ export function Notify() {
             )}
           </Async>
         </Card>
-        <Card title="什么情况下通知" sub="关掉的规则不再发通知">
+        <Card title="什么情况下通知">
           <Async res={rules} lines={5}>
             {(list) => (list.length ? <div>{list.map((r) => <RuleRow key={r.key} rule={r} onChange={(nr) => rules.mutate((l) => l.map((x) => (x.key === nr.key ? nr : x)))} />)}</div> : <EmptyState title="暂时没有可用的规则" />)}
           </Async>
@@ -44,10 +44,10 @@ function RuleRow({ rule, onChange }: { rule: AlertRule; onChange: (r: AlertRule)
   const toast = useToast();
   const meta = ALERT_RULE[rule.key];
   const p = rule.params;
-  const initial = p.thresholds_percent ? p.thresholds_percent.join(", ") : p.consecutive_failures !== undefined ? String(p.consecutive_failures) : p.offline_after_seconds !== undefined ? String(p.offline_after_seconds) : null;
+  const initial = p.thresholds_percent ? p.thresholds_percent.join(", ") : p.consecutive_failures !== undefined ? String(p.consecutive_failures) : p.offline_after_seconds !== undefined ? String(p.offline_after_seconds) : p.before_days !== undefined ? String(p.before_days) : null;
   const [text, setText] = useState(initial ?? "");
   const [busy, setBusy] = useState(false);
-  const label = p.thresholds_percent ? ["用到", "% 时"] : p.consecutive_failures !== undefined ? ["连续失败", "次后"] : ["没有上报超过", "秒后"];
+  const label = p.thresholds_percent ? ["用到", "% 时"] : p.consecutive_failures !== undefined ? ["连续失败", "次后"] : p.before_days !== undefined ? ["到期前", "天"] : ["没有上报超过", "秒后"];
 
   const patch = async (body: Parameters<typeof api.updateAlertRule>[1], okText: string) => {
     setBusy(true);
@@ -63,7 +63,7 @@ function RuleRow({ rule, onChange }: { rule: AlertRule; onChange: (r: AlertRule)
   const saveParam = () => {
     const nums = text.split(/[,，\s]+/).filter(Boolean).map(Number);
     if (!nums.length || nums.some((n) => !(n > 0)) || (p.thresholds_percent && nums.some((n) => n > 100))) return toast("请填写大于 0 的数字；百分比不能超过 100。", true);
-    const params = p.thresholds_percent ? { thresholds_percent: [...nums].sort((a, b) => a - b) } : p.consecutive_failures !== undefined ? { consecutive_failures: nums[0] } : { offline_after_seconds: nums[0] };
+    const params = p.thresholds_percent ? { thresholds_percent: [...nums].sort((a, b) => a - b) } : p.consecutive_failures !== undefined ? { consecutive_failures: nums[0] } : p.before_days !== undefined ? { before_days: nums[0] } : { offline_after_seconds: nums[0] };
     patch({ params }, "已保存");
   };
 
@@ -111,7 +111,7 @@ function History() {
     }
   };
   return (
-    <Card title="通知记录" sub="新的在前">
+    <Card title="通知记录">
       <Async res={first} lines={5}>
         {() =>
           !items.length ? <EmptyState title="还没有通知">用量越过档位、采集程序掉线、账号连接失败时，会发通知并记录在这里。可以先点上面的“发送测试消息”试一下。</EmptyState> : (

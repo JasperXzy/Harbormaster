@@ -8,6 +8,7 @@ import { DataProvider } from "./lib/data";
 import { setTimezone } from "./lib/format";
 import { navigate, usePath } from "./lib/router";
 import { useTheme } from "./lib/theme";
+import { Billing } from "./pages/Billing";
 import { Instances } from "./pages/Instances";
 import { Login } from "./pages/Login";
 import { Notify } from "./pages/Notify";
@@ -26,6 +27,7 @@ const PAGES: Record<string, { title: string; el: (p: { onLogout: () => void }) =
   "/": { title: "总览", el: () => <Overview /> },
   "/instances": { title: "实例", el: () => <Instances /> },
   "/traffic": { title: "流量", el: () => <Traffic /> },
+  "/billing": { title: "费用", el: () => <Billing /> },
   "/notify": { title: "通知", el: () => <Notify /> },
   "/settings": { title: "设置", el: (p) => <Settings onLogout={p.onLogout} /> },
 };

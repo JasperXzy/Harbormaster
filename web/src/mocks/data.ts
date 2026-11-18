@@ -73,6 +73,9 @@ export function buildDb(scene: Scene, now = Date.now()): Db {
     { key: "agent_offline", enabled: true, urgent: true, params: { offline_after_seconds: 30 } },
     { key: "account_api_failure", enabled: true, urgent: false, params: { consecutive_failures: 3 } },
     { key: "cdt_official_unavailable", enabled: true, urgent: false, params: { consecutive_failures: 3 } },
+    { key: "instance_expiring", enabled: true, urgent: false, params: { before_days: 7 } },
+    { key: "spec_bandwidth_insufficient", enabled: true, urgent: false, params: {} },
+    { key: "instance_public_ip_changed", enabled: true, urgent: false, params: {} },
   ];
   const base: Db = {
     scene, initialized: scene !== "setup", settings, accounts: [], instances: [], instancesUpdatedAt: null, quotas: [], daily: {}, subjects: [], packages: [], hourly: {},
@@ -226,6 +229,15 @@ export function buildDb(scene: Scene, now = Date.now()): Db {
   ];
 
   base.accounts = [a1, a2];
+  // 续费方式、规格带宽、IPv6（M2 字段）
+  for (const i of instances) {
+    i.renewal = { status: i.charge_type !== "subscription" ? "not_applicable" : i.id === "ins_web" ? "auto_renewal" : "manual_renewal", source: i.charge_type === "subscription" ? "bss_query_available_instances" : null, checked_at: iso(scanAt), last_error: null };
+    i.ipv6 = { addresses: i.id === "ins_hkg" ? ["240b:4001:27a:5c00::1f"] : [], status: "ok", source: "ecs_instances", checked_at: iso(scanAt), observed_at: iso(scanAt), last_error: null };
+    if (i.kind === "ecs" && i.bandwidth_mbps) {
+      const tx = i.id === "ins_sin" ? 450_000 : 3_000_000; // sin-pro：买了 2000 Mbps，规格只能跑约 450 Mbps
+      i.network_capacity = { source: "ecs_describe_instance_types", checked_at: iso(scanAt), rx_kbps: tx, tx_kbps: tx, public_outbound_mbps: i.bandwidth_mbps, public_outbound_exceeds_spec: i.bandwidth_mbps * 1000 > tx, last_error: null };
+    }
+  }
   base.instances = instances;
   base.instancesUpdatedAt = iso(scanAt);
   if (scene === "cutoff_unknown") {

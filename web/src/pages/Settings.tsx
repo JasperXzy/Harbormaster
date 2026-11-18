@@ -1,11 +1,11 @@
 // 设置：账号与权限测试、采集程序、通用、登录与版本。API Key、Passkey、备份等在后续里程碑加入。
-import { useState } from "react";
-import { api } from "../api/client";
+import { useState, type FormEvent } from "react";
+import { api, ApiError, downloadBackup } from "../api/client";
 import { waitForJob } from "../api/jobs";
-import { AGENT, errorText, regionName, SITE } from "../api/labels";
-import type { Account, Instance } from "../api/types";
+import { AGENT, API_SCOPE, errorText, RAM_LIMITATION, RAM_POLICY, regionName, SITE } from "../api/labels";
+import type { Account, APIKey, APIKeyScope, Instance } from "../api/types";
 import { AccountForm, PermissionList } from "../components/AccountForm";
-import { Async, Badge, Card, Confirm, EmptyState, ErrorState, errMsg, Modal, Skeleton, Spinner, Switch, useToast } from "../components/ui";
+import { Async, Badge, Card, Confirm, CopyButton, EmptyState, ErrorState, errMsg, Modal, SegToggle, Skeleton, Spinner, Switch, useToast } from "../components/ui";
 import { useShared } from "../lib/data";
 import { ago, duration, gb, setTimezone, stamp } from "../lib/format";
 import { Link } from "../lib/router";
@@ -14,15 +14,215 @@ import { useNow, useResource } from "../lib/useResource";
 const TIMEZONES = ["Asia/Shanghai", "Asia/Hong_Kong", "Asia/Singapore", "Asia/Tokyo", "UTC", "Europe/London", "America/Los_Angeles", "America/New_York"];
 
 export function Settings({ onLogout }: { onLogout: () => void }) {
+  const [tab, setTab] = useState<Tab>("accounts");
   return (
     <>
-      <Accounts />
-      <Agents />
-      <div className="grid g2">
-        <General />
-        <About onLogout={onLogout} />
-      </div>
+      <div><SegToggle label="设置分类" value={tab} onChange={setTab} options={TABS} /></div>
+      {tab === "accounts" && <><Accounts /><RamPolicies /></>}
+      {tab === "agents" && <Agents />}
+      {tab === "access" && <><ApiKeys /><Backup /></>}
+      {tab === "system" && (
+        <div className="grid g2">
+          <General />
+          <About onLogout={onLogout} />
+        </div>
+      )}
     </>
+  );
+}
+
+type Tab = "accounts" | "agents" | "access" | "system";
+const TABS: [Tab, string][] = [["accounts", "账号"], ["agents", "采集程序"], ["access", "接口与备份"], ["system", "系统"]];
+
+/** 权限策略模板：复制到阿里云 RAM 里自己授权，面板不会替你授权 */
+function RamPolicies() {
+  const [open, setOpen] = useState(false);
+  const res = useResource(() => (open ? api.ramPolicies() : Promise.resolve(null)), [open]);
+  return (
+    <details className="card fold" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary><h2>权限策略模板</h2><span className="sub">给子账号授权时可以直接复制</span><div className="spacer" /><span className="sub">展开</span></summary>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          <Async res={res}>
+            {(items) => !items ? null : (
+              <>
+                {items.map((p) => (
+                  <div className="rowline" key={p.id} style={{ alignItems: "flex-start" }}>
+                    <div className="grow">
+                      <b>{RAM_POLICY[p.id][0]}</b>
+                      <div className="sub">{RAM_POLICY[p.id][1]}</div>
+                    </div>
+                    <CopyButton text={JSON.stringify(p.document, null, 2)} label="复制策略" />
+                  </div>
+                ))}
+                <p className="note">这些是草稿。复制后请在阿里云 RAM 控制台里自己创建策略并授权，面板不会替你修改任何权限。目前已知的不足：</p>
+                <ul className="sub" style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+                  {[...new Set(items.flatMap((p) => p.limitations))].map((l) => <li key={l}>{RAM_LIMITATION[l]}</li>)}
+                </ul>
+              </>
+            )}
+          </Async>
+        </div>
+      )}
+    </details>
+  );
+}
+
+function ApiKeys() {
+  const toast = useToast();
+  const res = useResource(api.apiKeys, []);
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState<{ name: string; token: string }>();
+  const [revoke, setRevoke] = useState<APIKey>();
+  const [showRevoked, setShowRevoked] = useState(false);
+  const now = useNow(60_000);
+  return (
+    <Card title="API Key" sub="给手机小组件或脚本用的访问凭证" right={<button className="btn primary" onClick={() => setCreating(true)}>＋ 创建</button>}>
+      <Async res={res}>
+        {(all) => {
+          const active = all.filter((k) => !k.revoked_at), revoked = all.filter((k) => k.revoked_at);
+          const row = (k: APIKey) => (
+            <div className="rowline" key={k.id} style={k.revoked_at ? { opacity: 0.6 } : undefined}>
+              <div className="grow">
+                <b>{k.name}</b> {k.scopes.map((sc) => <span className="tag" key={sc} title={API_SCOPE[sc][1]} style={{ marginLeft: 4 }}>{API_SCOPE[sc][0]}</span>)}
+                <div className="sub">{k.revoked_at ? `已于 ${stamp(k.revoked_at)} 撤销` : k.last_used_at ? `最近使用：${ago(k.last_used_at, now)}` : "还没有用过"}</div>
+              </div>
+              {!k.revoked_at && <button className="btn sm danger" onClick={() => setRevoke(k)}>撤销</button>}
+            </div>
+          );
+          return (
+            <>
+              {!active.length ? <EmptyState title="还没有 API Key">需要让手机小组件或脚本读取用量时，在这里创建一个。</EmptyState> : active.map(row)}
+              {revoked.length > 0 && <div style={{ marginTop: 8 }}><button className="linkbtn sub" onClick={() => setShowRevoked(!showRevoked)}>{showRevoked ? "收起" : `另有 ${revoked.length} 个已撤销`}</button></div>}
+              {showRevoked && revoked.map(row)}
+            </>
+          );
+        }}
+      </Async>
+      {creating && <ApiKeyForm onClose={() => setCreating(false)} onCreated={(name, token) => { setCreating(false); setCreated({ name, token }); res.reload(); }} />}
+      {created && (
+        <Modal title={`“${created.name}”已创建`} onClose={() => { /* 只能点下面的按钮关闭，避免误触后丢失凭证 */ }}>
+          <p><b style={{ color: "var(--text)" }}>下面这串字符只显示这一次。</b>关掉这个窗口后就再也看不到了，请现在复制并保存好。</p>
+          <div className="codebox"><code>{created.token}</code><CopyButton text={created.token} className="btn" /></div>
+          <div className="actions"><button className="btn primary" onClick={() => setCreated(undefined)}>我已经保存好了</button></div>
+        </Modal>
+      )}
+      {revoke && (
+        <Confirm
+          title={`撤销“${revoke.name}”？`} okText="撤销" danger onClose={() => setRevoke(undefined)}
+          body="撤销后，用这个凭证的小组件或脚本会立刻失效，而且不能恢复。需要时只能重新创建一个。"
+          onOk={async () => {
+            try {
+              await api.revokeApiKey(revoke.id);
+              res.reload();
+              toast("已撤销");
+            } catch (e) {
+              toast(errMsg(e), true);
+              throw e;
+            }
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+function ApiKeyForm({ onClose, onCreated }: { onClose: () => void; onCreated: (name: string, token: string) => void }) {
+  const [name, setName] = useState("");
+  const [scopes, setScopes] = useState<APIKeyScope[]>(["summary:read"]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return setError("请填写名称。");
+    if (!scopes.length) return setError("至少选一项权限。");
+    setBusy(true);
+    setError(undefined);
+    try {
+      const r = await api.createApiKey(name.trim(), scopes);
+      onCreated(r.api_key.name, r.token);
+    } catch (err) {
+      setError(errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title="创建 API Key" onClose={onClose}>
+      <form className="stack" onSubmit={submit} noValidate>
+        <div>
+          <label className="lbl" htmlFor="key-name">名称</label>
+          <input id="key-name" type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="比如：手机小组件" maxLength={80} autoComplete="off" autoFocus />
+        </div>
+        <div>
+          <span className="lbl" style={{ display: "block", fontSize: "var(--fs-md)", color: "var(--text-2)", marginBottom: 4 }}>允许它做什么</span>
+          {(Object.keys(API_SCOPE) as APIKeyScope[]).map((sc) => (
+            <label key={sc} className="rowline" style={{ cursor: "pointer", flexWrap: "nowrap", alignItems: "flex-start" }}>
+              <input type="checkbox" checked={scopes.includes(sc)} onChange={() => setScopes((v) => (v.includes(sc) ? v.filter((x) => x !== sc) : [...v, sc]))} style={{ width: "auto", marginTop: 4 }} />
+              <span><b>{API_SCOPE[sc][0]}</b><span className="sub" style={{ display: "block" }}>{API_SCOPE[sc][1]}</span></span>
+            </label>
+          ))}
+          <div className="field-help">创建后不能改权限；要改只能撤销后重新创建。</div>
+        </div>
+        {error && <div className="field-error" role="alert">{error}</div>}
+        <div className="inline" style={{ justifyContent: "flex-end" }}>
+          <button type="button" className="btn" onClick={onClose}>取消</button>
+          <button className="btn primary" disabled={busy}>{busy && <Spinner />} 创建</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function Backup() {
+  const toast = useToast();
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const bytes = new TextEncoder().encode(pw).length;
+    if (bytes < 12) return setError("备份密码至少要 12 位（一个汉字算 3 位）。");
+    if (bytes > 1024) return setError("备份密码太长了。");
+    if (pw !== pw2) return setError("两次输入的密码不一样。");
+    setBusy(true);
+    setError(undefined);
+    try {
+      const { blob, filename } = await downloadBackup(pw);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      setPw("");
+      setPw2("");
+      toast("备份已下载");
+    } catch (err) {
+      setError(err instanceof ApiError && err.code === "not_implemented" ? "演示模式下不能导出备份。" : errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="备份" sub="下载一份用密码加密的完整备份，可用于迁移到新机器">
+      <form className="form" onSubmit={submit} noValidate>
+        <label htmlFor="bk-pw">备份密码</label>
+        <div>
+          <input id="bk-pw" type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" />
+          <div className="field-help">至少 12 位。不要用登录密码。面板不保存它，忘了就打不开这份备份。</div>
+        </div>
+        <label htmlFor="bk-pw2">再输入一次</label>
+        <div><input id="bk-pw2" type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} autoComplete="new-password" /></div>
+        <span />
+        <div>
+          {error && <div className="field-error" role="alert" style={{ marginBottom: 8 }}>{error}</div>}
+          <button className="btn primary" disabled={busy || !pw}>{busy && <Spinner />} 下载备份</button>
+        </div>
+      </form>
+      <p className="note">恢复不在网页上做：把备份文件传到新机器，执行 <span className="mono">hm-server restore --input 备份文件 --data-dir 新的数据目录</span>。恢复后需要重新登录。</p>
+    </Card>
   );
 }
 
@@ -56,7 +256,7 @@ function Accounts() {
   };
 
   return (
-    <Card title="阿里云账号" sub="密钥加密保存，保存后不再显示" right={<button className="btn primary" onClick={() => setForm({})}>＋ 添加账号</button>}>
+    <Card title="阿里云账号" right={<button className="btn primary" onClick={() => setForm({})}>＋ 添加账号</button>}>
       {accounts.error ? <ErrorState error={accounts.error} onRetry={accounts.reload} /> : !accounts.data ? <Skeleton lines={4} /> : !accounts.data.length ? (
         <EmptyState title="还没有添加阿里云账号" action={<button className="btn primary" onClick={() => setForm({})}>添加第一个账号</button>}>添加后会自动发现账号下的机器，并开始读取流量用量。</EmptyState>
       ) : (
@@ -73,13 +273,12 @@ function Accounts() {
                   <div className="field-error" style={{ margin: 0 }}>{errorText(a.last_error.code)}已连续失败 {a.consecutive_failures} 次{a.last_sync_at ? `，数据停在 ${stamp(a.last_sync_at)}` : ""}。</div>
                 )}
                 <div className="sub">
-                  免费额度：海外 {gb(a.quota_overseas_bytes, 0)} + 国内 {gb(a.quota_mainland_bytes, 0)} · 每月 {a.reset_day} 号重新计算 · 用到 {a.alert_thresholds_percent.join("% / ")}% 时通知
+                  免费额度 海外 {gb(a.quota_overseas_bytes, 0)} + 国内 {gb(a.quota_mainland_bytes, 0)} · 用到 {a.alert_thresholds_percent.join(" / ")}% 时通知 · 扫描 {a.region_ids.map(regionName).join("、")}
                 </div>
-                <div className="sub">扫描地域：{a.region_ids.map(regionName).join("、")}</div>
                 <PermissionList check={a.permission_check} pending={checking.has(a.id)} />
               </div>
               <div className="inline">
-                <button className="btn sm" onClick={() => check(a.id)} disabled={checking.has(a.id) || !a.enabled}>重新测试权限</button>
+                <button className="btn sm" onClick={() => check(a.id)} disabled={checking.has(a.id) || !a.enabled} title="只是试着读取，不会真的开关机或创建任何东西">重新测试权限</button>
                 <button className="btn sm" onClick={() => setForm({ account: a })}>修改</button>
                 <Switch on={a.enabled} label={`启用 ${a.name}`} onChange={(v) => (v ? toggle(a, true) : setDel(a))} />
               </div>
@@ -87,7 +286,6 @@ function Accounts() {
           ))}
         </div>
       )}
-      <p className="note">权限测试只是试着读取，不会真的开关机或创建任何东西。</p>
       {form && (
         <Modal title={form.account ? `修改账号 ${form.account.name}` : "添加阿里云账号"} onClose={() => setForm(null)} wide>
           <AccountForm
@@ -122,7 +320,7 @@ function Agents() {
   const [revoke, setRevoke] = useState<Instance>();
   const list = (instances.data?.items ?? []).filter((i) => i.agent.status !== "not_installed");
   return (
-    <Card title="采集程序" sub="装在实例上、负责上报公网流量的小程序（hm-agent）" right={<Link className="btn" to="/instances">去实例页安装</Link>}>
+    <Card title="采集程序" sub="装在实例上、上报公网流量的小程序" right={<Link className="btn" to="/instances">去实例页安装</Link>}>
       {instances.error ? <ErrorState error={instances.error} onRetry={instances.reload} /> : !instances.data ? <Skeleton /> : !list.length ? (
         <EmptyState title="还没有实例装上采集程序">到实例页，点某台机器的“安装采集程序”，按提示在机器上执行一行命令即可。</EmptyState>
       ) : (
@@ -186,7 +384,7 @@ function General() {
     }
   };
   return (
-    <Card title="时间与数据">
+    <Card title="时区">
       <Async res={res} lines={5}>
         {(s) => {
           const zones = TIMEZONES.includes(s.business_timezone) ? TIMEZONES : [s.business_timezone, ...TIMEZONES];
@@ -204,13 +402,9 @@ function General() {
                   <div className="field-help">面板上的时间、“今天”从几点算起，都按这个时区。</div>
                 </div>
               </div>
-              <dl className="kv">
-                <dt>阿里云官方流量数据</dt><dd>每 {duration(s.collection.cdt_poll_interval_seconds)}取一次（数据本身约晚 1 小时）</dd>
-                <dt>采集程序上报</dt><dd>每 {duration(s.collection.agent_report_interval_seconds)}一次</dd>
-                <dt>多久没上报算掉线</dt><dd>{duration(s.collection.agent_offline_after_seconds)}</dd>
-                <dt>重新扫描实例</dt><dd>每 {duration(s.collection.resource_scan_interval_seconds)}一次</dd>
-              </dl>
-              <p className="note">这些间隔由服务器决定，面板里暂时不能修改。</p>
+              <p className="note" style={{ margin: 0 }}>
+                官方流量数据每 {duration(s.collection.cdt_poll_interval_seconds)}读取一次（数据本身约晚 1 小时）；采集程序每 {duration(s.collection.agent_report_interval_seconds)}上报一次，{duration(s.collection.agent_offline_after_seconds)}没上报算掉线；实例每 {duration(s.collection.resource_scan_interval_seconds)}重新扫描一次。
+              </p>
             </>
           );
         }}

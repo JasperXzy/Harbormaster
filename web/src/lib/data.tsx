@@ -42,7 +42,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   };
 
   useEvent("quota.updated", (q) => quotas.mutate((list) => list.map((x) => (x.account_id === q.account_id && x.scope === q.scope ? q : x))));
-  useEvent("instance.realtime", (e) => instances.mutate((l) => ({ ...l, items: l.items.map((i) => (i.id === e.instance_id ? { ...i, realtime: e.realtime, agent: { ...i.agent, last_report_at: e.realtime.sampled_at } } : i)) })));
+  useEvent("instance.realtime", (e) => instances.mutate((l) => ({ ...l, items: l.items.map((i) => (i.id === e.instance_id ? { ...i, realtime: e.realtime, agent: { ...i.agent, last_report_at: e.realtime?.sampled_at ?? i.agent.last_report_at } } : i)) })));
   useEvent("agent.status", (e) => instances.mutate((l) => ({ ...l, items: l.items.map((i) => (i.id === e.instance_id ? { ...i, agent: e.agent, realtime_protection: e.realtime_protection, realtime: e.agent.status === "online" ? i.realtime : null } : i)) })));
   useEvent("job.updated", (job) => { if (job.status === "succeeded" || job.status === "failed") reloadAll(); });
 

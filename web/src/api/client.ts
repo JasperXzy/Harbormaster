@@ -70,7 +70,38 @@ const keepSession = (s: T.Session) => {
   return s;
 };
 
+/** 下载加密备份：响应是二进制文件，不走 JSON 解析。 */
+export async function downloadBackup(backup_password: string): Promise<{ blob: Blob; filename: string }> {
+  if (readOnly) throw new ApiError(501, "not_implemented", "read only");
+  if (import.meta.env.VITE_API_MODE === "mock") {
+    const { handle } = await import("../mocks/server");
+    const res = await handle("POST", "/backups", { backup_password });
+    const err = (res.body as T.ErrorBody | null)?.error;
+    throw new ApiError(res.status, err?.code ?? "internal_error", err?.message ?? "", err?.fields);
+  }
+  let res: Response;
+  try {
+    res = await fetch(BASE + "/backups", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfToken }, body: JSON.stringify({ backup_password }) });
+  } catch {
+    throw new ApiError(0, "network_error", "network error");
+  }
+  if (!res.ok) {
+    const err = ((await res.json().catch(() => null)) as T.ErrorBody | null)?.error;
+    if (res.status === 401) onUnauthenticated();
+    throw new ApiError(res.status, err?.code ?? "internal_error", err?.message ?? "", err?.fields, err?.retry_after_seconds);
+  }
+  const name = /filename="?([^";]+)"?/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "harbormaster.hmbak";
+  return { blob: await res.blob(), filename: name };
+}
+
 export const api = {
+  finance: (account_id: string) => request<T.AccountFinance>("GET", `/accounts/${account_id}/finance`),
+  apiKeys: () => request<{ items: T.APIKey[]; next_cursor: string | null }>("GET", "/api-keys" + qs({ limit: 100 })).then((r) => r.items),
+  createApiKey: (name: string, scopes: T.APIKeyScope[]) => request<{ api_key: T.APIKey; token: string }>("POST", "/api-keys", { name, scopes }),
+  revokeApiKey: (id: string) => request<void>("DELETE", `/api-keys/${id}`),
+  ramPolicies: () => request<{ items: T.RAMPolicyDraft[] }>("GET", "/ram-policies").then((r) => r.items),
+  instanceEvents: (p: { instance_id?: string; cursor?: string; limit?: number } = {}) => request<{ items: T.InstanceEvent[]; next_cursor: string | null }>("GET", "/instance-events" + qs(p)),
+
   setupStatus: () => request<T.SetupStatus>("GET", "/setup/status"),
   completeSetup: (b: T.SetupRequest) => request<T.Session>("POST", "/setup", b, { quiet401: true }).then(keepSession),
   session: () => request<T.Session>("GET", "/session", undefined, { quiet401: true }).then(keepSession),

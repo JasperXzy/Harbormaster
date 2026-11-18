@@ -43,6 +43,13 @@ export type AlertRuleKey = S["AlertRuleKey"];
 export type AlertRuleUpdate = S["AlertRuleUpdate"];
 export type Notification = S["Notification"];
 export type Severity = S["Severity"];
+export type AccountFinance = S["AccountFinance"];
+export type BillOverviewItem = S["BillOverviewItem"];
+export type APIKey = S["APIKey"];
+export type APIKeyScope = S["APIKeyScope"];
+export type RAMPolicyDraft = S["RAMPolicyDraft"];
+export type InstanceEvent = S["InstanceEvent"];
+export type InstanceRenewal = S["InstanceRenewal"];
 export type InstanceRealtimeEvent = S["InstanceRealtimeEvent"];
 export type AgentStatusEvent = S["AgentStatusEvent"];
 

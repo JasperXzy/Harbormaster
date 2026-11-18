@@ -1,7 +1,7 @@
 // 额度条：官方已用 + 实时增量（未出账）+ 预测到月底，竖线标出免费额度。
 import type { QuotaStatus } from "../api/types";
 import { SCOPE } from "../api/labels";
-import { gb, pct, shortDate, time, stamp } from "../lib/format";
+import { GB, gb, pct, shortDate, time, stamp } from "../lib/format";
 import { Badge, type Level } from "./ui";
 
 export function quotaLevel(q: QuotaStatus): [Level, string] {
@@ -44,17 +44,17 @@ export function QuotaLegend({ worstCase }: { worstCase?: boolean }) {
       </span>
       <span>
         <i style={{ background: "var(--realtime)" }} />
-        实时增量（官方还没算进去）
+        实时增量
       </span>
       {worstCase && (
         <span>
           <i className="worst" />
-          掉线期间的推算
+          掉线推算
         </span>
       )}
       <span>
         <i className="proj" />
-        预测到月底
+        预测
       </span>
       <span>
         <i className="bar" />
@@ -110,28 +110,17 @@ export function QuotaMeter({ q }: { q: QuotaStatus }) {
       </div>
       <div className="meter-foot">
         <span>
-          官方 <b>{gb(q.official_bytes)}</b>
-          {q.official_as_of ? `（截至 ${time(q.official_as_of)}）` : "（还没有数据）"}
-        </span>
-        <span>
-          实时增量 <b>+{gb(q.realtime_increment_bytes)}</b>
+          官方 <b>{gb(q.official_bytes)}</b>{q.official_as_of ? `（截至 ${time(q.official_as_of)}）` : ""} + 实时 <b>{gb(q.realtime_increment_bytes)}</b>
         </span>
         {q.forecast ? (
-          <>
-            <span>
-              预测月底 <b>{gb(q.forecast.cycle_end_bytes)}</b>
-            </span>
-            <span>{q.forecast.exceeds_on ? <>预计 <b>{shortDate(q.forecast.exceeds_on)}</b> 超出免费额度</> : <>预计月底<b>不会超额</b></>}</span>
-          </>
+          <span>
+            月底约 <b>{gb(q.forecast.cycle_end_bytes, q.forecast.cycle_end_bytes >= 100 * GB ? 0 : 1)}</b>
+            {q.forecast.exceeds_on ? <>，预计 <b>{shortDate(q.forecast.exceeds_on)}</b> 超出</> : "，不会超额"}
+          </span>
         ) : (
-          <span>数据还不够，暂时无法预测</span>
+          <span>暂时无法预测</span>
         )}
       </div>
-      {q.official_status === "unavailable" && (
-        <div style={{ marginTop: 6 }}>
-          <Badge level="warning">官方数据暂时取不到，正沿用上一次的数值</Badge>
-        </div>
-      )}
       {q.worst_case_bytes > 0 && (
         <div style={{ marginTop: 6 }}>
           <Badge level="critical">其中 {gb(q.worst_case_bytes)} 是采集程序掉线期间按最坏情况推算的</Badge>

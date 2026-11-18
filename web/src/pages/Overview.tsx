@@ -1,10 +1,10 @@
 // 总览：需要留意的问题、四个数字、各账号额度、共享带宽、最近通知。
 import { api } from "../api/client";
 import { useEvent } from "../api/events";
-import { SCOPE_SHORT, SEVERITY, SITE, SUBJECT_KIND, regionName } from "../api/labels";
+import { SCOPE_SHORT, SEVERITY, SITE, regionName } from "../api/labels";
 import type { Account, Instance, Notification, QuotaScope, QuotaStatus } from "../api/types";
 import { quotaLevel, QuotaLegend, QuotaMeter, quotaUnknown, QuotaUnknownNote } from "../components/QuotaMeter";
-import { Async, Badge, Banner, Card, EmptyState, ErrorState, Fresh, Skeleton, type Level } from "../components/ui";
+import { Async, Badge, Banner, Card, EmptyState, ErrorState, Skeleton, type Level } from "../components/ui";
 import { useShared } from "../lib/data";
 import { gb, stamp } from "../lib/format";
 import { Link } from "../lib/router";
@@ -31,7 +31,7 @@ export function NotificationItem({ n }: { n: Notification }) {
 export function Overview() {
   const { accounts, instances, quotas } = useShared();
   const packages = useResource(api.bandwidthPackages, [], { refreshMs: 30_000 });
-  const notes = useResource(() => api.notifications({ limit: 4 }), []);
+  const notes = useResource(() => api.notifications({ limit: 3 }), []);
   const telegram = useResource(api.telegram, []);
   useEvent("notification.created", () => notes.reload());
 
@@ -40,7 +40,7 @@ export function Overview() {
   if (!accounts.data || !instances.data || !quotas.data)
     return (
       <>
-        <div className="grid g4">{[0, 1, 2, 3].map((i) => <div className="card" key={i}><Skeleton lines={2} height={18} /></div>)}</div>
+        <div className="card"><Skeleton lines={2} height={18} /></div>
         <div className="grid g2">{[0, 1].map((i) => <div className="card" key={i}><Skeleton lines={5} /></div>)}</div>
       </>
     );
@@ -75,27 +75,27 @@ export function Overview() {
         <div className="grid" style={{ gap: 8 }} aria-label="需要留意">
           {worstCase.map((i) => (
             <Banner key={i.id} level="critical" action={<Link className="btn sm" to="/instances">查看</Link>}>
-              <b>{i.name} 的采集程序掉线了。</b> 掉线期间按它之前的最高速度估算用量，所以数字会偏大。请登录这台机器检查 hm-agent 是否在运行。
+              <b>{i.name} 的采集程序掉线了。</b> 掉线期间按它之前的最高速度估算，数字会偏大。
             </Banner>
           ))}
           {failing.map((a) => (
             <Banner key={a.id} level="critical" action={<Link className="btn sm" to="/settings">去检查</Link>}>
-              <b>账号 {a.name} 连不上阿里云</b>（已连续失败 {a.consecutive_failures} 次）。这个账号下的数据停在 {a.last_sync_at ? stamp(a.last_sync_at) : "很久以前"}，不再更新。
+              <b>账号 {a.name} 连不上阿里云</b> 它的数据停在 {a.last_sync_at ? stamp(a.last_sync_at) : "很久以前"}，已连续失败 {a.consecutive_failures} 次。
             </Banner>
           ))}
           {officialDown && (
             <Banner level="warning">
-              <b>暂时取不到阿里云的官方流量数据。</b> 面板正在用上一次的官方数值加上实时增量继续估算。
+              <b>暂时取不到阿里云的官方流量数据。</b> 正用上一次的数值继续估算。
             </Banner>
           )}
           {unprotected.length > 0 && (
             <Banner level="warning" action={<Link className="btn sm" to="/instances">去安装</Link>}>
-              <b>{unprotected.map((i) => i.name).join("、")} 未受实时保护。</b> 它的流量计入免费额度，但没装采集程序，用量要等约 1 小时后才能看到。
+              <b>{unprotected.map((i) => i.name).join("、")} 未受实时保护。</b> 没装采集程序，用量要晚约 1 小时才看得到。
             </Banner>
           )}
           {usageUnknown && (
             <Banner level="warning" action={<Link className="btn sm" to="/traffic">查看流量</Link>}>
-              <b>暂时算不出实时用量。</b> 阿里云的官方数据还不完整，没法和采集程序报上来的流量加在一起。下面只显示能确认的官方数字。
+              <b>暂时算不出实时用量。</b> 下面只显示能确认的官方数字。
             </Banner>
           )}
           {telegram.data?.status === "not_configured" && (
@@ -105,15 +105,15 @@ export function Overview() {
           )}
           {telegram.data?.status === "failing" && (
             <Banner level="critical" action={<Link className="btn sm" to="/notify">去检查</Link>}>
-              <b>通知发不出去。</b> 最近一次发送 Telegram 消息失败了，告警可能收不到。
+              <b>通知发不出去。</b> 告警可能收不到。
             </Banner>
           )}
         </div>
       )}
 
-      <div className="grid g4">
+      <div className="card statstrip">
         {tiles.map(([label, value, unit, hint]) => (
-          <div className="card stat" key={label}>
+          <div className="stat" key={label}>
             <div className="label">{label}</div>
             <div className="value">{value}<small>{unit}</small></div>
             <div className="hint">{hint}</div>
@@ -121,31 +121,29 @@ export function Overview() {
         ))}
       </div>
 
+      {qs.some((q) => !quotaUnknown(q)) && <QuotaLegend worstCase={qs.some((q) => q.worst_case_bytes !== null && q.worst_case_bytes > 0)} />}
       <div className="grid g2">
         {accs.map((a) => <AccountCard key={a.id} account={a} quotas={qs.filter((q) => q.account_id === a.id)} instances={insts.filter((i) => i.account_id === a.id)} />)}
       </div>
 
-      <div className="grid g3">
-        <Async res={packages} lines={5}>
-          {(pkgs) => (
-            <>
-              {pkgs.map((p) => (
-                <Card key={p.id} title={`共享带宽 ${p.name}`} right={<Fresh at={p.updated_at} kind="realtime" />}>
-                  <dl className="kv">
-                    <dt>账号 / 地域</dt><dd>{accs.find((a) => a.id === p.account_id)?.name} · {regionName(p.region_id)}</dd>
-                    <dt>带宽上限</dt><dd>{p.bandwidth_mbps === null ? "待确认" : `${p.bandwidth_mbps} Mbps`}</dd>
-                    <dt>计费方式</dt><dd>{SUBJECT_KIND[p.kind].replace("共享带宽 · ", "")}{p.settled_by_cdt === null ? " · 是否计入免费额度待确认" : p.settled_by_cdt ? " · 计入免费额度" : ""}</dd>
-                    <dt>成员</dt><dd>{p.members.map((m) => <span key={m.eip_address}><span className="mono">{m.eip_address}</span>{m.instance_name ? `（${m.instance_name}）` : ""} </span>)}</dd>
-                    <dt>今天收 / 发</dt><dd>{p.today_rx_bytes === null ? "—" : gb(p.today_rx_bytes)} / {p.today_tx_bytes === null ? "—" : gb(p.today_tx_bytes)}</dd>
-                    <dt>今天计费流量</dt><dd><b>{p.today_metered_bytes === null ? "—" : gb(p.today_metered_bytes)}</b>{p.dominant_direction ? ` · ${p.dominant_direction === "inbound" ? "收到的" : "发出的"}更多` : ""}</dd>
-                  </dl>
-                  {p.kind === "cbwp_dominant_traffic" && <p className="note">“按主流量”的意思：每小时比较收到和发出的流量，按较大的一方计费，不是只算发出的。</p>}
-                </Card>
-              ))}
-            </>
-          )}
-        </Async>
-        <Card className={packages.data?.length ? "span2" : "span2"} title="最近通知" right={<Link className="sub" to="/notify">全部</Link>}>
+      <div className="grid g2">
+        {!!packages.data?.length && (
+          <Card title="共享带宽" sub="每小时按收、发中较大的一方计费" right={<Link className="sub" to="/traffic">详情</Link>}>
+            {packages.data.map((p) => (
+              <div className="rowline" key={p.id}>
+                <div className="grow" style={{ minWidth: 0, flexBasis: 140 }}>
+                  <b>{p.name}</b>
+                  <div className="sub">{accs.find((a) => a.id === p.account_id)?.name} · {regionName(p.region_id)}{p.bandwidth_mbps === null ? "" : ` · ${p.bandwidth_mbps} Mbps`} · {p.members.map((m) => m.instance_name ?? m.eip_address).join("、")}</div>
+                </div>
+                <div style={{ textAlign: "right", marginLeft: "auto" }}>
+                  <b className="num">{p.today_metered_bytes === null ? "—" : gb(p.today_metered_bytes)}</b>
+                  <div className="sub num">今天 · 收 {p.today_rx_bytes === null ? "—" : gb(p.today_rx_bytes)} / 发 {p.today_tx_bytes === null ? "—" : gb(p.today_tx_bytes)}</div>
+                </div>
+              </div>
+            ))}
+          </Card>
+        )}
+        <Card className={packages.data?.length ? "" : "span2"} title="最近通知" right={<Link className="sub" to="/notify">全部</Link>}>
           <Async res={notes}>
             {(n) => (n.items.length ? <div className="alist">{n.items.map((x) => <NotificationItem key={x.id} n={x} />)}</div> : <EmptyState title="还没有通知">用量越过档位、采集程序掉线等情况发生时，会记录在这里。</EmptyState>)}
           </Async>
@@ -167,7 +165,6 @@ function AccountCard({ account, quotas, instances }: { account: Account; quotas:
     <Card title={account.name} sub={`${SITE[account.site]} · ${instances.length} 台实例`} right={<Badge level={level}>{text}</Badge>}>
       {quotas.length ? (
         <>
-          {!quotas.every(quotaUnknown) && <QuotaLegend worstCase={quotas.some((q) => q.worst_case_bytes !== null && q.worst_case_bytes > 0)} />}
           {order.map((s) => quotas.filter((q) => q.scope === s).map((q) => <QuotaMeter key={s} q={q} />))}
           <QuotaUnknownNote quotas={quotas} />
         </>

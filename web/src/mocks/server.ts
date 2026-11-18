@@ -136,6 +136,11 @@ function page<X>(items: X[], q: URLSearchParams) {
   return { items: slice, next_cursor: from + limit < items.length ? String(from + limit) : null };
 }
 
+const apiKeys: T.APIKey[] = scene === "empty" || scene === "setup" ? [] : [
+  { id: "key_widget", name: "手机小组件", scopes: ["summary:read"], created_at: iso(Date.now() - 20 * 86400_000), last_used_at: iso(Date.now() - 4 * 60_000), revoked_at: null },
+  { id: "key_old", name: "旧脚本", scopes: ["summary:read", "cron:run"], created_at: iso(Date.now() - 80 * 86400_000), last_used_at: iso(Date.now() - 41 * 86400_000), revoked_at: iso(Date.now() - 40 * 86400_000) },
+];
+
 let failedLogins = 0;
 
 export async function handle(method: string, fullPath: string, body: unknown): Promise<Res> {
@@ -334,6 +339,70 @@ export async function handle(method: string, fullPath: string, body: unknown): P
     return ok(r);
   }
   if (is("GET", "/notifications")) return ok(page(db.notifications, q));
+
+  /* ---------- M2：费用、API Key、RAM 策略、实例变化、备份 ---------- */
+  if (seg[0] === "accounts" && seg[2] === "finance" && method === "GET") {
+    const a = db.accounts.find((x) => x.id === seg[1]);
+    if (!a) return fail(404, "not_found");
+    const now = Date.now(), cycle = new Date(now + 8 * 3600_000).toISOString().slice(0, 7);
+    const src = { status: "ok" as const, fetched_at: iso(now - 9 * 60_000), last_attempt_at: iso(now - 9 * 60_000), last_error: null };
+    const jasper = a.name === "jasperxzy";
+    const item = (bill_type: string, product_code: string, product_name: string, amount: string): T.BillOverviewItem => ({ bill_type, product_code, product_name, currency: "CNY", pretax_amount: amount, payment_amount: amount, outstanding_amount: "0.00" });
+    const failing = a.sync_status === "failing";
+    return ok({
+      account_id: a.id, enabled: a.enabled, billing_cycle: cycle, updated_at: src.fetched_at,
+      balance: failing ? { status: "failing", fetched_at: iso(now - 3 * 3600_000), last_attempt_at: iso(now - 60_000), last_error: { code: "access_key_invalid", message: "mock" }, data: null }
+        : { ...src, data: { currency: "CNY", available_amount: jasper ? "412.08" : "36.40", available_cash_amount: jasper ? "412.08" : "36.40", credit_amount: "0.00" } },
+      bill: failing ? { status: "failing", fetched_at: null, last_attempt_at: iso(now - 60_000), last_error: { code: "access_key_invalid", message: "mock" }, data: null }
+        : { ...src, data: { billing_cycle: cycle, items: jasper
+            ? [item("PayAsYouGoBill", "ecs", "云服务器 ECS", "79.80"), item("PayAsYouGoBill", "eip", "弹性公网 IP", "3.26"), item("SubscriptionOrder", "ecs", "云服务器 ECS", "24.00"), item("PayAsYouGoBill", "cdt", "云数据传输", "0.00")]
+            : [item("SubscriptionOrder", "swas", "轻量应用服务器", "24.00"), item("PayAsYouGoBill", "ecs", "云服务器 ECS", "8.15")] } },
+    } as unknown as T.AccountFinance);
+  }
+  if (is("GET", "/api-keys")) return ok({ items: apiKeys, next_cursor: null });
+  if (is("POST", "/api-keys")) {
+    const name = String(b.name ?? "").trim(), scopes = (b.scopes ?? []) as T.APIKeyScope[];
+    const fields: Record<string, string> = {};
+    if (!name) fields.name = "required";
+    if (!scopes.length) fields.scopes = "required";
+    if (Object.keys(fields).length) return fail(422, "validation_failed", { fields });
+    const api_key: T.APIKey = { id: "key_" + Math.random().toString(36).slice(2, 8), name, scopes, created_at: iso(), last_used_at: null, revoked_at: null };
+    apiKeys.unshift(api_key);
+    return ok({ api_key, token: "hm_mock_" + Math.random().toString(36).slice(2, 14) + Math.random().toString(36).slice(2, 14) }, 201);
+  }
+  if (seg[0] === "api-keys" && seg[1] && method === "DELETE") {
+    const k = apiKeys.find((x) => x.id === seg[1]);
+    if (!k) return fail(404, "not_found");
+    k.revoked_at ??= iso();
+    return ok(undefined, 204);
+  }
+  if (is("GET", "/ram-policies")) {
+    const doc = (Action: string[]) => ({ Version: "1" as const, Statement: [{ Effect: "Allow" as const, Action, Resource: "*" }] });
+    const read = ["ecs:Describe*", "swas-open:List*", "vpc:Describe*", "cms:DescribeMetricList", "bss:Query*", "cdt:ListCdtInternetTraffic"];
+    const power = [...read, "ecs:StartInstance", "ecs:StopInstance", "ecs:RebootInstance", "swas-open:StartInstance", "swas-open:StopInstance", "swas-open:RebootInstance"];
+    const items: T.RAMPolicyDraft[] = [
+      { id: "readonly", reviewed_on: "2026-11-12", verification: "draft", cloud_write_permissions: false, limitations: ["cdt_action_unverified", "resource_scope_not_account_bound"], document: doc(read) },
+      { id: "instance_power", reviewed_on: "2026-11-12", verification: "draft", cloud_write_permissions: true, limitations: ["cdt_action_unverified", "resource_scope_not_account_bound", "runtime_writes_unimplemented"], document: doc(power) },
+      { id: "resource_management", reviewed_on: "2026-11-12", verification: "draft", cloud_write_permissions: true, limitations: ["cdt_action_unverified", "resource_scope_not_account_bound", "runtime_writes_unimplemented", "creation_dependencies_pending"], document: doc([...power, "vpc:AllocateEipAddress", "vpc:AssociateEipAddress", "vpc:UnassociateEipAddress", "vpc:ReleaseEipAddress", "ecs:RunInstances", "ecs:DeleteInstance"]) },
+    ];
+    return ok({ items });
+  }
+  if (is("GET", "/instance-events")) {
+    const now = Date.now();
+    const ev = (n: number, minsAgo: number, id: string, kind: T.InstanceEvent["kind"], before: T.InstanceEvent["before"], after: T.InstanceEvent["after"]): T.InstanceEvent | null => {
+      const i = db.instances.find((x) => x.id === id);
+      return i ? { id: "evt_" + n, account_id: i.account_id, instance_id: i.id, cloud_instance_id: i.cloud_instance_id, instance_kind: i.kind, region_id: i.region_id, instance_name: i.name, kind, observed_at: iso(now - minsAgo * 60_000), before, after } : null;
+    };
+    const all = [
+      ev(5, 3 * 60, "ins_spot", "public_ipv4_changed", { addresses: ["47.242.18.21"] }, { addresses: ["47.242.18.66"] }),
+      ev(4, 26 * 60, "ins_lite", "status_changed", { status: "running" }, { status: "stopped" }),
+      ev(3, 3 * 24 * 60, "ins_hkg", "ipv6_changed", { addresses: [] }, { addresses: ["240b:4001:27a:5c00::1f"] }),
+      ev(2, 9 * 24 * 60, "ins_sin", "discovered", null, { present: true, status: "running" }),
+      ev(1, 9 * 24 * 60, "ins_hkg", "discovered", null, { present: true, status: "running" }),
+    ].filter((x): x is T.InstanceEvent => !!x).filter((x) => !q.get("instance_id") || x.instance_id === q.get("instance_id"));
+    return ok(page(all, q));
+  }
+  if (is("POST", "/backups")) return fail(501, "not_implemented");
 
   return fail(404, "not_found");
 }

@@ -170,6 +170,7 @@ export interface paths {
          *     | `agent.status` | `AgentStatusEvent` | agent 上线、掉线、注册、被撤销 |
          *     | `job.updated` | `Job` | 任务状态变化 |
          *     | `notification.created` | `Notification` | 产生了一条新通知 |
+         *     | `notification.updated` | `Notification` | 已有通知的发送或取消状态变化；按 id 更新，不当作新告警 |
          *     | `ping` | `{}` | 心跳 |
          *
          *     断线后前端自动重连，重连成功后重新拉取当前页面的数据。
@@ -249,6 +250,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 下载密码加密备份
+         * @description Production only. Password is never saved or placed in a URL. Creates a consistent SQLite snapshot with reencrypted credentials; does not change live sessions or pending work. The response is a complete archive with Content-Length. Busy preparation returns 429. Offline restore uses the CLI and a separately supplied master key; no restore-over-live-data API is exposed.
+         */
+        post: operations["downloadEncryptedBackup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ram-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * RAM 权限策略草稿
+         * @description Fixed documents for copying into the user's own RAM workflow. No cloud request, grant, DryRun or resource mutation occurs. The frontend must display verification and limitations alongside the selected draft.
+         */
+        get: operations["listRAMPolicyDrafts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/instances": {
         parameters: {
             query?: never;
@@ -258,6 +299,26 @@ export interface paths {
         };
         /** 实例列表 */
         get: operations["listInstances"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instance-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 实例变化事件
+         * @description Newest first, persisted independently of present resources. Includes disabled accounts and disappeared instances. Reads never call cloud APIs. observed_at is detection time; disappearance may also result from changed resource visibility and does not prove a cloud deletion.
+         */
+        get: operations["listInstanceEvents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -295,7 +356,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** 生成一行安装命令（含一次性注册码） */
+        /**
+         * 生成一行安装命令（含一次性注册码）
+         * @description Requires a complete configured agent release. Creating a new command expires the previous registration code; the running agent token remains valid until a new registration succeeds. Commands contain a secret code valid for 10 minutes and must not be logged or shared. Linux systemd installation only.
+         */
         post: operations["createAgentInstallCommand"];
         delete?: never;
         options?: never;
@@ -413,6 +477,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/accounts/{account_id}/finance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Cached account balance and current-month bill overview
+         * @description Read-only snapshots refreshed by resource collection. No cloud call on GET. A refresh uses the existing instances/refresh job API. Disabled accounts retain cached data. The bill is the provider account overview, including its returned product categories; no exchange conversion or inferred refund netting.
+         */
+        get: operations["getAccountFinance"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List API Key metadata, including revoked keys */
+        get: operations["listAPIKeys"];
+        put?: never;
+        /**
+         * Create an API Key and return its secret once
+         * @description Grants are immutable; create a replacement and revoke the old key to change scopes. Keys remain valid until revoked. Losing this response does not permit secret retrieval; use the metadata list to revoke and replace the key. Creating a grant does not implement or enable unavailable control/cron operations.
+         */
+        post: operations["createAPIKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api-keys/{key_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an API Key
+         * @description Idempotent for an existing key. Metadata is retained; subsequent authentication fails. Does not create or execute a cloud job.
+         */
+        delete: operations["revokeAPIKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/notify/telegram": {
         parameters: {
             query?: never;
@@ -458,7 +587,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 内置告警规则 */
+        /**
+         * 内置告警规则
+         * @description Returns only rules with implemented, usable evidence sources. Production currently supports account_api_failure, cdt_official_unavailable, agent_offline, instance_expiring, spec_bandwidth_insufficient and instance_public_ip_changed. Usage/forecast rules are not returned until their metering source and policy are available.
+         */
         get: operations["listAlertRules"];
         put?: never;
         post?: never;
@@ -590,7 +722,8 @@ export interface components {
              * @description Null when the binary has no build timestamp.
              */
             built_at: string | null;
-            latest_agent_version: string;
+            /** @description Verified local agent release version, using the same cache as Agent.available_version. Null when unavailable. Use Agent.update_available for upgrade decisions, not string inequality against this field. */
+            latest_agent_version: string | null;
         };
         Settings: {
             /** @description IANA 时区名，面板按它显示时间、切分"今天"。 */
@@ -598,6 +731,7 @@ export interface components {
             /** @description 采集周期，只读，用于在界面上解释数据有多新。 */
             collection: {
                 cdt_poll_interval_seconds: number;
+                /** @description Default agent sampling interval (10 seconds). Individual agents may override it locally; see Agent.report_interval_seconds. */
                 agent_report_interval_seconds: number;
                 agent_offline_after_seconds: number;
                 resource_scan_interval_seconds: number;
@@ -744,6 +878,19 @@ export interface components {
          */
         WorstCaseBasis: "recent_peak" | "bandwidth_cap";
         Agent: {
+            /** @description Version of the server's locally configured and validated agent release, not a check against an upstream release service. Null if release files are unavailable or invalid. */
+            available_version?: string | null;
+            /** @description True when the installed semantic version is older than available_version. Null for dev/unknown versions or missing installation/release. Build metadata does not affect precedence. Use POST install-command for an explicit upgrade command; no automatic installation occurs. */
+            update_available?: boolean | null;
+            /** @description Latest declared sampling interval; null before a fresh report in the current registration or after revocation. This does not change the separately configured offline alert timeout. */
+            report_interval_seconds?: number | null;
+            /** @description Registered but no fresh sample received; status remains offline until the first fresh report. Do not interpret registration as online. */
+            pending_first_report?: boolean;
+            /**
+             * @description Latest stored sample quality; absent samples or revoked tokens produce null. Online does not imply aligned CDT protection.
+             * @enum {string|null}
+             */
+            data_quality?: "baseline" | "ok" | "clock_skew" | "counter_reset" | "stale" | "gap" | null;
             status: components["schemas"]["AgentStatus"];
             version: string | null;
             /** Format: date-time */
@@ -778,6 +925,75 @@ export interface components {
             /** Format: date-time */
             sampled_at: string;
         };
+        RAMPolicyDraft: {
+            /** @enum {string} */
+            id: "readonly" | "instance_power" | "resource_management";
+            /** Format: date */
+            reviewed_on: string;
+            /** @enum {string} */
+            verification: "draft";
+            cloud_write_permissions: boolean;
+            limitations: ("cdt_action_unverified" | "public_metadata_actions_unverified" | "resource_scope_not_account_bound" | "runtime_writes_unimplemented" | "creation_dependencies_pending")[];
+            document: {
+                /** @enum {string} */
+                Version: "1";
+                Statement: {
+                    /** @enum {string} */
+                    Effect: "Allow";
+                    Action: string[];
+                    /** @description RAM ARN pattern or '*'. Template patterns are not yet narrowed to the user's account or individual resources. */
+                    Resource: string;
+                }[];
+            };
+        };
+        /** @description Exactly one field according to event kind. Lifecycle events use present, status changes use status, address changes use addresses. Address arrays are normalized sets, not interface ordering; an empty array is a confirmed empty set. */
+        InstanceEventValue: {
+            present?: boolean;
+            status?: components["schemas"]["InstanceStatus"];
+            addresses?: string[];
+        };
+        InstanceEvent: {
+            id: string;
+            account_id: string;
+            instance_id: string;
+            cloud_instance_id: string;
+            instance_kind: components["schemas"]["InstanceKind"];
+            region_id: string;
+            /** @description Name at observation time; retained for disappeared instances. */
+            instance_name: string;
+            /** @enum {string} */
+            kind: "discovered" | "disappeared" | "reappeared" | "status_changed" | "public_ipv4_changed" | "ipv6_changed";
+            /** Format: date-time */
+            observed_at: string;
+            /** @description Null on first discovery. Existing data at feature rollout establishes a baseline without fabricating old changes. */
+            before: components["schemas"]["InstanceEventValue"] | null;
+            after: components["schemas"]["InstanceEventValue"];
+        };
+        InstanceIPv6: {
+            /** @description Normalized assigned addresses from primary and secondary ENIs, sorted and deduplicated. Empty with unknown status does not confirm absence. Delegated prefixes are not expanded into host addresses. */
+            addresses: string[];
+            /**
+             * @description ok means the latest complete query succeeded; stale retains a previous successful result after failure; unknown means no successful result yet.
+             * @enum {string}
+             */
+            status: "ok" | "stale" | "unknown";
+            /** @enum {string|null} */
+            source: "ecs_instances" | "ecs_network_interfaces" | null;
+            /**
+             * Format: date-time
+             * @description Time of the latest collection attempt.
+             */
+            checked_at: string;
+            /**
+             * Format: date-time
+             * @description Time of the last successful complete observation; unchanged on failure.
+             */
+            observed_at: string | null;
+            last_error: {
+                code: string;
+                message: string;
+            } | null;
+        };
         Instance: {
             id: string;
             /** @description 阿里云实例 ID。 */
@@ -795,6 +1011,8 @@ export interface components {
                 address: string;
                 type: components["schemas"]["PublicIpType"];
             }[];
+            /** @description Assigned ECS IPv6 addresses; allocation does not prove public connectivity, internet bandwidth or CDT eligibility. Null for SWAS; absent in older snapshots. */
+            ipv6?: components["schemas"]["InstanceIPv6"] | null;
             charge_type: components["schemas"]["ChargeType"];
             /**
              * Format: date-time
@@ -810,8 +1028,11 @@ export interface components {
             metering_rule: (string & components["schemas"]["MeteringRule"]) | null;
             /** @description 实际生效的公网带宽上限（实例、EIP 或所在共享带宽）。 */
             bandwidth_mbps: number | null;
+            renewal?: components["schemas"]["InstanceRenewal"];
             /** @description 所在共享带宽的名称；不在共享带宽里为 null。 */
             bandwidth_package_name: string | null;
+            /** @description ECS specification capacity and public outbound comparison from the latest resource scan. Null for SWAS; absent in snapshots collected before this feature. */
+            network_capacity?: components["schemas"]["InstanceNetworkCapacity"] | null;
             /** @description Null until CDT upgrade, line eligibility and topology are verified; never treat null as false. */
             counts_toward_cdt: boolean | null;
             /** @description 计入国内还是海外额度；不计入 CDT 为 null。 */
@@ -825,6 +1046,126 @@ export interface components {
              * @description 这台实例的资源信息最近一次从阿里云更新的时间。
              */
             updated_at: string;
+        };
+        InstanceRenewal: {
+            /**
+             * @description A configured renewal policy, not proof that a renewal payment will succeed. Known pay-as-you-go/spot instances are not_applicable; unavailable or ambiguous subscription data is unknown.
+             * @enum {string}
+             */
+            status: "auto_renewal" | "manual_renewal" | "no_renewal" | "unknown" | "not_applicable";
+            /** @enum {string|null} */
+            source: "ecs_describe_instance_auto_renew_attribute" | "bss_query_available_instances" | null;
+            /** Format: date-time */
+            checked_at: string;
+            last_error: {
+                code: string;
+                message: string;
+            } | null;
+        };
+        InstanceNetworkCapacity: {
+            /** @enum {string} */
+            source: "ecs_describe_instance_types";
+            /** Format: date-time */
+            checked_at: string;
+            /**
+             * Format: int64
+             * @description InstanceBandwidthRx, kbit/s as documented by ECS. Not a measured rate or a public inbound allowance.
+             */
+            rx_kbps: number | null;
+            /**
+             * Format: int64
+             * @description InstanceBandwidthTx, kbit/s as documented by ECS. Not a throughput guarantee.
+             */
+            tx_kbps: number | null;
+            /**
+             * Format: int64
+             * @description Known single public exit ceiling, using shared-package bandwidth for member EIPs. Shared bandwidth is not reserved for this instance.
+             */
+            public_outbound_mbps: number | null;
+            /** @description Whether public_outbound_mbps * 1000 exceeds tx_kbps. Null if either source is unavailable or topology is ambiguous. False only means this outbound comparison did not find a mismatch; it does not certify overall network health. */
+            public_outbound_exceeds_spec: boolean | null;
+            last_error: {
+                code: string;
+                message: string;
+            } | null;
+        };
+        FinanceSource: {
+            /**
+             * @description Result of the latest attempt, not a guarantee that cached data is recent. Check timestamps and account enabled state.
+             * @enum {string}
+             */
+            status: "never_synced" | "ok" | "failing";
+            /**
+             * Format: date-time
+             * @description Last successful retrieval; not a provider accounting cutoff.
+             */
+            fetched_at: string | null;
+            /** Format: date-time */
+            last_attempt_at: string | null;
+            last_error: {
+                code: string;
+                message: string;
+            } | null;
+            /** @description Last successful payload; remains present with its original fetched_at on later failure. */
+            data: Record<string, never> | null;
+        };
+        AccountFinance: {
+            account_id: string;
+            enabled: boolean;
+            /** @description Current YYYY-MM in the configured business timezone, sent explicitly to QueryBillOverview. Previous-month snapshots are not substituted. */
+            billing_cycle: string;
+            /**
+             * Format: date-time
+             * @description Most recent attempt across these two sources.
+             */
+            updated_at: string | null;
+            balance: components["schemas"]["FinanceSource"] & {
+                data?: {
+                    currency: string;
+                    /** @description Provider AvailableAmount (available credit), not necessarily cash balance. */
+                    available_amount: string;
+                    /** @description Provider AvailableCashAmount. */
+                    available_cash_amount: string;
+                    /** @description Provider CreditAmount, if supplied. */
+                    credit_amount: string | null;
+                } | null;
+            };
+            bill: components["schemas"]["FinanceSource"] & {
+                data?: {
+                    billing_cycle: string;
+                    /** @description Provider overview rows. An empty successful response is an empty list, not a fabricated zero-value bill. Do not sum different currencies or assume the sign of refund/adjustment rows. */
+                    items: components["schemas"]["BillOverviewItem"][];
+                } | null;
+            };
+        };
+        BillOverviewItem: {
+            /** @description Provider Item value, e.g. SubscriptionOrder, PayAsYouGoBill, Refund, Adjustment. */
+            bill_type: string;
+            product_code: string;
+            product_name: string;
+            currency: string;
+            /** @description Provider PretaxAmount, decimal text. */
+            pretax_amount: string;
+            /** @description Provider PaymentAmount, cash payment including credit refund offsets. */
+            payment_amount: string;
+            /** @description Provider OutstandingAmount, unpaid or credit settlement amount. */
+            outstanding_amount: string;
+        };
+        /** @enum {string} */
+        APIKeyScope: "summary:read" | "instance:control" | "cron:run";
+        APIKey: {
+            id: string;
+            name: string;
+            scopes: components["schemas"]["APIKeyScope"][];
+            /** Format: date-time */
+            created_at: string;
+            /**
+             * Format: date-time
+             * @description Last successful scope authentication, not proof of a completed cloud action.
+             */
+            last_used_at: string | null;
+            /** Format: date-time */
+            revoked_at: string | null;
         };
         AgentInstallCommand: {
             /** @description Installer command; setup may need elevated privileges, but the agent service must run with minimal capabilities. */
@@ -1052,8 +1393,11 @@ export interface components {
         };
         /** @enum {string} */
         TelegramProxyMode: "none" | "reverse_proxy" | "socks5";
-        /** @enum {string} */
-        TelegramStatus: "not_configured" | "ok" | "failing";
+        /**
+         * @description not_tested means configuration is saved but no send has confirmed it works; syntax validation alone does not imply ok.
+         * @enum {string}
+         */
+        TelegramStatus: "not_configured" | "not_tested" | "ok" | "failing";
         TelegramChannel: {
             /** @description 是否已保存 Bot Token。Token 本身永不返回。 */
             bot_token_set: boolean;
@@ -1061,6 +1405,8 @@ export interface components {
             proxy_mode: components["schemas"]["TelegramProxyMode"];
             /** @description Proxy URL without credentials or secret query parameters; empty when disabled. Never echo stored authentication material. */
             proxy_url: string;
+            /** @description Whether encrypted proxy authentication is saved. Neither the username nor password is returned. */
+            proxy_auth_set?: boolean;
             status: components["schemas"]["TelegramStatus"];
             last_error: {
                 code: string;
@@ -1077,19 +1423,21 @@ export interface components {
             proxy_url: string;
         };
         /**
-         * @description M1 可用的内置规则；后续里程碑在此追加。
+         * @description 内置规则；仅返回当前已实现且有可用来源的规则。
          * @enum {string}
          */
-        AlertRuleKey: "cdt_usage" | "cdt_forecast_exceed" | "account_api_failure" | "agent_offline" | "cdt_official_unavailable";
+        AlertRuleKey: "cdt_usage" | "cdt_forecast_exceed" | "account_api_failure" | "agent_offline" | "cdt_official_unavailable" | "instance_expiring" | "spec_bandwidth_insufficient" | "instance_public_ip_changed";
         /** @enum {string} */
         Severity: "info" | "warning" | "serious" | "critical";
-        /** @description 每条规则只用到其中一部分字段，用不到的字段不返回。 */
+        /** @description 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient 和 instance_public_ip_changed 使用空对象，无额外阈值。公网 IP 变化按每次有效事件记录，不产生恢复通知。 */
         AlertRuleParams: {
+            /** @description instance_expiring only. Default 7; compare freshly collected expiry against now plus this many 24-hour days. Missing expiry is unknown. Stopped subscription instances remain applicable. */
+            before_days?: number;
             /** @description cdt_usage 的默认档位（账号可以单独覆盖）。 */
             thresholds_percent?: number[];
             /** @description account_api_failure、cdt_official_unavailable：连续失败多少次后告警。 */
             consecutive_failures?: number;
-            /** @description agent_offline：连续多少秒无上报视为掉线。 */
+            /** @description agent_offline：连续多少秒无新鲜上报视为掉线，默认 30。实例状态和 settings 使用同一值；关闭告警不关闭状态监测。尚未收到首次有效上报的注册不触发掉线告警。 */
             offline_after_seconds?: number;
         };
         AlertRule: {
@@ -1123,11 +1471,21 @@ export interface components {
             account_id: string | null;
             instance_id: string | null;
             delivery_status: components["schemas"]["DeliveryStatus"];
+            attempts?: number;
+            last_error?: {
+                code: string;
+                message: string;
+            } | null;
+            /** Format: date-time */
+            delivered_at?: string | null;
+            /** @description At least one attempt may have reached Telegram without a confirmed response. A failed record is not proof of non-delivery; if a later attempt succeeds, duplicates may be possible. */
+            has_uncertain_attempt?: boolean;
         };
         /** @description 事件流 `instance.realtime` 的 data。 */
         InstanceRealtimeEvent: {
             instance_id: string;
-            realtime: components["schemas"]["InstanceRealtime"];
+            /** @description Null clears the prior rate on offline, revocation, counter reset or insufficient samples. */
+            realtime: components["schemas"]["InstanceRealtime"] | null;
         };
         /** @description 事件流 `agent.status` 的 data。 */
         AgentStatusEvent: {
@@ -1646,6 +2004,84 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    downloadEncryptedBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: password
+                     * @description 12–1024 UTF-8 bytes; not the administrator password or master key.
+                     */
+                    backup_password: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Password-encrypted Harbormaster archive. Save the binary response as a file; do not parse it as JSON. */
+            200: {
+                headers: {
+                    "Content-Disposition"?: string;
+                    "Content-Length"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["RateLimited"];
+            /** @description Development mode has no production backup export (not_implemented). */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Snapshot or encryption failed before an attachment was started (backup_unavailable). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listRAMPolicyDrafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Three cumulative policy levels; write permissions are opt-in at the user's RAM configuration, not applied by this endpoint. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RAMPolicyDraft"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     listInstances: {
         parameters: {
             query?: {
@@ -1678,6 +2114,37 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    listInstanceEvents: {
+        parameters: {
+            query?: {
+                account_id?: string;
+                /** @description Harbormaster Instance.id, including instances no longer in the current list. */
+                instance_id?: string;
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Instance observation history; no matching records returns an empty page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["InstanceEvent"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
         };
     };
     refreshInstances: {
@@ -1725,6 +2192,15 @@ export interface operations {
             404: components["responses"]["NotFound"];
             /** @description 该实例不支持安装（`agent_not_supported`，例如实例已释放） */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Release artifacts are missing or fail checksum verification (`agent_release_unavailable`). No code is issued. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1875,6 +2351,115 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAccountFinance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cached finance sources; missing data is null, never an inferred zero. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountFinance"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listAPIKeys: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Newest first; no secret or token hash is returned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["APIKey"][];
+                        next_cursor: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    createAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    scopes: components["schemas"]["APIKeyScope"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Secret appears only in this response; do not log or persist it in frontend state storage. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        api_key: components["schemas"]["APIKey"];
+                        /** @description One-time creation response secret. This field is deliberately absent from list responses. */
+                        token: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    revokeAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked, or already revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

@@ -154,7 +154,8 @@ export function Banner({ level, children, action }: { level: "warning" | "critic
 }
 
 /** "截至 17:42"；超过时限没更新则变成醒目的"数据已过期" */
-export function Fresh({ at, kind, prefix = "截至", name = "数据" }: { at: string | null | undefined; kind: FreshKind; prefix?: string; name?: string }) {
+/** quiet：数据新鲜时什么都不显示，只在过期或缺失时提示 */
+export function Fresh({ at, kind, prefix = "截至", name = "数据", quiet }: { at: string | null | undefined; kind: FreshKind; prefix?: string; name?: string; quiet?: boolean }) {
   const now = useNow(5000);
   if (!at) return <span className="chip stale">还没有{name}</span>;
   if (isStale(at, kind, now))
@@ -163,6 +164,7 @@ export function Fresh({ at, kind, prefix = "截至", name = "数据" }: { at: st
         <LevelIconInline /> {name}已过期 · 停在 {stamp(at)}
       </span>
     );
+  if (quiet) return null;
   return (
     <span className="chip" title={ago(at, now)}>
       {prefix} {stamp(at)}
