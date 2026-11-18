@@ -87,6 +87,9 @@ func calculateDailyScope(ctx context.Context, tx *sql.Tx, a model.Account, scope
 	reasons := map[string]bool{"topology_observed_only": true}
 	complete := len(a.RegionIDs) > 0
 	for _, region := range a.RegionIDs {
+		if model.CDTRegionScope(region) != scope {
+			continue
+		}
 		rows, err := tx.QueryContext(ctx, `SELECT observed_from,last_seen,closed_at,subjects_json FROM daily_topology WHERE account_id=? AND credential_version=? AND region=? AND observed_from<? AND (closed_at IS NULL OR closed_at>?) ORDER BY observed_from,id`, a.ID, a.CredentialVersion, region, timestamp(until), timestamp(day))
 		if err != nil {
 			return v, err

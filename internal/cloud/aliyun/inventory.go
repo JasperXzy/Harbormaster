@@ -255,4 +255,4 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 	return result
 }
 func text(m map[string]any, key string) string { s, _ := m[key].(string); return s }
-func mainland(region string) bool              { return strings.HasPrefix(region, "cn-") && region != "cn-hongkong" }
+func mainland(region string) bool              { return model.CDTRegionScope(region) == "mainland" }

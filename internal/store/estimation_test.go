@@ -134,6 +134,37 @@ func TestEmptyPackageNeedsAddressAwareHistoryBeforeRealtimeZero(t *testing.T) {
 		t.Fatal("address without member became zero", v)
 	}
 }
+
+func TestTopologyCoverageIsIsolatedByCDTScope(t *testing.T) {
+	s, _, _, base := estimateFixture(t)
+	ctx := context.Background()
+	now := base.Add(120 * time.Second)
+	a, err := s.Account(ctx, "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.RegionIDs = append(a.RegionIDs, "cn-hongkong")
+	if _, err = s.DB.Exec("INSERT INTO metering_topology VALUES('a','cn-hongkong',1,'new',?,?,1,'observed')", timestamp(base.Add(time.Second)), timestamp(now)); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	settings, err := readEstimationSettings(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mainland, err := calculateEstimate(ctx, tx, a, "mainland", settings, time.UTC, now)
+	if err != nil || mainland.Status != "ready" {
+		t.Fatal(mainland, err)
+	}
+	overseas, err := calculateEstimate(ctx, tx, a, "overseas", settings, time.UTC, now)
+	if err != nil || overseas.Status != "incomplete" || !slices.Contains(overseas.Reasons, "topology_history_incomplete") {
+		t.Fatal(overseas, err)
+	}
+}
 func TestTrustedCutoffAndPeriodAreNecessaryForAlignedPath(t *testing.T) {
 	s, _, _, base := estimateFixture(t)
 	now := base.Add(120 * time.Second)

@@ -148,6 +148,17 @@ func TestDailyTopologyGapsAndKnownEmptyAreExplicit(t *testing.T) {
 	}
 }
 
+func TestDailyScopeDoesNotRequireUnrelatedRegionalHistory(t *testing.T) {
+	s, a, base, report := dailyFixture(t)
+	report(base, 0, 0)
+	report(base.Add(24*time.Hour), 0, 100)
+	a.RegionIDs = append(a.RegionIDs, "cn-hongkong")
+	v := dailyScope(t, s, a, base, base.Add(24*time.Hour))
+	if !v.CompleteDay || v.Bytes == nil || *v.Bytes != 100 {
+		t.Fatal(v)
+	}
+}
+
 func TestOfficialDailyRequiresExactVerifiedBoundaryPair(t *testing.T) {
 	s, a, base, _ := dailyFixture(t)
 	start, end := ReferenceCycle(base, time.UTC)

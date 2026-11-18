@@ -153,9 +153,12 @@ func calculateEstimateAt(ctx context.Context, tx *sql.Tx, a model.Account, scope
 		reason("invalid_estimation_window")
 		return finish()
 	}
-	// Every configured region needs current complete topology, including regions
+	// Every configured region in this CDT scope needs complete topology, including regions
 	// with no metered objects. Observation stability never verifies historical membership.
 	for _, region := range a.RegionIDs {
+		if model.CDTRegionScope(region) != scope {
+			continue
+		}
 		var since, last, quality string
 		var ok bool
 		var credential int64
@@ -198,7 +201,7 @@ func calculateEstimateAt(ctx context.Context, tx *sql.Tx, a model.Account, scope
 			rows.Close()
 			return v, err
 		}
-		if !slices.Contains(a.RegionIDs, region) {
+		if !slices.Contains(a.RegionIDs, region) || model.CDTRegionScope(region) != scope {
 			continue
 		}
 		var observed dailySubject

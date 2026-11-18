@@ -1,6 +1,17 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
+
+// CDT groups the regional ECS/VPC billing objects by their resource region.
+func CDTRegionScope(region string) string {
+	if strings.HasPrefix(region, "cn-") && region != "cn-hongkong" {
+		return "mainland"
+	}
+	return "overseas"
+}
 
 type CDTRegion struct {
 	Region          string `json:"region"`
