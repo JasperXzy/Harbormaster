@@ -30,3 +30,15 @@ test("forecast waiting states distinguish missing samples from missing baseline"
   assert.match(forecastNote({forecast:null,forecast_status:"insufficient_data"}),/今天不参加日均/);
   assert.match(forecastNote({forecast:null,forecast_status:"baseline_missing"}),/累计基准/);
 });
+
+test("aggregate forecasts describe independent samples and unavailable accounts",()=>{
+  const aggregation={account_count:2,forecast_accounts:1,forecast_sample_days_min:2,forecast_sample_days_max:7};
+  assert.match(forecastNote({forecast:null,aggregation}),/1\/2 个账号/);
+  const message=forecastNote({forecast:{daily_average_bytes:100,cycle_end_bytes:200},aggregation:{...aggregation,forecast_accounts:2}});
+  assert.match(message,/独立预测/);assert.match(message,/2–7/);assert.match(message,/不能跨账号/);
+});
+
+test("mixed-source partial totals keep their known zero and coverage label",()=>{
+  const day={date:"2026-11-18",overseas_bytes:null,scopes:{overseas:{bytes:null,known_bytes:0,has_data:true,source:"mixed",status:"partial",is_complete_day:false,reasons:["account_data_incomplete"]}}};
+  const v=dailyValue(day,"overseas");assert.equal(v.value,0);assert.equal(v.partial,true);assert.match(v.label,/混合来源/);assert.match(v.label,/部分覆盖/);
+});

@@ -7,7 +7,7 @@ export type Scene = "normal" | "slow" | "empty" | "error" | "stale" | "agent_off
 
 export const SCENES: [Scene, string, string][] = [
   ["normal", "正常运行", "两个账号、六台实例，其中一台未受实时保护"],
-  ["cutoff_unknown", "截止时间未知", "海外显示未核实估算，国内覆盖不完整；日数据保留缺口"],
+  ["cutoff_unknown", "截止时间未知", "一个账号估算可用，另一个覆盖不全；合计保留缺口"],
   ["slow", "加载很慢", "每个请求等 4 秒，用来看加载中的样子"],
   ["empty", "空数据", "刚装好，还没有添加账号"],
   ["error", "接口出错", "数据接口全部返回错误"],
@@ -252,7 +252,7 @@ export function buildDb(scene: Scene, now = Date.now()): Db {
   base.instancesUpdatedAt = iso(scanAt);
   if (scene === "cutoff_unknown") {
     for (const q of base.quotas) {
-      const complete=q.scope==="overseas";
+      const complete=q.scope==="overseas" && q.account_id===a1.id;
       q.estimation={mode:"unverified",status:complete?"ready":"incomplete",basis_id:"demo-basis",from_at:iso(now-3600_000),to_at:iso(realtimeAt),calculated_at:iso(realtimeAt),lag_window_seconds:3600,increment_bytes:complete?q.realtime_increment_bytes:null,known_increment_bytes:complete?q.realtime_increment_bytes??0:150_000_000,worst_case_bytes:complete?q.worst_case_bytes:null,estimated_bytes:complete?q.estimated_bytes:null,current_rate_bytes_per_second:100000,qualified_for_execution:false,reasons:complete?["lag_window_assumption","official_cutoff_or_unit_unverified"]:["coverage_gap","unattributed_subject"]};
       Object.assign(q,{official_as_of:null,official_status:"cutoff_unknown",official_quality:"inferred",fetched_at:iso(now),realtime_increment_bytes:null,worst_case_bytes:null,estimated_bytes:null,effective_bytes:null,forecast:null,forecast_status:"insufficient_data"});
     }

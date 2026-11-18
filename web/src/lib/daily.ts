@@ -4,11 +4,12 @@ import { cumulativeBytes, quotaView } from "./usage.ts";
 // Presentation only: byte aggregation and all forecast calculations live in Go.
 export function dailyValue(day: DailyTraffic["days"][number], scope: QuotaScope) {
   const detail = day.scopes?.[scope];
+  const source = detail?.source === "official" ? "官方日数据" : detail?.source === "mixed" ? "混合来源" : "采集估算";
   if (detail) return {
     value: detail.bytes ?? (detail.has_data ? detail.known_bytes : null),
     partial: detail.bytes === null, completeDay: detail.is_complete_day,
     source: detail.source, reasons: detail.reasons, from: detail.observed_from, until: detail.observed_until,
-    label: detail.status === "pending" ? "正在汇总" : detail.source === "official" ? "官方日数据" : detail.has_data ? detail.bytes === null ? "采集估算 · 部分覆盖" : detail.is_complete_day ? "采集估算 · 完整日" : "采集估算 · 今天未结束" : "无覆盖数据",
+    label: detail.status === "pending" ? "正在汇总" : detail.has_data ? `${source} · ${detail.bytes===null?"部分覆盖":detail.is_complete_day?"完整日":"今天未结束"}` : "无覆盖数据",
   };
   const value = day[scope === "overseas" ? "overseas_bytes" : "mainland_bytes"];
   return { value, partial: value === null, completeDay: false, source: "unavailable", reasons: [] as string[], from: null, until: null, label: value === null ? "无覆盖数据" : "来源待核实" };
@@ -16,6 +17,11 @@ export function dailyValue(day: DailyTraffic["days"][number], scope: QuotaScope)
 
 export function forecastNote(q: QuotaStatus) {
   const f=q.forecast;
+  const a=q.aggregation;
+  if(a) {
+    if(!f) return `当前 ${a.forecast_accounts}/${a.account_count} 个账号有可用预测，完整合计尚不可用。各账号需积累完整日样本，今天不参加日均。`;
+    return `将 ${a.account_count} 个账号的独立预测相加。${a.forecast_sample_days_min>0?`各账号使用 ${a.forecast_sample_days_min===a.forecast_sample_days_max?a.forecast_sample_days_min:`${a.forecast_sample_days_min}–${a.forecast_sample_days_max}`} 个完整日样本。`:""}各自基准时间可能不同，合计仅供展示；免费额度不能跨账号使用。`;
+  }
   if (!f) return q.forecast_status === "baseline_missing" ? "已有完整日样本，正在等待可用的累计基准。" : "近 7 个已结束日期中还没有覆盖完整的样本。至少有 1 个完整日后显示预测，今天不参加日均。";
   return `按近 7 天中的 ${f.sample_days ?? "—"} 个完整日预测，日均 ${(f.daily_average_bytes / 1024 ** 3).toFixed(2)} GB。${f.unverified ? "这是未核实的展示估算。" : ""}${f.baseline_at_assumed ? "官方累计的统计时间采用本地窗口假设。" : ""}`;
 }

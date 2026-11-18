@@ -1,3 +1,4 @@
+import { mockQuotaTotals, mockDailyTotal } from "./traffic-aggregate";
 // 模拟后端：在浏览器里按契约应答，不发网络请求。只在 VITE_API_MODE=mock 时被加载。
 import type * as T from "../api/types";
 import type { EventName } from "../api/types";
@@ -83,6 +84,7 @@ function tick() {
     emit("quota.updated", q);
   }
   for(const q of db.quotas){
+    q.updated_at=iso(now);
     const e=q.estimation;if(!e)continue;
     e.calculated_at=iso(now);e.to_at=iso(now);
     if(e.status==="ready" && e.increment_bytes!==null && q.official_bytes!==null){e.increment_bytes+=(e.current_rate_bytes_per_second??0)*TICK_SECONDS;e.known_increment_bytes=e.increment_bytes;e.estimated_bytes=q.official_bytes+e.increment_bytes;}
@@ -292,7 +294,7 @@ export async function handle(method: string, fullPath: string, body: unknown): P
 
   /* 流量 */
   const byAccount = <X extends { account_id: string }>(xs: X[]) => xs.filter((x) => !q.get("account_id") || x.account_id === q.get("account_id"));
-  if (is("GET", "/traffic/quotas")) return ok({ items: byAccount(db.quotas) });
+  if (is("GET", "/traffic/quotas")) return ok({ items: q.get("account_id")==="all"?mockQuotaTotals(db):byAccount(db.quotas) });
   if (is("GET", "/traffic/observations")) {
     const id = q.get("account_id");
     if (!db.accounts.some((a) => a.id === id)) return fail(404, "not_found");
@@ -300,7 +302,7 @@ export async function handle(method: string, fullPath: string, body: unknown): P
     return ok({ items: Array.from({ length: 8 }, (_, i) => ({ id: String(8 - i), account_id: id, fetched_at: iso(Date.now() - i * 300_000), mainland_bytes: known("mainland", i), overseas_bytes: known("overseas", i), official_quality: "inferred", error: null })), next_cursor: null });
   }
   if (is("GET", "/traffic/daily")) {
-    const d = db.daily[q.get("account_id") ?? ""];
+    const d = q.get("account_id")==="all"?mockDailyTotal(db):db.daily[q.get("account_id") ?? ""];
     return d ? ok(d) : fail(404, "not_found");
   }
   if (is("GET", "/traffic/billing-subjects")) return ok({ items: byAccount(db.subjects) });

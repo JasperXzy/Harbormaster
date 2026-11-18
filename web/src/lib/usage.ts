@@ -23,6 +23,7 @@ export function quotaState(q: QuotaStatus) {
   return v.stale ? "估算已过期" : v.usable ? v.unverified ? "未核实估算" : "实时估算" : v.status === "incomplete" ? "覆盖不完整" : "暂无估算";
 }
 const ESTIMATION_REASON: Record<string, string> = {
+	account_data_incomplete: "部分账号的计量数据不完整或已过期",
   official_basis_missing: "还没有可用的官方累计基准",
   topology_unknown: "公网出口信息尚未采集完整",
   topology_history_incomplete: "还缺少这一时段的出口成员历史",

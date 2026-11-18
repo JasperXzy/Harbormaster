@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { api } from "../api/client";
 import { RULE, SCOPE, SUBJECT_KIND } from "../api/labels";
-import type { BandwidthPackage, DailyTraffic, QuotaScope, QuotaStatus } from "../api/types";
+import type { Account, BandwidthPackage, DailyTraffic, QuotaScope, QuotaStatus } from "../api/types";
 import { DailyBars } from "../components/charts/DailyBars";
 import { LineChart } from "../components/charts/LineChart";
 import { QuotaMeter, QuotaUnknownNote } from "../components/QuotaMeter";
@@ -11,7 +11,7 @@ import { Async, Badge, Card, EmptyState, ErrorState, Fresh, SegToggle, Skeleton 
 import { useShared } from "../lib/data";
 import { gb, gbValue, bytes, num, shortDate, time, stamp } from "../lib/format";
 import { Link } from "../lib/router";
-import { useResource } from "../lib/useResource";
+import { useResource, type Resource } from "../lib/useResource";
 import { quotaView, quotaState, quotaMissingReasons } from "../lib/usage";
 import { dailyValue, forecastNote, usageTimeline } from "../lib/daily";
 
@@ -33,6 +33,8 @@ export function Traffic() {
       </div>
     );
   const qs = (quotas.data ?? []).filter((q) => q.account_id === accountId);
+  const enabledAccounts = accs.filter(a=>a.enabled);
+  const all = accountId === "all";
   const instName = (id: string) => instances.data?.items.find((i) => i.id === id)?.name ?? id;
 
   return (
@@ -40,21 +42,32 @@ export function Traffic() {
       <div className="filters">
         <label className="sub" htmlFor="traffic-account">账号</label>
         <select id="traffic-account" value={accountId} onChange={(e) => setPicked(e.target.value)}>
+          <option value="all">全部账号（合计）</option>
           {accs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
       </div>
 
-      <Card title="本月用量" sub="同时保留官方累计和采集估算；未核实的窗口会单独标注">
-        {quotas.error ? <ErrorState error={quotas.error} onRetry={quotas.reload} /> : !quotas.data ? <Skeleton /> : !qs.length ? <EmptyState title="这个账号还没有额度数据" /> : <QuotaTable qs={qs} />}
-      </Card>
-
-      <DailySection key={accountId} accountId={accountId} quotas={qs} />
-      <Observations key={`observations-${accountId}`} accountId={accountId} />
-
-      <Subjects accountId={accountId} instName={instName} />
-      <Packages accountId={accountId} />
+      {all && <p className="note">汇总 {enabledAccounts.length} 个启用账号，停用账号不计入。免费额度按账号独立计算，合计额度不能跨账号使用。</p>}
+      {all ? <AggregateSection /> : <>
+        <QuotaSection res={{...quotas,data:quotas.data?qs:undefined}} />
+        <DailySection key={accountId} accountId={accountId} quotas={qs} />
+      </>}
+      {all ? enabledAccounts.map(a=><Observations key={a.id} accountId={a.id} accountName={a.name} />) : <Observations key={accountId} accountId={accountId} />}
+      <Subjects accountId={accountId} instName={instName} accounts={accs} />
+      <Packages accountId={accountId} accounts={accs} />
     </>
   );
+}
+
+function QuotaSection({res,total=false}:{res:Pick<Resource<QuotaStatus[]>,"data"|"error"|"reload">;total?:boolean}) {
+  return <Card title={total?"本月用量 · 合计":"本月用量"} sub={total?"分别合计国内、海外用量；缺数据时保留已知小计":"同时保留官方累计和采集估算；未核实的窗口会单独标注"}>
+    {res.error?<ErrorState error={res.error} onRetry={res.reload} />:!res.data?<Skeleton />:!res.data.length?<EmptyState title={total?"没有启用的账号":"这个账号还没有额度数据"} />:<QuotaTable qs={res.data} />}
+  </Card>;
+}
+
+function AggregateSection() {
+  const quotas=useResource(()=>api.quotas("all"),[],{refreshMs:10_000});
+  return <><QuotaSection res={quotas} total /><DailySection accountId="all" quotas={quotas.data??[]} /></>;
 }
 
 function QuotaTable({ qs }: { qs: QuotaStatus[] }) {
@@ -74,12 +87,13 @@ function QuotaTable({ qs }: { qs: QuotaStatus[] }) {
               <td><b>{SCOPE[q.scope]}</b></td>
               <td className="num">
                 <b>{v.value === null ? "—" : gb(v.value, 2)}</b> <Badge level={v.unverified || !v.usable ? "warning" : "neutral"}>{quotaState(q)}</Badge>
-                <div className="sub">官方 {gb(q.official_bytes)}{q.official_as_of ? `（截至 ${time(q.official_as_of)}）` : "（截止时间未知）"}{v.usable && v.increment !== null && ` + 采集 ${bytes(v.increment)}`}</div>
+                <div className="sub">官方 {q.aggregation && q.official_bytes===null && q.aggregation.official_accounts>0 ? `已知小计 ${gb(q.aggregation.known_official_bytes)}（${q.aggregation.official_accounts}/${q.aggregation.account_count} 账号）` : gb(q.official_bytes)}{q.official_as_of ? `（截至 ${time(q.official_as_of)}）` : "（截止时间未知）"}{v.usable && v.increment !== null && ` + 采集 ${bytes(v.increment)}`}</div>
                 {!v.usable && <div className="sub">{quotaMissingReasons(q)}{v.knownIncrement > 0 && `；已采集部分 ${bytes(v.knownIncrement)}`}</div>}
+                {q.aggregation && <div className="sub">{q.aggregation.estimated_accounts}/{q.aggregation.account_count} 个账号的估算可用{!v.usable && q.aggregation.estimated_accounts>0 ? `；已知估算小计 ${gb(q.aggregation.known_estimated_bytes,2)}` : ""}</div>}
                 {v.worstCase !== null && v.worstCase > 0 && <div className="sub">含掉线推算 {bytes(v.worstCase)}</div>}
               </td>
               <td className="num">{gb(q.quota_bytes, 0)}{v.usable && v.value !== null && q.quota_bytes > 0 && <div className="sub">{v.unverified ? "估算" : ""}已用 {num(v.value / q.quota_bytes * 100, 1)}%</div>}</td>
-              <td className="num">{q.forecast ? gb(q.forecast.cycle_end_bytes) : "—"}<div className="sub">{!q.forecast ? q.forecast_status === "baseline_missing" ? "累计基准尚不可用" : "等待首个完整日" : `${q.forecast.sample_days ?? "—"} 个完整日${q.forecast.unverified ? " · 未核实" : ""}`}{q.forecast?.exceeds_on && <div>{q.forecast.already_exceeded ? "累计已超本地额度" : `预计 ${shortDate(q.forecast.exceeds_on)} 超出`}</div>}</div></td>
+              <td className="num">{q.forecast ? gb(q.forecast.cycle_end_bytes) : "—"}<div className="sub">{!q.forecast ? q.aggregation ? q.aggregation.forecast_accounts>0?"部分账号预测不可用":"等待各账号预测" : q.forecast_status === "baseline_missing" ? "累计基准尚不可用" : "等待首个完整日" : `${q.aggregation?`${q.aggregation.forecast_accounts} 个账号预测合计`:`${q.forecast.sample_days ?? "—"} 个完整日`}${q.forecast.unverified ? " · 未核实" : ""}`}{q.forecast?.exceeds_on && <div>{q.forecast.already_exceeded ? "累计已超本地额度" : `预计 ${shortDate(q.forecast.exceeds_on)} 超出`}</div>}{q.aggregation && q.aggregation.forecast_accounts>0 && !q.forecast && <div>已知预测小计 {gb(q.aggregation.known_forecast_bytes)}（{q.aggregation.forecast_accounts}/{q.aggregation.account_count} 账号）</div>}{!!q.aggregation?.forecast_exceeding_accounts && <div>{q.aggregation.forecast_exceeding_accounts} 个账号预测超额，请单独查看</div>}</div></td>
               <td><Fresh at={v.updatedAt} kind="realtime" prefix="" />{q.official_status === "unavailable" && <div className="sub">沿用上次官方基准</div>}</td>
             </tr>
           ); })}
@@ -117,12 +131,12 @@ function DailySection({ accountId, quotas }: { accountId: string; quotas: QuotaS
   </div>;
 }
 
-function Observations({ accountId }: { accountId: string }) {
+function Observations({ accountId, accountName }: { accountId: string;accountName?:string }) {
   const [cursor, setCursor] = useState<string>();
   const [view, setView] = useState<View>("table"); // 两条线几乎是平的，表格更有用
   const res = useResource(() => api.trafficObservations(accountId, cursor), [accountId, cursor], { refreshMs: cursor ? 0 : 60_000 });
   return <details className="card fold">
-    <summary><h2>官方累计读取记录</h2><span className="sub">每次从阿里云读到的本月累计总数；不是每天的用量</span><div className="spacer" /><span className="sub">展开</span></summary>
+    <summary><h2>{accountName?`${accountName} · `:""}官方累计读取记录</h2><span className="sub">每次从阿里云读到的本月累计总数；不是每天的用量</span><div className="spacer" /><span className="sub">展开</span></summary>
     <div className="inline" style={{ justifyContent: "flex-end", margin: "12px 0 8px" }}><SegToggle label="读取记录显示方式" value={view} onChange={setView} options={[["table", "表格"], ["chart", "图表"]]} /></div>
     <Async res={res}>{(page) => {
       const points = [...page.items].reverse();
@@ -164,12 +178,13 @@ function Cumulative({ d,q,scope }: {d:DailyTraffic;q:QuotaStatus;scope:QuotaScop
     </> : <EmptyState title="正在积累累计数据" />}
     {f&&<p><b>月底预计 {gb(f.cycle_end_bytes,2)}</b>{f.exceeds_on&&<span> · {f.already_exceeded?"累计已超本地额度":`预计 ${shortDate(f.exceeds_on)} 超出`}</span>}</p>}
     <p className="note">{forecastNote(q)}{f?.sample_dates?.length ? `样本日期：${f.sample_dates.map(shortDate).join("、")}。` : ""}</p>
-    <p className="note">官方曲线按读取日期展示月累计，统计截止时间仍可能未知。缺少整月采集覆盖时不拼接采集累计；预测使用服务端返回的基准和预测点，仅用于展示。</p>
+    <p className="note">{q.aggregation?"官方曲线合计各账号同一读取日期的月累计，读取时间和统计截止可能不同。":"官方曲线按读取日期展示月累计，统计截止时间仍可能未知。"}缺少整月采集覆盖时不拼接采集累计；预测使用服务端返回的基准和预测点，仅用于展示。</p>
   </>;
 }
 
-function Subjects({ accountId, instName }: { accountId: string; instName: (id: string) => string }) {
-  const res = useResource(() => api.billingSubjects(accountId), [accountId], { refreshMs: 30_000 });
+function Subjects({ accountId, instName, accounts }: { accountId: string; instName: (id: string) => string;accounts:Account[] }) {
+  const enabled=accounts.filter(a=>a.enabled).map(a=>a.id);
+  const res = useResource(async () => {const rows=await api.billingSubjects(accountId==="all"?undefined:accountId);return accountId==="all"?rows.filter(s=>enabled.includes(s.account_id)):rows;}, [accountId,enabled.join(",")], { refreshMs: 30_000 });
   const src = { agent: "", cloud_monitor: "数据来自云监控，晚 1–2 分钟", none: "没有数据" } as const;
   return (
     <Card title="流量是按什么计费的" sub="今天到现在，每个公网出口各算各的">
@@ -182,7 +197,7 @@ function Subjects({ accountId, instName }: { accountId: string; instName: (id: s
                 <tbody>
                   {items.map((s) => (
                     <tr key={s.id}>
-                      <td><b>{s.name}</b><div className="sub"><span className="mono">{s.public_ips.join("、")}</span>{s.kind.startsWith("cbwp") ? ` · 成员 ${s.instance_ids.map(instName).join("、")}` : ""}</div></td>
+                      <td><b>{s.name}</b>{accountId==="all"&&<div className="sub">账号 {accounts.find(a=>a.id===s.account_id)?.name}</div>}<div className="sub"><span className="mono">{s.public_ips.join("、")}</span>{s.kind.startsWith("cbwp") ? ` · 成员 ${s.instance_ids.map(instName).join("、")}` : ""}</div></td>
                       <td>{SUBJECT_KIND[s.kind]}<div className="sub">{RULE[s.metering_rule]}{s.data_source === "agent" ? "" : ` · ${src[s.data_source]}`}</div></td>
                       <td className="num">{s.today_rx_bytes === null ? <span className="sub">—</span> : gb(s.today_rx_bytes)}</td>
                       <td className="num">{s.today_tx_bytes === null ? <span className="sub">—</span> : gb(s.today_tx_bytes)}</td>
@@ -200,18 +215,18 @@ function Subjects({ accountId, instName }: { accountId: string; instName: (id: s
   );
 }
 
-function Packages({ accountId }: { accountId: string }) {
+function Packages({ accountId,accounts }: { accountId: string;accounts:Account[] }) {
   const res = useResource(api.bandwidthPackages, []);
-  const mine = (res.data ?? []).filter((p) => p.account_id === accountId);
+  const mine = (res.data ?? []).filter((p) => accountId==="all"?accounts.some(a=>a.id===p.account_id&&a.enabled):p.account_id===accountId);
   if (!mine.length) return null;
-  return <>{mine.map((p) => <PackageHourly key={p.id} p={p} />)}</>;
+  return <>{mine.map((p) => <PackageHourly key={p.id} p={p} accountName={accountId==="all"?accounts.find(a=>a.id===p.account_id)?.name:undefined} />)}</>;
 }
 
-function PackageHourly({ p }: { p: BandwidthPackage }) {
+function PackageHourly({ p,accountName }: { p: BandwidthPackage;accountName?:string }) {
   const res = useResource(() => api.bandwidthPackageHourly(p.id), [p.id], { refreshMs: 60_000 });
   const [view, setView] = useState<View>("chart");
   return (
-    <Card title={`共享带宽 ${p.name} · 今天每小时收发`} right={<SegToggle label="显示方式" value={view} onChange={setView} options={VIEW} />}>
+    <Card title={`共享带宽 ${p.name}${accountName?`（${accountName}）`:""} · 今天每小时收发`} right={<SegToggle label="显示方式" value={view} onChange={setView} options={VIEW} />}>
       <Async res={res} lines={6}>
         {(h) => {
           if (!h.periods.length) return <EmptyState title="今天还没有数据" />;
