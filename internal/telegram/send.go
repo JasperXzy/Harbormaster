@@ -49,6 +49,35 @@ var chatPattern = regexp.MustCompile(`^(?:-?[0-9]{1,20}|@[A-Za-z0-9_]{5,64})$`)
 
 func invalid() *Failure            { return &Failure{Code: "telegram_configuration_invalid"} }
 func Validate(d Destination) error { _, err := endpoint(d); return err }
+
+// FieldErrors attributes a rejected destination to request fields without
+// echoing any submitted value. An empty map means Validate also succeeds.
+func FieldErrors(d Destination) map[string]string {
+	fields := map[string]string{}
+	if !tokenPattern.MatchString(d.Token) {
+		fields["bot_token"] = "invalid_format"
+	}
+	if !chatPattern.MatchString(d.ChatID) {
+		fields["chat_id"] = "invalid_format"
+	}
+	if d.ProxyMode != "none" && d.ProxyMode != "" && d.ProxyMode != "reverse_proxy" && d.ProxyMode != "socks5" {
+		fields["proxy_mode"] = "invalid_value"
+		return fields
+	}
+	if (d.ProxyMode == "none" || d.ProxyMode == "") && (d.ProxyUsername != "" || d.ProxyPassword != "") {
+		fields["proxy_username"] = "not_allowed"
+	} else if len(d.ProxyUsername) > 255 || len(d.ProxyPassword) > 255 || (d.ProxyUsername == "") != (d.ProxyPassword == "") {
+		fields["proxy_username"] = "invalid_format"
+	}
+	if len(fields) == 0 {
+		probe := d
+		probe.ProxyUsername, probe.ProxyPassword = "", ""
+		if Validate(probe) != nil {
+			fields["proxy_url"] = "invalid_format"
+		}
+	}
+	return fields
+}
 func endpoint(d Destination) (string, error) {
 	if !tokenPattern.MatchString(d.Token) || !chatPattern.MatchString(d.ChatID) {
 		return "", invalid()

@@ -277,15 +277,13 @@ func (s *Store) EvaluateQuotaProtection(ctx context.Context, policy model.Protec
 						d.Targets = append(d.Targets, target)
 					}
 				}
-				// One incident notification, with fixed placeholder text. No network I/O.
+				// One incident notification. No network I/O.
 				kind := "alert"
 				key := "quota_protection"
 				account := r.AccountID
-				body := "quota_protection_pending_copy"
-				if d.Simulation || r.DryRun || !evaluation.estimate.Qualified || !policy.PowerEnabled {
-					body = "quota_protection_rehearsal_pending_copy"
-				}
-				if _, e = enqueueNotification(ctx, tx, model.Notification{EventKey: fmt.Sprintf("quota:%s:%s:%d:alert", r.ID, evaluation.key, generation), Kind: kind, Severity: "warning", RuleKey: &key, Title: body, Body: body, AccountID: &account, Urgent: true}, now); e != nil {
+				rehearsal := d.Simulation || r.DryRun || !evaluation.estimate.Qualified || !policy.PowerEnabled
+				title, body := quotaProtectionCopy(ctx, tx, r, d, rehearsal)
+				if _, e = enqueueNotification(ctx, tx, model.Notification{EventKey: fmt.Sprintf("quota:%s:%s:%d:alert", r.ID, evaluation.key, generation), Kind: kind, Severity: "critical", RuleKey: &key, Title: title, Body: body, AccountID: &account, Urgent: true}, now); e != nil {
 					return e
 				}
 			} else if d.State == "triggered" && active && same {
@@ -308,7 +306,7 @@ func (s *Store) EvaluateQuotaProtection(ctx context.Context, policy model.Protec
 				active = false
 				key := "quota_protection"
 				account := r.AccountID
-				if _, e = enqueueNotification(ctx, tx, model.Notification{EventKey: fmt.Sprintf("quota:%s:%s:%d:recovery", r.ID, evaluation.key, generation), Kind: "recovery", Severity: "info", RuleKey: &key, Title: "quota_protection_recovery_pending_copy", Body: "quota_protection_recovery_pending_copy", AccountID: &account, Urgent: true}, now); e != nil {
+				if _, e = enqueueNotification(ctx, tx, model.Notification{EventKey: fmt.Sprintf("quota:%s:%s:%d:recovery", r.ID, evaluation.key, generation), Kind: "recovery", Severity: "info", RuleKey: &key, Title: severitySymbol("recovery", "info") + " " + accountCopyName(ctx, tx, account) + " 的" + copyScope(r.Scope) + "流量回到保护线以下：" + r.Name, Body: "", AccountID: &account, Urgent: true}, now); e != nil {
 					return e
 				}
 			}
@@ -407,7 +405,7 @@ func (s *Store) finishQuotaNotifications(ctx context.Context, now time.Time) err
 	}
 	for _, v := range items {
 		key := "quota_protection"
-		if _, err = enqueueNotification(ctx, tx, model.Notification{EventKey: "quota-job:" + v.job + ":finished", JobID: v.job, Kind: "alert", Severity: "warning", RuleKey: &key, Title: "quota_power_" + v.status + "_pending_copy", Body: "quota_power_" + v.status + "_pending_copy", AccountID: &v.account, InstanceID: &v.instance, Urgent: true}, now); err != nil {
+		if _, err = enqueueNotification(ctx, tx, model.Notification{EventKey: "quota-job:" + v.job + ":finished", JobID: v.job, Kind: "alert", Severity: quotaPowerSeverity(v.status), RuleKey: &key, Title: quotaPowerCopy(ctx, tx, v.instance, v.status), Body: "", AccountID: &v.account, InstanceID: &v.instance, Urgent: true}, now); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, "UPDATE quota_power_job SET final_notified=1 WHERE job_id=?", v.job); err != nil {

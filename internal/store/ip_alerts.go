@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/model"
@@ -18,13 +19,22 @@ func notifyInstanceIPChange(ctx context.Context, tx *sql.Tx, event model.Instanc
 	if err != nil || !rule.Enabled {
 		return err
 	}
-	// Wording remains a placeholder for frontend-owned templates. The complete
-	// before/after address sets remain in instance event history, not raw logs.
+	// The complete before/after address sets remain in instance event history.
+	name := event.InstanceName
+	if name == "" {
+		name = instanceCopyName(ctx, tx, event.InstanceID)
+	}
+	body := ""
+	if after, ok := event.After["addresses"].([]string); ok && len(after) > 0 {
+		body = "现在是 " + strings.Join(after, "、") + "。"
+	} else if ok {
+		body = "现在没有公网 IPv4。"
+	}
 	_, err = enqueueNotification(ctx, tx, model.Notification{
 		EventKey: "instance-event/" + event.ID,
 		Kind:     "alert", Severity: "info", RuleKey: &rule.Key,
-		Title:     "Harbormaster alert: instance_public_ip_changed",
-		Body:      "target=" + event.InstanceID + "; instance_event_id=" + event.ID,
+		Title:     severitySymbol("alert", "info") + " " + name + " 的公网 IP 变了",
+		Body:      body,
 		AccountID: &event.AccountID, InstanceID: &event.InstanceID,
 	}, now)
 	return err

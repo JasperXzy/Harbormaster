@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,6 +52,9 @@ func TestAccountAlertLifecycleIsDurableAndUnknownIsNotRecovery(t *testing.T) {
 	if len(history) != 1 || history[0].Kind != "alert" || history[0].DeliveryStatus != "not_sent" {
 		t.Fatal(history)
 	}
+	if history[0].Title != "🟠 账号 account 连不上阿里云" || !strings.HasPrefix(history[0].Body, "连续 3 次失败") {
+		t.Fatal("unexpected copy", history[0].Title, history[0].Body)
+	}
 	// A fresh configuration with no new result must not invent a recovery.
 	setAlertAccount(t, s, "never_synced", 0)
 	evaluate(t, s, now.Add(2*time.Second))
@@ -61,7 +65,7 @@ func TestAccountAlertLifecycleIsDurableAndUnknownIsNotRecovery(t *testing.T) {
 	evaluate(t, s, now.Add(3*time.Second))
 	evaluate(t, s, now.Add(4*time.Second))
 	history = alertHistory(t, s)
-	if len(history) != 2 || history[0].Kind != "recovery" {
+	if len(history) != 2 || history[0].Kind != "recovery" || history[0].Title != "🟢 账号 account 恢复连接" || history[0].Body != "" {
 		t.Fatal(history)
 	}
 	setAlertAccount(t, s, "failing", 3)
@@ -163,8 +167,11 @@ func TestAgentOfflineNeedsFreshBaselineAndRunningManagedInstance(t *testing.T) {
 	evaluate(t, s, now.Add(30*time.Second))
 	evaluate(t, s, now.Add(40*time.Second))
 	history := alertHistory(t, s)
-	if len(history) != 1 || history[0].InstanceID == nil || *history[0].InstanceID != "ecs" {
+	if len(history) != 1 || history[0].InstanceID == nil || *history[0].InstanceID != "ecs" || history[0].Severity != "critical" {
 		t.Fatal(history)
+	}
+	if !strings.HasPrefix(history[0].Title, "🔴 ") || !strings.HasSuffix(history[0].Title, " 的采集程序掉线了") || !strings.HasPrefix(history[0].Body, "已经 30 秒没有收到上报。") || strings.Contains(history[0].Body, "估算") {
+		t.Fatal("unexpected copy", history[0].Title, history[0].Body)
 	}
 	if _, err = s.DB.Exec("UPDATE instance SET status='stopped' WHERE id='ecs'"); err != nil {
 		t.Fatal(err)

@@ -73,3 +73,58 @@ func TestNotificationReadsRequireSessionAndDoNotRevealSecrets(t *testing.T) {
 		t.Fatal("read endpoint created work")
 	}
 }
+
+func TestTelegramWritesAreProtectedWriteOnlyAndQueueTests(t *testing.T) {
+	p := testPanel(t)
+	cookie, csrf := setupPanel(t, p)
+	box, _ := security.NewBox(bytes.Repeat([]byte{5}, 32))
+	p.engine = &collect.Engine{Store: p.s, Box: box}
+	const token = "123456789:TEST_ONLY_not_a_real_bot_token"
+	body := map[string]any{"bot_token": token, "chat_id": "-100123456789", "proxy_mode": "reverse_proxy", "proxy_url": "https://tg.example", "proxy_username": "private-user", "proxy_password": "private-pass"}
+	if w := panelRequest(p, "PUT", "/notify/telegram", body, cookie, ""); w.Code != 403 {
+		t.Fatal("missing CSRF accepted", w.Code)
+	}
+	if w := panelRequest(p, "POST", "/notify/telegram/test", nil, cookie, csrf); w.Code != 409 || !strings.Contains(w.Body.String(), "telegram_not_configured") {
+		t.Fatal(w.Code, w.Body)
+	}
+	w := panelRequest(p, "PUT", "/notify/telegram", body, cookie, csrf)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"status":"not_tested"`) || !strings.Contains(w.Body.String(), `"proxy_auth_set":true`) {
+		t.Fatal(w.Code, w.Body)
+	}
+	for _, secret := range []string{token, "private-user", "private-pass"} {
+		if strings.Contains(w.Body.String(), secret) {
+			t.Fatal("update response exposed a secret")
+		}
+	}
+	// Omitting the token and auth keeps both while the proxy is unchanged.
+	w = panelRequest(p, "PUT", "/notify/telegram", map[string]any{"chat_id": "-100777", "proxy_mode": "reverse_proxy", "proxy_url": "https://tg.example"}, cookie, csrf)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"proxy_auth_set":true`) || !strings.Contains(w.Body.String(), `"chat_id":"-100777"`) {
+		t.Fatal(w.Code, w.Body)
+	}
+	w = panelRequest(p, "PUT", "/notify/telegram", map[string]any{"chat_id": "-100777", "proxy_mode": "none", "proxy_url": ""}, cookie, csrf)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"proxy_auth_set":false`) {
+		t.Fatal(w.Code, w.Body)
+	}
+	w = panelRequest(p, "PUT", "/notify/telegram", map[string]any{"chat_id": "nope", "proxy_mode": "none", "proxy_url": ""}, cookie, csrf)
+	if w.Code != 422 || !strings.Contains(w.Body.String(), `"chat_id":"invalid_format"`) {
+		t.Fatal(w.Code, w.Body)
+	}
+	if w = panelRequest(p, "PUT", "/notify/telegram", map[string]any{"proxy_mode": "none", "proxy_url": ""}, cookie, csrf); w.Code != 422 {
+		t.Fatal(w.Code)
+	}
+	w = panelRequest(p, "POST", "/notify/telegram/test", nil, cookie, csrf)
+	var accepted struct {
+		JobID string `json:"job_id"`
+	}
+	if w.Code != 202 || json.Unmarshal(w.Body.Bytes(), &accepted) != nil || accepted.JobID == "" {
+		t.Fatal(w.Code, w.Body)
+	}
+	again := panelRequest(p, "POST", "/notify/telegram/test", nil, cookie, csrf)
+	if again.Code != 202 || !strings.Contains(again.Body.String(), accepted.JobID) {
+		t.Fatal("duplicate unfinished test created another job", again.Body)
+	}
+	items, err := p.s.Notifications(context.Background(), 0, 10)
+	if err != nil || len(items) != 1 || items[0].Kind != "test" || items[0].DeliveryStatus != "pending" || items[0].Title != telegramTestTitle {
+		t.Fatal(items, err)
+	}
+}

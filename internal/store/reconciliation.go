@@ -181,14 +181,16 @@ func reconcileCDT(ctx context.Context, tx *sql.Tx, a model.Account, scope string
 	if rule.Enabled && wasActive != progress.active {
 		kind := "alert"
 		severity := "warning"
-		text := "cdt_estimation_deviation_pending_copy"
+		title := severitySymbol(kind, severity) + " " + accountCopyName(ctx, tx, a.ID) + " 的" + copyScope(scope) + "实时估算和官方数值相差较大"
+		body := "连续几次对账偏差超过 10%，估算可能不准，请留意官方数值。"
 		if !progress.active {
 			kind = "recovery"
 			severity = "info"
-			text = "cdt_estimation_deviation_recovery_pending_copy"
+			title = severitySymbol(kind, severity) + " " + accountCopyName(ctx, tx, a.ID) + " 的" + copyScope(scope) + "实时估算恢复准确"
+			body = ""
 		}
 		key := "cdt_estimation_deviation"
-		if _, err = enqueueNotification(ctx, tx, model.Notification{EventKey: fmt.Sprintf("reconcile:%s:%s:%d:%d:%s:%d:%s", a.ID, scope, a.CredentialVersion, a.Revision, progress.cycle, progress.episode, kind), Kind: kind, Severity: severity, RuleKey: &key, AccountID: &a.ID, Title: text, Body: text, Urgent: true}, now); err != nil {
+		if _, err = enqueueNotification(ctx, tx, model.Notification{EventKey: fmt.Sprintf("reconcile:%s:%s:%d:%d:%s:%d:%s", a.ID, scope, a.CredentialVersion, a.Revision, progress.cycle, progress.episode, kind), Kind: kind, Severity: severity, RuleKey: &key, AccountID: &a.ID, Title: title, Body: body, Urgent: true}, now); err != nil {
 			return err
 		}
 	}

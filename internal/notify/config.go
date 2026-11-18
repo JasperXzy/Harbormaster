@@ -69,5 +69,66 @@ func (c Channels) Replace(ctx context.Context, d telegram.Destination, expectedR
 	if err != nil {
 		return model.TelegramChannelState{}, ErrConfiguration
 	}
-	return c.Store.SaveTelegramChannel(ctx, sealed, expectedRevision, now)
+	// Only field names reach the audit journal; values are compared in memory.
+	details := model.AuditDetails{ChangedFields: []string{}}
+	for _, f := range []struct {
+		name    string
+		changed bool
+	}{{"chat_id", previous.ChatID != d.ChatID}, {"proxy_mode", previous.ProxyMode != d.ProxyMode}, {"proxy_url", previous.ProxyURL != d.ProxyURL}} {
+		if f.changed {
+			details.ChangedFields = append(details.ChangedFields, f.name)
+		}
+	}
+	details.CredentialsChanged = previous.Token != d.Token || previous.ProxyUsername != d.ProxyUsername || previous.ProxyPassword != d.ProxyPassword
+	return c.Store.SaveTelegramChannel(ctx, sealed, expectedRevision, details, now)
+}
+
+// Update is the browser write path. Omitted secrets are write-only "keep"
+// markers. User-confirmed proxy rule: saved authentication survives only while
+// the proxy mode and address are unchanged; any change clears it unless new
+// authentication is supplied in the same request. Both empty strings clear it.
+type Update struct {
+	BotToken      *string
+	ChatID        string
+	ProxyMode     string
+	ProxyURL      string
+	ProxyUsername *string
+	ProxyPassword *string
+}
+
+// FieldError reports invalid request fields by name only, never by value.
+type FieldError struct{ Fields map[string]string }
+
+func (e *FieldError) Error() string { return "validation_failed" }
+
+func (c Channels) Update(ctx context.Context, in Update, now time.Time) (model.TelegramChannelState, error) {
+	previous, state, err := c.Load(ctx)
+	configured := err == nil
+	if err != nil && !errors.Is(err, store.ErrTelegramNotConfigured) {
+		return state, err
+	}
+	d := telegram.Destination{ChatID: in.ChatID, ProxyMode: in.ProxyMode, ProxyURL: in.ProxyURL}
+	if d.ProxyMode == "none" {
+		d.ProxyURL = ""
+	}
+	switch {
+	case in.BotToken != nil:
+		d.Token = *in.BotToken
+	case configured:
+		d.Token = previous.Token
+	default:
+		return state, &FieldError{Fields: map[string]string{"bot_token": "required"}}
+	}
+	if (in.ProxyUsername == nil) != (in.ProxyPassword == nil) {
+		return state, &FieldError{Fields: map[string]string{"proxy_password": "required"}}
+	}
+	if in.ProxyUsername != nil {
+		d.ProxyUsername, d.ProxyPassword = *in.ProxyUsername, *in.ProxyPassword
+	} else if configured && previous.ProxyMode == d.ProxyMode && previous.ProxyURL == d.ProxyURL {
+		d.ProxyUsername, d.ProxyPassword = previous.ProxyUsername, previous.ProxyPassword
+	}
+	if fields := telegram.FieldErrors(d); len(fields) > 0 {
+		return state, &FieldError{Fields: fields}
+	}
+	return c.Replace(ctx, d, state.Revision, now)
 }

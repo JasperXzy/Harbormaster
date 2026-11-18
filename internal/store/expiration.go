@@ -43,7 +43,7 @@ func checkExpirationSnapshots(ctx context.Context, tx *sql.Tx, account string, s
 						state = renewal["status"].(string)
 					}
 				}
-				o.detail = "expires_at=" + o.basis + "; renewal_status=" + state
+				o.facts = alertFacts{expiresAt: &at, renewal: state}
 			}
 		}
 		if err := applyAlert(ctx, tx, o, now); err != nil {

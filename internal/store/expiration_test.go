@@ -48,7 +48,7 @@ func TestExpirationRequiresFreshSnapshotAndRecoversAfterRenewal(t *testing.T) {
 		t.Fatal(err)
 	}
 	history := alertHistory(t, s)
-	if len(history) != 1 || history[0].Kind != "alert" || history[0].DeliveryStatus != "pending" || !strings.Contains(history[0].Body, "auto_renewal") {
+	if len(history) != 1 || history[0].Kind != "alert" || history[0].DeliveryStatus != "pending" || !strings.Contains(history[0].Body, "已开自动续费") {
 		t.Fatal(history)
 	}
 	if err := expiryScan(t, s, fresh.Add(time.Second), "subscription", expiry); err != nil {

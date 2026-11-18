@@ -9,6 +9,7 @@
 # 不在本文件内：hm-agent 与 hm-server 之间的上报协议、数据库结构（见 WORK_SPLIT 第 2 节）。
 #
 # ── 变更记录 ────────────────────────────────────────────────────────────────
+# 2026-11-19  Telegram delivery: implement PUT /notify/telegram and POST /notify/telegram/test, add write-only proxy_username/proxy_password. User-confirmed proxy rule: omitted authentication is kept only while proxy mode and address are unchanged. A production dispatcher now sends pending notifications. User-confirmed retry policy: only provable non-delivery (request never written) and 429 are retried, at most 5 attempts; an uncertain outcome or an expired send lease stops as failed with has_uncertain_attempt=true and telegram_delivery_uncertain, never resent automatically. Notification title/body now follow docs/design/telegram-templates.md; clauses depending on unavailable estimation are omitted. CDT usage threshold alerts stay disabled until units are verified (user-confirmed).
 # 2026-11-18  Frontend integration: correct nullable object schemas and quote the quota outcome description so OpenAPI type generation accepts the existing backend contract; no response behavior changes.
 # 2026-11-18  CDT reconciliation: add paginated local /traffic/reconciliations and QuotaStatus.reconciliation. Compare predicted and official usage at the same trusted cutoff/period, using actual fully covered intervals only; boundary upper allocations, projections, unknown topology/eligibility and repeated/regressed cutoffs do not count as precise comparisons. Default deviation trigger needs three distinct comparable >10% observations; recovery also needs three comparable healthy observations by explicit user confirmation, denominator official; 0/0 is healthy and nonzero/0 has no finite ratio. Existing /alert-rules omits the new rule unless include_reconciliation=true to preserve the current frontend fixed dictionary. No GET queries clouds.
 # 2026-11-18  Quota protection: add session-only rule CRUD, expiring account/scope simulations, durable decision history/status and temporary instance exemptions. Rules explicitly choose threshold/action/targets/stop mode/reserve/dry-run. Unverified sources and simulations can only rehearse; disabled power creates terminal local records, never latent cloud jobs. Automatic sends re-evaluate in the dispatch transaction, require known server identity, apply exemptions and a persisted default 3-per-10-minute per-instance budget. Host binding is deployment configuration outside DB backups.
@@ -2893,6 +2894,7 @@ paths:
       tags: [notify]
       operationId: updateTelegramChannel
       summary: 保存 Telegram 渠道设置
+      description: Session+CSRF. Saving a changed configuration resets status to not_tested, fails unsent queued notifications with telegram_configuration_changed (never redirects them to the new chat) and records telegram_channel_updated in the audit journal with field names and a credentials_changed marker only. Saving identical values is a no-op.
       requestBody:
         required: true
         content:
@@ -2908,8 +2910,20 @@ paths:
                 $ref: "#/components/schemas/TelegramChannel"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: 并发修改（`telegram_configuration_changed`）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "422":
           $ref: "#/components/responses/ValidationFailed"
+        "503":
+          description: 主密钥不可用，无法加密保存（`telegram_configuration_unavailable`）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /notify/telegram/test:
     post:
@@ -2919,7 +2933,7 @@ paths:
       tags: [notify]
       operationId: sendTelegramTest
       summary: 发送一条测试消息
-      description: 用已保存的设置发送。任务失败时 `Job.error.code` 说明原因（如 `telegram_unauthorized`、`telegram_chat_not_found`、`telegram_unreachable`）。
+      description: 用已保存的设置发送。任务失败时 `Job.error.code` 说明原因（如 `telegram_unauthorized`、`telegram_chat_not_found`、`telegram_unreachable`、`telegram_rate_limited`、`telegram_proxy_unauthorized`、`telegram_delivery_uncertain`）。An unfinished test is reused instead of queueing another. Tests bypass quiet hours.
       responses:
         "202":
           $ref: "#/components/responses/JobAccepted"
@@ -3249,8 +3263,8 @@ components:
           properties:
             kind: {type: string, enum: [admin, api_key, cli, telegram, system]}
             id: {type: string, nullable: true, description: Validated internal API-key ID when applicable; never the token. Null for the single administrator and system/CLI sources.}
-        action: {type: string, description: "Stable codes include account_created/account_updated/account_disabled; alert_rule_updated; quiet_hours_updated; branding_updated; probe_target_created/updated/deleted; probe_plan_created/updated/deleted; trace_schedule_updated; api_key_created/revoked; agent_registration_issued/agent_registered/agent_revoked; instance_power_requested/started/dispatch_started/dispatch_recorded/finished."}
-        target_type: {type: string, description: account / alert_rule / quiet_hours / branding / probe_target / probe_plan / trace_schedule / api_key / instance}
+        action: {type: string, description: "Stable codes include account_created/account_updated/account_disabled; alert_rule_updated; quiet_hours_updated; telegram_channel_updated; branding_updated; probe_target_created/updated/deleted; probe_plan_created/updated/deleted; trace_schedule_updated; api_key_created/revoked; agent_registration_issued/agent_registered/agent_revoked; instance_power_requested/started/dispatch_started/dispatch_recorded/finished."}
+        target_type: {type: string, description: account / alert_rule / quiet_hours / telegram_channel / branding / probe_target / probe_plan / trace_schedule / api_key / instance}
         target_id: {type: string}
         account_id: {type: string, nullable: true}
         job_id: {type: string, nullable: true, description: Links operation evidence to its persistent task; not proof of cloud success.}
@@ -6034,17 +6048,27 @@ components:
 
     TelegramChannelUpdate:
       type: object
+      additionalProperties: false
       required: [chat_id, proxy_mode, proxy_url]
       properties:
         bot_token:
           type: string
-          description: 不传表示保留已保存的 Token。
+          description: 不传表示保留已保存的 Token；首次保存必须提供。
         chat_id:
           type: string
         proxy_mode:
           $ref: "#/components/schemas/TelegramProxyMode"
         proxy_url:
           type: string
+          description: Must be empty when proxy_mode is none. reverse_proxy requires https without credentials/query; socks5 requires socks5://host:port.
+        proxy_username:
+          type: string
+          maxLength: 255
+          description: Write-only; send together with proxy_password. Omit both to keep saved authentication only while proxy_mode and proxy_url are unchanged; changing either clears saved authentication unless new values are sent in the same request. Two empty strings clear it explicitly.
+        proxy_password:
+          type: string
+          maxLength: 255
+          description: Write-only; see proxy_username.
 
     AlertRuleKey:
       type: string

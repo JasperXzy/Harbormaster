@@ -27,7 +27,7 @@ func channelFixture(t *testing.T, s *Store, revision int64, now time.Time) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.SaveTelegramChannel(context.Background(), sealed, revision, now); err != nil {
+	if _, err = s.SaveTelegramChannel(context.Background(), sealed, revision, model.AuditDetails{}, now); err != nil {
 		t.Fatal(err)
 	}
 }

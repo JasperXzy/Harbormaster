@@ -29,7 +29,7 @@ func checkBalanceObservation(ctx context.Context, tx *sql.Tx, a model.Account, o
 		o := alertObservation{rule: rule.Key, target: a.ID, account: a.ID, outcome: "healthy"}
 		if balance.Cmp(limit) < 0 {
 			o.outcome = "firing"
-			o.detail = "available_amount=" + observation.Balance.Available + "; currency=" + threshold.Currency + "; threshold=" + threshold.Amount
+			o.facts = alertFacts{amount: observation.Balance.Available, currency: threshold.Currency, limit: threshold.Amount}
 		}
 		return applyAlert(ctx, tx, o, observation.FetchedAt)
 	}

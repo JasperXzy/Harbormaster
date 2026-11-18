@@ -52,7 +52,7 @@ func TestRestoreWithNewMasterCancelsOldWorkAndPreservesHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	channel, _ := old.Encrypt([]byte("restore-channel-fixture"), model.TelegramCredentialOwner)
-	if _, err := s.SaveTelegramChannel(ctx, channel, 0, now); err != nil {
+	if _, err := s.SaveTelegramChannel(ctx, channel, 0, model.AuditDetails{}, now); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.EnqueueTelegramTest(ctx, "test placeholder", "test placeholder", now); err != nil {

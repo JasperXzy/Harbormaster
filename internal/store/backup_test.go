@@ -29,7 +29,7 @@ func TestCopyReencryptionRollsBackOnInvalidChannelCiphertext(t *testing.T) {
 		t.Fatal(err)
 	}
 	badChannel, _ := old.Encrypt([]byte("test-channel"), "wrong-owner")
-	if _, err := s.SaveTelegramChannel(ctx, badChannel, 0, time.Now()); err != nil {
+	if _, err := s.SaveTelegramChannel(ctx, badChannel, 0, model.AuditDetails{}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.DB.Exec("INSERT INTO session VALUES(x'01','2099-01-01T00:00:00Z')"); err != nil {
@@ -50,7 +50,7 @@ func TestCopyReencryptionRollsBackOnInvalidChannelCiphertext(t *testing.T) {
 		t.Fatal("session deletion escaped rollback", err)
 	}
 	goodChannel, _ := old.Encrypt([]byte("test-channel"), model.TelegramCredentialOwner)
-	if _, err := s.SaveTelegramChannel(ctx, goodChannel, 1, time.Now()); err != nil {
+	if _, err := s.SaveTelegramChannel(ctx, goodChannel, 1, model.AuditDetails{}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.ReencryptCopy(ctx, old, newKey); err != nil {

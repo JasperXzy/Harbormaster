@@ -14,7 +14,7 @@ import (
 type alertObservation struct {
 	rule, target, account, instance, plan, resource string
 	outcome                                         string // firing, healthy, unknown; absent targets are no longer applicable.
-	detail                                          string
+	facts                                           alertFacts
 	basis                                           string
 }
 
@@ -89,7 +89,10 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 			}
 			if a.SyncStatus == "failing" && a.ConsecutiveFailures >= *r.Params.ConsecutiveFailures {
 				o.outcome = "firing"
-				o.detail = "recorded_consecutive_failures=" + strconv.Itoa(a.ConsecutiveFailures)
+				o.facts = alertFacts{failures: a.ConsecutiveFailures, since: a.LastSyncAt}
+				if a.LastError != nil {
+					o.facts.reason = a.LastError.Code
+				}
 			}
 			observations = append(observations, o)
 		}
@@ -123,7 +126,7 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 			}
 			if failures >= *r.Params.ConsecutiveFailures {
 				o.outcome = "firing"
-				o.detail = "recorded_consecutive_failures=" + strconv.Itoa(failures)
+				o.facts = alertFacts{failures: failures}
 			}
 			observations = append(observations, o)
 		}
@@ -147,7 +150,7 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 				o.outcome = "healthy"
 				if !now.Before(at.Add(time.Duration(*r.Params.OfflineAfterSeconds) * time.Second)) {
 					o.outcome = "firing"
-					o.detail = "seconds_since_fresh_report=" + strconv.FormatInt(int64(now.Sub(*at)/time.Second), 10)
+					o.facts = alertFacts{offline: now.Sub(*at)}
 				}
 			}
 			observations = append(observations, o)
@@ -263,11 +266,9 @@ func applyAlert(ctx context.Context, tx *sql.Tx, o alertObservation, now time.Ti
 	}
 	kind := "recovery"
 	severity := "info"
-	detail := "source_observed_healthy"
 	if firing {
 		episode++
 		kind = "alert"
-		detail = o.detail
 		switch o.rule {
 		case "agent_offline":
 			severity = "critical"
@@ -281,7 +282,8 @@ func applyAlert(ctx context.Context, tx *sql.Tx, o alertObservation, now time.Ti
  ON CONFLICT(rule_key,target_id) DO UPDATE SET account_id=excluded.account_id,active=excluded.active,episode=excluded.episode,changed_at=excluded.changed_at,basis=excluded.basis`, o.rule, o.target, o.account, firing, episode, timestamp(now), o.basis); err != nil {
 		return err
 	}
-	n := model.Notification{EventKey: "alert/" + o.rule + "/" + o.target + "/" + strconv.FormatInt(episode, 10) + "/" + kind, Kind: kind, Severity: severity, RuleKey: &o.rule, Title: "Harbormaster " + kind + ": " + o.rule, Body: "target=" + o.target + "; " + detail}
+	n := model.Notification{EventKey: "alert/" + o.rule + "/" + o.target + "/" + strconv.FormatInt(episode, 10) + "/" + kind, Kind: kind, Severity: severity, RuleKey: &o.rule}
+	n.Title, n.Body = alertCopy(ctx, tx, o, kind, severity, now)
 	if o.plan != "" {
 		n.ProbePlanID = &o.plan
 	}

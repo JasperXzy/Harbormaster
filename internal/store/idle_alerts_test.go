@@ -41,7 +41,7 @@ func TestIdleAlertRequiresFreshKnownEvidenceAndDeduplicatesEpisodes(t *testing.T
 	c := idleFixture("eip", "eip-one", now)
 	saveEventScan(t, s, idleScan("eip", now, 1, nil, c), now)
 	first := idleHistory(t, s)
-	if len(first) != 1 || first[0].ResourceID == nil || *first[0].ResourceID != c.ID || first[0].InstanceID != nil || first[0].AccountID == nil || *first[0].AccountID != "a" || first[0].Kind != "alert" || first[0].Urgent || first[0].Severity != "warning" || first[0].DeliveryStatus != "not_sent" || !strings.Contains(first[0].Body, "monthly_cost=unestimated") || strings.Contains(first[0].Body, c.Name) {
+	if len(first) != 1 || first[0].ResourceID == nil || *first[0].ResourceID != c.ID || first[0].InstanceID != nil || first[0].AccountID == nil || *first[0].AccountID != "a" || first[0].Kind != "alert" || first[0].Urgent || first[0].Severity != "warning" || first[0].DeliveryStatus != "not_sent" || !strings.Contains(first[0].Title, c.Name) || !strings.Contains(first[0].Body, "没有绑定任何实例") || strings.Contains(first[0].Body, "元") {
 		t.Fatal(first)
 	}
 	for minute := 1; minute <= 2; minute++ {

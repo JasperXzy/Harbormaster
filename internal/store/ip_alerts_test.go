@@ -54,7 +54,7 @@ func TestPublicIPChangeRecordsEachEventWithoutRecovery(t *testing.T) {
 			if err := s.DB.QueryRow("SELECT id FROM instance_event WHERE json_extract(payload_json,'$.kind')='public_ipv4_changed' ORDER BY sequence DESC LIMIT 1").Scan(&eventID); err != nil {
 				t.Fatal(err)
 			}
-			if history[0].EventKey != "instance-event/"+eventID || !strings.Contains(history[0].Body, eventID) {
+			if history[0].EventKey != "instance-event/"+eventID || !strings.Contains(history[0].Body, "192.0.2.3") {
 				t.Fatal("notice not tied to durable event", history[0])
 			}
 			// Returning to an old IP set and removing all IPs are separate changes.

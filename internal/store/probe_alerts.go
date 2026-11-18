@@ -323,7 +323,7 @@ func checkProbeResultAlerts(ctx context.Context, tx *sql.Tx, jobID string, now t
 		o := base
 		o.rule = key
 		o.outcome = outcome
-		o.detail = "probe_run_id=" + run.ID + "; value=" + strconv.FormatFloat(value, 'f', -1, 64) + "; threshold=" + strconv.FormatFloat(policy.threshold, 'f', -1, 64)
+		o.facts = alertFacts{value: value, threshold: policy.threshold}
 		if err = applyAlert(ctx, tx, o, now); err != nil {
 			return err
 		}

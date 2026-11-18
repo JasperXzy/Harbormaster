@@ -76,7 +76,7 @@ func checkIdleObservation(ctx context.Context, tx *sql.Tx, a model.Account, o mo
  VALUES(?,?,?,?,?,nullif(?,''),?) ON CONFLICT(target_id) DO UPDATE SET instance_id=excluded.instance_id,last_observed_at=excluded.last_observed_at`, c.ID, a.ID, o.Region, o.Kind, c.CloudID, instance, timestamp(o.QueriedAt)); err != nil {
 			return err
 		}
-		if err := applyAlert(ctx, tx, alertObservation{rule: rule.Key, target: c.ID, account: a.ID, instance: instance, resource: c.ID, outcome: "firing", detail: "kind=" + c.Kind + "; reason=" + c.Reason + "; monthly_cost=unestimated"}, now); err != nil {
+		if err := applyAlert(ctx, tx, alertObservation{rule: rule.Key, target: c.ID, account: a.ID, instance: instance, resource: c.ID, outcome: "firing", facts: alertFacts{resourceKind: c.Kind, resourceName: c.Name, resourceReason: c.Reason}}, now); err != nil {
 			return err
 		}
 	}

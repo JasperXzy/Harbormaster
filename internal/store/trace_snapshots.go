@@ -232,7 +232,7 @@ func notifyTraceChange(ctx context.Context, tx *sql.Tx, run model.TraceSnapshot,
 	if err != nil || !rule.Enabled {
 		return nil, err
 	}
-	n := model.Notification{EventKey: "trace-snapshot/" + run.ID, Kind: "alert", Severity: "info", RuleKey: &rule.Key, ProbePlanID: &run.PlanID, Title: "Harbormaster alert: network_route_change", Body: "probe_plan_id=" + run.PlanID + "; trace_snapshot_id=" + run.ID}
+	n := model.Notification{EventKey: "trace-snapshot/" + run.ID, Kind: "alert", Severity: "info", RuleKey: &rule.Key, ProbePlanID: &run.PlanID, Title: severitySymbol("alert", "info") + " " + planCopyName(ctx, tx, run.PlanID) + " 的线路变了", Body: "每日线路快照和上一次相比，经过的网络（ASN）不同了。"}
 	if base.account != "" {
 		n.AccountID = &base.account
 	}

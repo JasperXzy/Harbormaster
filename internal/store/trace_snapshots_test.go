@@ -32,7 +32,7 @@ func newSnapshotFixture(t *testing.T) *snapshotFixture {
 	// cancellation. No sender is started by these store tests.
 	box, _ := security.NewBox(make([]byte, 32))
 	cipher, _ := box.Encrypt([]byte("test-only-channel"), model.TelegramCredentialOwner)
-	if _, err := s.SaveTelegramChannel(context.Background(), cipher, 0, now); err != nil {
+	if _, err := s.SaveTelegramChannel(context.Background(), cipher, 0, model.AuditDetails{}, now); err != nil {
 		t.Fatal(err)
 	}
 	target, err := s.SaveNetworkTarget(context.Background(), "", model.NetworkTarget{Name: "synthetic target", Kind: "custom", Host: new("trace.invalid"), TCPPort: new(443), Enabled: true}, now)

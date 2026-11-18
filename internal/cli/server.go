@@ -33,6 +33,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/retention"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
+	"github.com/JasperXzy/harbormaster/internal/telegram"
 	"github.com/JasperXzy/harbormaster/internal/traceinfo"
 	"github.com/JasperXzy/harbormaster/internal/ui"
 )
@@ -323,6 +324,13 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 		}()
 		go func() { defer workers.Done(); (probes.Runner{Store: s, Log: log}).Run(workerCtx) }()
 		go func() { defer workers.Done(); (notify.Evaluator{Store: s, Log: log}).Run(workerCtx) }()
+		if engine.Box != nil {
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				(notify.Dispatcher{Channels: notify.Channels{Store: s, Box: engine.Box}, Sender: telegram.Sender{}, Log: log}).Run(workerCtx)
+			}()
+		}
 		go func() {
 			defer workers.Done()
 			(retention.Runner{Store: s, Days: c.ProbeHistoryRetentionDays, Log: log}).Run(workerCtx)

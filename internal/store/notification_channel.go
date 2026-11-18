@@ -37,7 +37,7 @@ func (s *Store) TelegramChannel(ctx context.Context) ([]byte, model.TelegramChan
 
 // SaveTelegramChannel only receives ciphertext. It fences queued/in-flight
 // sends against recipient or credential changes in the same transaction.
-func (s *Store) SaveTelegramChannel(ctx context.Context, ciphertext []byte, expectedRevision int64, now time.Time) (model.TelegramChannelState, error) {
+func (s *Store) SaveTelegramChannel(ctx context.Context, ciphertext []byte, expectedRevision int64, details model.AuditDetails, now time.Time) (model.TelegramChannelState, error) {
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return model.TelegramChannelState{}, err
@@ -61,6 +61,10 @@ func (s *Store) SaveTelegramChannel(ctx context.Context, ciphertext []byte, expe
 		return state, err
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE notification SET delivery_status='failed',last_error_code='telegram_configuration_changed',uncertain=(lease_owner IS NOT NULL),lease_owner=NULL,lease_until=0 WHERE delivery_status='pending'`); err != nil {
+		return state, err
+	}
+	details.Revision = &state.Revision
+	if err = appendAudit(ctx, tx, auditEvent{Action: "telegram_channel_updated", TargetType: "telegram_channel", TargetID: "1", Details: details}, now); err != nil {
 		return state, err
 	}
 	return state, tx.Commit()

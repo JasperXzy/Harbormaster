@@ -58,7 +58,7 @@ func TestLegacyBindingValidatesAccountAndTelegramCiphertextsBeforeAdoption(t *te
 				t.Fatal(err)
 			}
 			if withTelegram {
-				_, err = s.SaveTelegramChannel(ctx, ciphertext, 0, time.Now())
+				_, err = s.SaveTelegramChannel(ctx, ciphertext, 0, model.AuditDetails{}, time.Now())
 			} else {
 				_, err = s.DB.Exec("INSERT INTO credential VALUES(?,?,'now')", owner, ciphertext)
 			}

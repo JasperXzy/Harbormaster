@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"database/sql"
-	"strconv"
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/model"
@@ -34,7 +33,7 @@ func checkBandwidthSnapshots(ctx context.Context, tx *sql.Tx, account string, sn
 		o := alertObservation{rule: rule.Key, target: snapshot.ID, account: account, instance: snapshot.ID, outcome: "healthy"}
 		if limited {
 			o.outcome = "firing"
-			o.detail = "configured_public_outbound_mbps=" + strconv.FormatInt(public, 10) + "; specification_tx_kbps=" + strconv.FormatInt(spec, 10)
+			o.facts = alertFacts{publicMbps: public, specKbps: spec}
 		}
 		if err := applyAlert(ctx, tx, o, now); err != nil {
 			return err

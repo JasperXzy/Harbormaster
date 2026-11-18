@@ -36,7 +36,7 @@ func TestExportRekeysWALCredentialsAndClearsOnlyCopySessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	telegram, _ := master.Encrypt([]byte("private-test-telegram-not-real"), model.TelegramCredentialOwner)
-	if _, err := s.SaveTelegramChannel(ctx, telegram, 0, time.Now()); err != nil {
+	if _, err := s.SaveTelegramChannel(ctx, telegram, 0, model.AuditDetails{}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.DB.Exec("INSERT INTO session VALUES(x'01','2099-01-01T00:00:00Z')"); err != nil {
