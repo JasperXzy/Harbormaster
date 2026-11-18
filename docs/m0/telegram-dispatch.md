@@ -61,6 +61,15 @@ npm run build / build:mock     通过
 
 新增测试覆盖：成功只发一次并记录渠道健康；明确未发送与 429 的退避时刻；结果不确定不重发；崩溃留下的过期租约不重发；永久拒绝和次数用尽；测试任务结果；Token 保留、同地址保留认证、换地址清除认证、半份认证拒绝、错误不回显秘密、审计不含秘密；API 的 CSRF、写后只读响应、校验错误和测试任务复用；告警正文与恢复正文。所有测试都使用替身发送器，没有联系真实 Telegram。
 
-## 生产状态
+## 生产发布
 
-部署前只读检查：生产库没有 Telegram 渠道；已有 3 条通知（1 条到期、2 条规格带宽）均为 not_sent。新 worker 不会补发这些历史记录。用户在通知页保存 Bot Token 和 Chat ID 并点“发送测试消息”之后，新产生的告警才会实际发送。
+2026-11-18 经用户同意上线。后端 `c6aad45`，版本 `0.1.0-trial.20261118.6`，镜像 `harbormaster-server:trial-c6aad45`；前端 `1a24557`。
+
+- 只从已提交的 cmd/、internal/、go.mod/go.sum 和后端部署文件导出源包，在 main-server 上用 `deploy/Dockerfile` 构建。镜像内 version 与提交一致，`deploy/check-container.sh` 通过（非 root、就绪、代理头、密钥不进日志、云写关闭）。
+- 切换前用 SQLite 在线备份 API 写入 `/var/backups/harbormaster/telegram-c6aad45/`（0700 目录、0600 文件），`integrity_check=ok`，同时保存原 runtime.env。外部主密钥没有复制或改动。本次没有新迁移。
+- 只把 runtime.env 的 HM_IMAGE 换成新镜像，原两个 Compose 文件不变，单独重建 hm-server。
+- 切换后：容器 healthy，UID 65532、根文件系统只读；HM_DEV、电源、释放三个开关均为 false；启动日志 `cloud_writes:false`；本机与公网 readyz 200；两台 agent 继续在数秒内上报。
+- 前端先把新哈希资源 `index-Dx4L4YRL.js` 加入原发布目录，再原子替换 index.html；旧入口备份在 `/var/backups/harbormaster/frontend-1a24557/index.html`。公网入口、资源和 /notify 均返回 200。未登录访问新写接口返回 401。
+- 回退：把 runtime.env 换回 `trial-dd24027` 后重建，并恢复上面的 index.html。没有迁移，不需要恢复数据库。
+
+上线时生产库还没有 Telegram 渠道；已有 3 条通知（1 条到期、2 条规格带宽）都是 not_sent，worker 不会补发。真实送达还没有验证：需要用户在通知页保存 Bot Token 和 Chat ID，然后点“发送测试消息”。

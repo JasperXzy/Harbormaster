@@ -55,7 +55,7 @@
 | F7.1、F7.5 | 刷新与权限查询已走持久队列；任务列表/详情、分页筛选和来源记录已实现。固定开机/关机/重启、持久任务、入队保存意图、独立 worker、状态确认和管理员提交接口已模拟测试；serve 显式配置开启后可执行，默认关闭，真实操作未验收。[任务记录](job-history.md)、[电源调用](instance-power.md) |
 | F7.2、F7.3 | 换 EIP、创建 ECS 未实现，也未执行真实操作。 |
 | F7.4 | 固定调用层、影响缓存/管理员预览、持久任务、执行/确认及管理员提交 API/serve 接入已实现并本地模拟测试；默认独立开关关闭，run-once/M0 不执行。仅已停止 PostPaid ECS，精确名称/影响确认、与电源互斥、一次发送边界、不重放和恢复取消。受理后完整定向零行才记录 not_found_after_accept，不声称物理清理。前端适配、Telegram 入口及真实云验收未完成；未执行真实释放或 DryRun。[调用层](ecs-release.md)、[预览](ecs-release-preview.md)、[任务](ecs-release-queue.md)、[执行](ecs-release-worker.md)、[API/接入](ecs-release-api.md) |
-| F8.1 | 2026-11-18 已接通生产配置写入口（只写 Token/代理认证）、异步测试发送和发送 worker，按用户确认的代理认证与不确定不重发规则实现，本地替身测试通过。尚未在真实 Telegram 对话验证送达，需用户在面板保存 Bot Token 后发送测试。[实际发送](telegram-dispatch.md)、[发送边界](telegram-delivery-design.md)、[队列](notification-storage.md) |
+| F8.1 | 2026-11-18 已接通生产配置写入口（只写 Token/代理认证）、异步测试发送和发送 worker，按用户确认的代理认证与不确定不重发规则实现，本地替身测试通过。已在 main-server 上线（`c6aad45`）；尚未在真实 Telegram 对话验证送达，需用户在面板保存 Bot Token 后发送测试。[实际发送](telegram-dispatch.md)、[发送边界](telegram-delivery-design.md)、[队列](notification-storage.md) |
 | F8.2 | CDT/流量包用量阈值通知未启用。用户 2026-11-18 确认：CDT 单位核实前保持不启用。 |
 | F8.3 | 当前可管理十二个生产规则：账号失败、CDT 不可用、agent 掉线、到期、规格带宽、公网 IPv4 变化、可用余额低阈值、闲置资源，以及网络延迟/失败比例/不可达/线路变化。线路变化还需组合显式开启；见[网络告警](network-alerts.md)和[每日快照](trace-snapshots.md)。余额目标初始为空，由用户设置。[余额告警](balance-alerts.md)、[IP 告警](public-ip-alerts.md)、[闲置告警](idle-resource-alerts.md) |
 | F8.4–F8.6 | Telegram 远程控制、日报、邮件和 Webhook 未实现。 |
