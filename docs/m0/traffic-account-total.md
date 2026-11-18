@@ -17,3 +17,10 @@
 后端检查：`go test ./...` 全部通过；`go build ./...` 和 `go vet ./...` 均退出 0。OpenAPI lint 通过并已生成前端类型。生产接口集成测试覆盖 account_id=all，开发模式调用同一 Go 合计函数。
 
 前端检查：`npm test` 10/10 通过，`npm run typecheck`、`npm run build`、`npm run build:mock` 均通过。浏览器用构建后的独立 mock 静态产物验证：合计显示 400 GB 海外／40 GB 国内额度，保留单个账号预测超额数量；部分覆盖场景显示 1/2 账号可用与已知小计，不声称是完整合计。390×844 手机布局 documentWidth=390；恢复了临时视口设置。开发热更新曾出现 Context 缓存不一致，完整重载及静态构建验证均正常，不对生产代码增加无关调整。截图 `/tmp/harbormaster-account-total.jpg` 为显式演示数据。
+
+
+发布：后端 `dd24027`、前端 `3cf68af`，版本 `0.1.0-trial.20261118.5`。后端容器检查验证非 root、就绪、代理头、登录会话和关闭云写入；没有新增迁移。切换前在线备份 `/var/backups/harbormaster/total-dd24027/`，integrity_check=ok；未改外部主密钥。静态前端先发布新资源再原子替换入口，保留旧资源及入口备份 `/var/backups/harbormaster/frontend-3cf68af/index.html`。
+
+生产只读调用与接口相同的 Go 合计函数，确认海外额度合计 429,496,729,600 字节（400 GB）、国内 42,949,672,960 字节（40 GB）；海外两个账号官方值可用，只有一个账号估算完整，因此总估算 null、保留完整账号的已知小计；国内只有一个账号官方值可用，保留官方小计。两范围均不具备真实执行资格。详细读取保存在 traffic-account-total-evidence.json，只有最近两日用于证据，history_days_count 记录接口实际日期数。
+
+生产容器 healthy，/healthz 和 /readyz 均 200；两个有效 agent。电源、释放环境开关与原配置均保持关闭，电源发送、释放发送、自动动作全为 0。公网 /traffic 和新资源 assets/index-Clq-B4co.js 验证通过；入口 no-store、Cloudflare DYNAMIC。Go 全量测试、构建、vet 和前端 10 个测试均通过。保持前后端独立构建、独立发布，没有 push 或合并 main，原 docs/design/ 改动未暂存。
