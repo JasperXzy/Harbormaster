@@ -59,7 +59,7 @@ export function QuotaMeter({ q }: { q: QuotaStatus }) {
       <div className="tick" style={{ left: `calc(${q.quota_bytes / max * 100}% - 1px)` }} />
     </div>
     <div className="meter-foot"><span>官方 <b>{gb(q.official_bytes)}</b>{q.official_as_of ? `（截至 ${time(q.official_as_of)}）` : "（截止时间未知）"} + 采集 <b>{v.increment === null ? "—" : bytes(v.increment)}</b></span>
-      <span>{q.forecast ? <>月底约 <b>{gb(q.forecast.cycle_end_bytes, q.forecast.cycle_end_bytes >= 100 * GB ? 0 : 1)}</b>{q.forecast.exceeds_on ? `，预计 ${shortDate(q.forecast.exceeds_on)} 超出` : ""}</> : "日样本不足，暂不预测"}</span>
+      <span>{q.forecast ? <>{q.forecast.unverified ? "未核实预测 · " : ""}按 {q.forecast.sample_days ?? "—"} 个完整日，月底约 <b>{gb(q.forecast.cycle_end_bytes, q.forecast.cycle_end_bytes >= 100 * GB ? 0 : 1)}</b>{q.forecast.exceeds_on ? `，预计 ${shortDate(q.forecast.exceeds_on)} 超出` : ""}</> : "日样本不足，暂不预测"}</span>
     </div>
     <div className="sub" style={{ marginTop: 5 }}>估算更新于 {v.updatedAt ? stamp(v.updatedAt) : "—"}</div>
     {worst > 0 && <div style={{ marginTop: 6 }}><Badge level="warning">其中 {gb(worst)} 为掉线推算，回补后替换为实际采集数据</Badge></div>}

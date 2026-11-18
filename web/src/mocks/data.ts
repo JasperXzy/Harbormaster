@@ -147,19 +147,28 @@ export function buildDb(scene: Scene, now = Date.now()): Db {
     const o = series(seed, overseasGb + incO), m = series(seed + 7, mainlandGb + incM);
     base.daily[a.id] = {
       account_id: a.id, data_timezone: "Asia/Shanghai", cycle_start: iso(cycleStart), cycle_end: iso(cycleEnd), updated_at: iso(realtimeAt),
-      days: o.map((v, i) => ({ date: dateStr(i + 1), overseas_bytes: v, mainland_bytes: m[i], provisional: i === dom - 1 })),
+      source_status: "partial",
+      official_points: { mainland:[],overseas:[] },
+      days: o.map((v,i)=>{
+        const from=cycleStart+i*86400_000,until=Math.min(from+86400_000,realtimeAt),today=i===dom-1;
+        const detail=(value:number)=>({bytes:today?null:value,known_bytes:value,has_data:true,source:"agent_estimate" as const,status:today?"partial" as const:"complete" as const,is_complete_day:!today,from_at:iso(from),until_at:iso(Math.min(now,from+86400_000)),observed_from:iso(from),observed_until:iso(until),reasons:today?["day_in_progress","coverage_gap"]:["topology_observed_only"]});
+        return {date:dateStr(i+1),overseas_bytes:today?null:v,mainland_bytes:today?null:m[i],provisional:true,scopes:{overseas:detail(v),mainland:detail(m[i])}};
+      }),
     };
     const q = (scope: T.QuotaScope, usedGb: number, incGb: number, quota: number, daily: number[], wc: number): T.QuotaStatus => {
       const official = Math.round(usedGb * GB), inc = Math.round(incGb * GB) + wc, est = official + inc;
       const last7 = daily.slice(-8, -1);
-      const avg = last7.length ? Math.round(last7.reduce((x, y) => x + y, 0) / last7.length) : 0;
-      const end = est + avg * (daysInMonth - dom);
-      const exceedIn = avg > 0 && end > quota ? Math.max(0, Math.ceil((quota - est) / avg)) : null;
+      const avg = last7.length ? Math.ceil(last7.reduce((x, y) => x + y, 0) / last7.length) : 0;
+      const points=Array.from({length:daysInMonth-dom+1},(_,i)=>({at:iso(cycleStart+(dom+i)*86400_000),date:dateStr(dom+i),bytes:est+Math.ceil(avg*(cycleStart+(dom+i)*86400_000-realtimeAt)/86400_000)}));
+      const end=points.at(-1)?.bytes??est;
+      base.daily[a.id].official_points![scope]=Array.from({length:Math.min(5,dom)},(_,i)=>({at:iso(now-i*86400_000),date:dateStr(dom-i),bytes:Math.max(0,official-i*avg)})).reverse();
+      const exceedOn=est>quota?dateStr(dom):points.find(p=>p.bytes>quota)?.date??null;
       return {
         account_id: a.id, scope, cycle_start: iso(cycleStart), cycle_end: iso(cycleEnd), quota_bytes: quota,
         official_bytes: official, official_as_of: iso(officialAsOf), official_status: stale ? "unavailable" : "ok",
         realtime_increment_bytes: inc, worst_case_bytes: wc, estimated_bytes: est, effective_bytes: est, thresholds_percent: a.alert_thresholds_percent,
-        forecast: dom >= 2 ? { daily_average_bytes: avg, cycle_end_bytes: end, exceeds_on: exceedIn === null ? null : dateStr(Math.min(daysInMonth, dom + exceedIn)) } : null,
+        forecast_status:dom>=2?"ready":"insufficient_data",
+        forecast: dom >= 2 ? { daily_average_bytes:avg,cycle_end_bytes:end,exceeds_on:exceedOn,already_exceeded:est>quota,sample_days:last7.length,sample_dates:Array.from({length:last7.length},(_,i)=>dateStr(dom-last7.length+i)),source:"agent_estimate",unverified:true,baseline_bytes:est,baseline_at:iso(realtimeAt),baseline_source:"realtime_estimate",baseline_at_assumed:false,calculated_at:iso(now),points:[{at:iso(realtimeAt),date:dateStr(dom),bytes:est},...points],reasons:last7.length<7?["fewer_than_seven_complete_days"]:[] } : null,
         updated_at: iso(realtimeAt),
       };
     };
@@ -245,9 +254,20 @@ export function buildDb(scene: Scene, now = Date.now()): Db {
     for (const q of base.quotas) {
       const complete=q.scope==="overseas";
       q.estimation={mode:"unverified",status:complete?"ready":"incomplete",basis_id:"demo-basis",from_at:iso(now-3600_000),to_at:iso(realtimeAt),calculated_at:iso(realtimeAt),lag_window_seconds:3600,increment_bytes:complete?q.realtime_increment_bytes:null,known_increment_bytes:complete?q.realtime_increment_bytes??0:150_000_000,worst_case_bytes:complete?q.worst_case_bytes:null,estimated_bytes:complete?q.estimated_bytes:null,current_rate_bytes_per_second:100000,qualified_for_execution:false,reasons:complete?["lag_window_assumption","official_cutoff_or_unit_unverified"]:["coverage_gap","unattributed_subject"]};
-      Object.assign(q,{official_as_of:null,official_status:"cutoff_unknown",official_quality:"inferred",fetched_at:iso(now),realtime_increment_bytes:null,worst_case_bytes:null,estimated_bytes:null,effective_bytes:null,forecast:null});
+      Object.assign(q,{official_as_of:null,official_status:"cutoff_unknown",official_quality:"inferred",fetched_at:iso(now),realtime_increment_bytes:null,worst_case_bytes:null,estimated_bytes:null,effective_bytes:null,forecast:null,forecast_status:"insufficient_data"});
     }
-    for (const d of Object.values(base.daily)) { d.source_status = "daily_source_unverified"; for (const day of d.days) { day.mainland_bytes = null; day.overseas_bytes = null; } }
+    for (const d of Object.values(base.daily)) {
+      d.source_status="partial";
+      for (const [index,day] of d.days.entries()) {
+        for (const scope of ["mainland","overseas"] as const) {
+          const detail=day.scopes![scope],recent=index>=d.days.length-2;
+          detail.bytes=null;detail.is_complete_day=false;detail.has_data=recent;detail.known_bytes=recent?Math.round((scope==="overseas"?1.84:0.07)*GB):0;
+          detail.status=recent?"partial":"unavailable";detail.source=recent?"agent_estimate":"unavailable";detail.reasons=["topology_history_incomplete",...(index===d.days.length-1?["day_in_progress"]:[])];
+          if(!recent){detail.observed_from=null;detail.observed_until=null;}
+        }
+        day.mainland_bytes=null;day.overseas_bytes=null;
+      }
+    }
     for (const i of base.instances) if (i.counts_toward_cdt) { i.realtime_protection = "unprotected"; i.traffic_estimation=base.quotas.find((q)=>q.account_id===i.account_id&&q.scope===i.cdt_scope)?.estimation; }
   }
   return base;

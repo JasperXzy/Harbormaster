@@ -12,7 +12,8 @@ import { useShared } from "../lib/data";
 import { gb, gbValue, bytes, num, shortDate, time, stamp } from "../lib/format";
 import { Link } from "../lib/router";
 import { useResource } from "../lib/useResource";
-import { quotaView, quotaState, quotaMissingReasons, cumulativeBytes } from "../lib/usage";
+import { quotaView, quotaState, quotaMissingReasons } from "../lib/usage";
+import { dailyValue, forecastNote, usageTimeline } from "../lib/daily";
 
 type View = "chart" | "table";
 const VIEW: [View, string][] = [["chart", "图表"], ["table", "表格"]];
@@ -78,7 +79,7 @@ function QuotaTable({ qs }: { qs: QuotaStatus[] }) {
                 {v.worstCase !== null && v.worstCase > 0 && <div className="sub">含掉线推算 {bytes(v.worstCase)}</div>}
               </td>
               <td className="num">{gb(q.quota_bytes, 0)}{v.usable && v.value !== null && q.quota_bytes > 0 && <div className="sub">{v.unverified ? "估算" : ""}已用 {num(v.value / q.quota_bytes * 100, 1)}%</div>}</td>
-              <td className="num">{q.forecast ? gb(q.forecast.cycle_end_bytes) : "—"}<div className="sub">{!q.forecast ? "完整日样本尚不足" : q.forecast.exceeds_on ? `预计 ${shortDate(q.forecast.exceeds_on)} 超出` : "按当前趋势预测"}</div></td>
+              <td className="num">{q.forecast ? gb(q.forecast.cycle_end_bytes) : "—"}<div className="sub">{!q.forecast ? q.forecast_status === "baseline_missing" ? "累计基准尚不可用" : "等待首个完整日" : `${q.forecast.sample_days ?? "—"} 个完整日${q.forecast.unverified ? " · 未核实" : ""}`}{q.forecast?.exceeds_on && <div>{q.forecast.already_exceeded ? "累计已超本地额度" : `预计 ${shortDate(q.forecast.exceeds_on)} 超出`}</div>}</div></td>
               <td><Fresh at={v.updatedAt} kind="realtime" prefix="" />{q.official_status === "unavailable" && <div className="sub">沿用上次官方基准</div>}</td>
             </tr>
           ); })}
@@ -90,58 +91,30 @@ function QuotaTable({ qs }: { qs: QuotaStatus[] }) {
   );
 }
 
-const addDays = (date: string, n: number) => new Date(Date.parse(date + "T00:00:00Z") + n * 86400_000).toISOString().slice(0, 10);
+function DailyCell({ day, scope }: { day: DailyTraffic["days"][number]; scope: QuotaScope }) {
+  const v=dailyValue(day,scope);
+  return <><b>{v.value===null ? "—" : v.value<10*1024**2 ? bytes(v.value) : gb(v.value,2)}</b><div className="sub">{v.label}</div>{v.partial && v.from && v.until && <div className="sub">观测 {time(v.from)}–{time(v.until)}</div>}</>;
+}
 
 function DailySection({ accountId, quotas }: { accountId: string; quotas: QuotaStatus[] }) {
-  const daily = useResource(() => api.dailyTraffic(accountId), [accountId], { refreshMs: 60_000 });
+  const daily = useResource(() => api.dailyTraffic(accountId), [accountId], { refreshMs: 30_000 });
   const [view, setView] = useState<View>("chart");
   const [scope, setScope] = useState<QuotaScope>("overseas");
-  return (
-    <div className="grid g2">
-      <Card title="每天用了多少" right={<SegToggle label="显示方式" value={view} onChange={setView} options={VIEW} />}>
-        <Async res={daily} lines={6}>
-          {(d) =>
-            !d.days.length ? <EmptyState title="这个计费周期还没有数据" /> : d.days.every((x) => x.overseas_bytes === null && x.mainland_bytes === null) ? (
-              <EmptyState title="还拆不出每天的用量">阿里云目前只给了本月累计的总数，没法可靠地分到每一天。总数的变化可以在下面的“官方累计读取记录”里看。</EmptyState>
-            ) : view === "chart" ? (
-              <>
-                <div className="legend" style={{ marginBottom: 8 }}>
-                  <span><i style={{ background: "var(--series-1)" }} />{SCOPE.overseas}</span>
-                  <span><i style={{ background: "var(--series-2)" }} />{SCOPE.mainland}</span>
-                </div>
-                <DailyBars
-                  ariaLabel="每日流量用量" unit="GB" nameA={SCOPE.overseas} nameB={SCOPE.mainland} totalSlots={cycleDays(d)}
-                  bars={d.days.map((x) => ({ label: shortDate(x.date), a: x.overseas_bytes === null ? null : gbValue(x.overseas_bytes), b: x.mainland_bytes === null ? null : gbValue(x.mainland_bytes), provisional: x.provisional }))}
-                />
-                {d.days.some((x) => x.overseas_bytes === null || x.mainland_bytes === null) && <p className="note">有几天的数据没取到，图上用虚线框留空，不当作 0。</p>}
-              </>
-            ) : (
-              <div className="table-wrap" style={{ maxHeight: 300, overflowY: "auto" }}>
-                <table>
-                  <thead><tr><th>日期</th><th className="num">{SCOPE.overseas}</th><th className="num">{SCOPE.mainland}</th></tr></thead>
-                  <tbody>
-                    {[...d.days].reverse().map((x) => (
-                      <tr key={x.date}><td>{shortDate(x.date)}{x.provisional && <span className="sub"> · 含实时增量</span>}</td><td className="num">{gb(x.overseas_bytes)}</td><td className="num">{gb(x.mainland_bytes)}</td></tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )
-          }
-        </Async>
-      </Card>
-      <Card title="累计与预测" sub="虚线按最近 7 天的日均推算" right={<SegToggle label="范围" value={scope} onChange={setScope} options={[["overseas", "海外"], ["mainland", "国内"]]} />}>
-        <Async res={daily} lines={6}>
-          {(d) => {
-            const q = quotas.find((x) => x.scope === scope);
-            if (!d.days.length || !q) return <EmptyState title="还没有足够的数据画图" />;
-            if (cumulativeBytes(d.days, scope)[0] === null) return <EmptyState title="暂时画不出累计曲线">每天的用量还没取全，累计和月底预测都算不出来。</EmptyState>;
-            return <Cumulative d={d} q={q} scope={scope} />;
-          }}
-        </Async>
-      </Card>
-    </div>
-  );
+  return <div className="grid g2">
+    <Card title="每天用了多少" sub="按计费对象汇总，保留缺口" right={<SegToggle label="显示方式" value={view} onChange={setView} options={VIEW} />}>
+      <Async res={daily} lines={6}>{d => <>
+        {!d.days.length ? <EmptyState title="这个计费周期还没有数据" /> : view === "chart" ? <>
+          <div className="legend" style={{marginBottom:8}}><span><i style={{background:"var(--series-1)"}} />{SCOPE.overseas}</span><span><i style={{background:"var(--series-2)"}} />{SCOPE.mainland}</span><span>浅色虚线边：仅已采集部分</span></div>
+          <DailyBars ariaLabel="每日流量用量，浅色虚线边表示部分覆盖" unit="GB" nameA={SCOPE.overseas} nameB={SCOPE.mainland} totalSlots={cycleDays(d)} bars={d.days.map(day=>{const a=dailyValue(day,"overseas"),b=dailyValue(day,"mainland");return {label:shortDate(day.date),a:a.value===null?null:gbValue(a.value),b:b.value===null?null:gbValue(b.value),partialA:a.partial,partialB:b.partial,provisional:day.provisional};})} />
+          {d.days.some(day=>["mainland","overseas"].some(scope=>dailyValue(day,scope as QuotaScope).value!==null)) ? <div className="inline" style={{gap:24,marginTop:8}}>{(["overseas","mainland"] as const).map(scope=><div key={scope}><span className="sub">{shortDate(d.days.at(-1)!.date)} · {SCOPE[scope]} </span><DailyCell day={d.days.at(-1)!} scope={scope} /></div>)}</div> : <p className="note">{d.days.some(day=>day.scopes?.overseas.status==="pending") ? "正在汇总已接收的采集数据。" : "尚无可归属的采集数据，未知日期保留为空。"}</p>}
+        </> : <div className="table-wrap" style={{maxHeight:340,overflowY:"auto"}}><table><thead><tr><th>日期</th><th className="num">{SCOPE.overseas}</th><th className="num">{SCOPE.mainland}</th></tr></thead><tbody>{[...d.days].reverse().map(day=><tr key={day.date}><td>{shortDate(day.date)}{day===d.days.at(-1)&&<div className="sub">今天未结束</div>}</td><td className="num"><DailyCell day={day} scope="overseas" /></td><td className="num"><DailyCell day={day} scope="mainland" /></td></tr>)}</tbody></table></div>}
+        <p className="note">按 {d.data_timezone} 划分日期。官方日数据优先；没有时使用采集估算。部分覆盖的值只表示已采集小计，不是全天总量；空缺不按 0 处理。跨边界样本按上界分配，可能重复计入相邻时段。{d.updated_at && `最近汇总：${stamp(d.updated_at)}。`}</p>
+      </>}</Async>
+    </Card>
+    <Card title="累计与预测" sub="近 7 天中的完整日样本，今天不参加日均" right={<SegToggle label="范围" value={scope} onChange={setScope} options={[["overseas","海外"],["mainland","国内"]]} />}>
+      <Async res={daily} lines={6}>{d=>{const q=quotas.find(x=>x.scope===scope);return !d.days.length||!q ? <EmptyState title="还没有足够的数据画图" /> : <Cumulative d={d} q={q} scope={scope} />;}}</Async>
+    </Card>
+  </div>;
 }
 
 function Observations({ accountId }: { accountId: string }) {
@@ -172,33 +145,27 @@ function Observations({ accountId }: { accountId: string }) {
 
 const cycleDays = (d: DailyTraffic) => Math.max(d.days.length, Math.round((Date.parse(d.cycle_end) - Date.parse(d.cycle_start)) / 86400_000));
 
-function Cumulative({ d, q, scope }: { d: DailyTraffic; q: QuotaStatus; scope: QuotaScope }) {
-  const total = cycleDays(d), n = d.days.length;
-  const labels = Array.from({ length: total }, (_, i) => shortDate(addDays(d.days[0].date, i)));
-  const cum = cumulativeBytes(d.days, scope).map((v) => v === null ? null : gbValue(v));
-  const last = cum[n - 1];
-  const dailyAvg = q.forecast ? gbValue(q.forecast.daily_average_bytes) : 0;
-  const actual = labels.map((_, i) => (i < n ? cum[i] : null));
-  const proj = labels.map((_, i) => (q.forecast && last !== null && i >= n - 1 ? last + dailyAvg * (i - n + 1) : null));
-  const quota = gbValue(q.quota_bytes);
-  const exIdx = q.forecast?.exceeds_on ? labels.indexOf(shortDate(q.forecast.exceeds_on)) : -1;
-  const color = scope === "overseas" ? "var(--series-1)" : "var(--series-2)";
-  return (
-    <>
-      {cum.some((v) => v === null) && <p className="note">有几天的数据没取到，从那天起不画累计线，也不做预测。</p>}
-      <div className="legend" style={{ marginBottom: 8 }}>
-        <span><i className="line" style={{ background: color }} />已经用掉的</span>
-        {q.forecast && <span><i className="dash" style={{ borderColor: color }} />预测</span>}
+function Cumulative({ d,q,scope }: {d:DailyTraffic;q:QuotaStatus;scope:QuotaScope}) {
+  const s=usageTimeline(d,q,scope),color=scope==="overseas"?"var(--series-1)":"var(--series-2)";
+  const quota=gbValue(q.quota_bytes),f=q.forecast;
+  const convert=(values:(number|null)[])=>values.map(v=>v===null?null:gbValue(v));
+  const hasValues=[...s.official,...s.collected,...s.realtime,...s.projected].some(v=>v!==null);
+  return <>
+    {hasValues ? <>
+      <div className="legend" style={{marginBottom:8}}>
+        {s.official.some(v=>v!==null)&&<span><i className="line" style={{background:"var(--muted)"}} />官方累计读取值</span>}
+        {s.collected.some(v=>v!==null)&&<span><i className="line" style={{background:color}} />采集累计</span>}
+        {s.realtime.some(v=>v!==null)&&<span><i style={{background:"var(--realtime)"}} />当前估算</span>}
+        {f&&<span><i className="dash" style={{borderColor:color}} />月底预测</span>}
       </div>
-      <LineChart
-        ariaLabel={`${SCOPE[scope]}累计用量与预测`} labels={labels} unit="GB" height={250}
-        series={[{ name: "已用", color, data: actual, endLabel: false }, { name: "预测", color, data: proj, dashed: true, endLabel: false }]}
-        refLine={{ value: quota, label: `免费额度 ${num(quota, 0)} GB` }}
-        marker={exIdx >= 0 ? { index: exIdx, value: quota, label: `预计 ${labels[exIdx]} 超出` } : undefined}
-        extraTip={(i) => { const v = actual[i] ?? proj[i]; return v == null ? null : <TipRow label="占免费额度" value={`${num((v / quota) * 100, 0)}%`} />; }}
-      />
-    </>
-  );
+      <LineChart ariaLabel={`${SCOPE[scope]}累计读取、实时估算与月底预测`} labels={s.labels} unit="GB" height={250} digits={2}
+        series={[{name:"官方累计读取值",color:"var(--muted)",data:convert(s.official),endLabel:false},{name:"采集累计",color,data:convert(s.collected),endLabel:false},{name:"当前估算",color:"var(--realtime)",data:convert(s.realtime),endLabel:false},{name:"预测",color,data:convert(s.projected),dashed:true,endLabel:false}]}
+        refLine={{value:quota,label:`本地额度 ${num(quota,0)} GB`}} />
+    </> : <EmptyState title="正在积累累计数据" />}
+    {f&&<p><b>月底预计 {gb(f.cycle_end_bytes,2)}</b>{f.exceeds_on&&<span> · {f.already_exceeded?"累计已超本地额度":`预计 ${shortDate(f.exceeds_on)} 超出`}</span>}</p>}
+    <p className="note">{forecastNote(q)}{f?.sample_dates?.length ? `样本日期：${f.sample_dates.map(shortDate).join("、")}。` : ""}</p>
+    <p className="note">官方曲线按读取日期展示月累计，统计截止时间仍可能未知。缺少整月采集覆盖时不拼接采集累计；预测使用服务端返回的基准和预测点，仅用于展示。</p>
+  </>;
 }
 
 function Subjects({ accountId, instName }: { accountId: string; instName: (id: string) => string }) {
