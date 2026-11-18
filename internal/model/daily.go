@@ -28,6 +28,7 @@ type UsagePoint struct {
 	Bytes int64     `json:"bytes"`
 }
 type DailyTraffic struct {
+	Aggregation    *AccountAggregation     `json:"aggregation,omitempty"`
 	AccountID      string                  `json:"account_id"`
 	CycleStart     time.Time               `json:"cycle_start"`
 	CycleEnd       time.Time               `json:"cycle_end"`
@@ -42,7 +43,7 @@ type TrafficForecast struct {
 	CycleEndBytes     int64        `json:"cycle_end_bytes"`
 	ExceedsOn         *string      `json:"exceeds_on"`
 	AlreadyExceeded   bool         `json:"already_exceeded"`
-	SampleDays        int          `json:"sample_days"`
+	SampleDays        int          `json:"sample_days,omitempty"`
 	SampleDates       []string     `json:"sample_dates"`
 	Source            string       `json:"source"`
 	Unverified        bool         `json:"unverified"`
@@ -53,4 +54,8 @@ type TrafficForecast struct {
 	CalculatedAt      time.Time    `json:"calculated_at"`
 	Points            []UsagePoint `json:"points"`
 	Reasons           []string     `json:"reasons"`
+}
+
+type AccountAggregation struct {
+	AccountCount int `json:"account_count"`
 }

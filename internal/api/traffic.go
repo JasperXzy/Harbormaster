@@ -20,7 +20,7 @@ func (p *productionPanel) quotaRows(ctx context.Context, id string) ([]model.Quo
 	if err != nil {
 		return nil, err
 	}
-	if id != "" {
+	if id != "" && id != store.AggregateAccountID {
 		filtered := []model.Account{}
 		for _, a := range accounts {
 			if a.ID == id {
@@ -32,11 +32,24 @@ func (p *productionPanel) quotaRows(ctx context.Context, id string) ([]model.Quo
 		}
 		accounts = filtered
 	}
+	if id == store.AggregateAccountID {
+		filtered := []model.Account{}
+		for _, a := range accounts {
+			if a.Enabled {
+				filtered = append(filtered, a)
+			}
+		}
+		accounts = filtered
+	}
 	loc, err := p.businessLocation(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return p.s.Quotas(ctx, accounts, loc, p.now())
+	rows, err := p.s.Quotas(ctx, accounts, loc, p.now())
+	if err == nil && id == store.AggregateAccountID {
+		return store.AggregateQuotaStatuses(accounts, rows, loc, p.now())
+	}
+	return rows, err
 }
 func (p *productionPanel) traffic(w http.ResponseWriter, r *http.Request, path string) bool {
 	if r.Method != "GET" {
@@ -101,6 +114,33 @@ func (p *productionPanel) traffic(w http.ResponseWriter, r *http.Request, path s
 		loc, err := p.businessLocation(r.Context())
 		if err != nil {
 			businessError(w, err)
+			return true
+		}
+		if id == store.AggregateAccountID {
+			accounts, e := p.s.Accounts(r.Context())
+			if e != nil {
+				businessError(w, e)
+				return true
+			}
+			rows := []model.DailyTraffic{}
+			now := p.now()
+			for _, a := range accounts {
+				if !a.Enabled {
+					continue
+				}
+				d, e := p.s.DailyTraffic(r.Context(), a, loc, now)
+				if e != nil {
+					businessError(w, e)
+					return true
+				}
+				rows = append(rows, d)
+			}
+			data, e := store.AggregateDailyTraffic(accounts, rows, loc, now)
+			if e != nil {
+				businessError(w, e)
+			} else {
+				writeJSON(w, 200, data)
+			}
 			return true
 		}
 		a, err := p.s.Account(r.Context(), id)

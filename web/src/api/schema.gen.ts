@@ -3583,6 +3583,7 @@ export interface components {
         };
         /** @description Missing official values are null, never zero. An unknown official cutoff makes the aligned increment, estimate and effective value null; fetched_at must not be substituted for the cutoff. */
         QuotaStatus: {
+            aggregation?: components["schemas"]["TrafficAggregation"];
             /** @description 当前凭据及本地周期的最后一次对账记录，可能明确不可比较。 */
             reconciliation?: components["schemas"]["CDTReconciliation"] | null;
             /** @description 后台尚未计算时为 null；未核实值仅放在这里，旧的严格对齐字段继续为 null。 */
@@ -3654,6 +3655,9 @@ export interface components {
         };
         /** @description Aggregate in the returned data_timezone. Do not relabel provider daily totals as a different business timezone. */
         DailyTraffic: {
+            aggregation?: {
+                account_count: number;
+            };
             /**
              * @description Only exact verified boundary pairs can be official daily data; agent estimates and missing coverage remain explicit.
              * @enum {string}
@@ -3689,6 +3693,22 @@ export interface components {
             /** Format: date-time */
             updated_at: string | null;
         };
+        /** @description Display only; each account retains its own free quota, cutoff and forecast samples. Missing full values never become zero. */
+        TrafficAggregation: {
+            account_count: number;
+            official_accounts: number;
+            estimated_accounts: number;
+            forecast_accounts: number;
+            /** Format: int64 */
+            known_official_bytes: number;
+            /** Format: int64 */
+            known_estimated_bytes: number;
+            /** Format: int64 */
+            known_forecast_bytes: number;
+            forecast_sample_days_min: number;
+            forecast_sample_days_max: number;
+            forecast_exceeding_accounts: number;
+        };
         DailyScope: {
             /**
              * Format: int64
@@ -3700,7 +3720,7 @@ export interface components {
             /** @description Distinguishes measured zero from no observations. */
             has_data: boolean;
             /** @enum {string} */
-            source: "official" | "agent_estimate" | "unavailable";
+            source: "official" | "agent_estimate" | "mixed" | "unavailable";
             /** @enum {string} */
             status: "complete" | "partial" | "unavailable" | "pending";
             /** @description Ended business day with complete temporal and membership coverage. Only these enter forecasts. */
@@ -3745,7 +3765,7 @@ export interface components {
             /** Format: date-time */
             baseline_at?: string;
             /** @enum {string} */
-            baseline_source?: "realtime_estimate" | "official";
+            baseline_source?: "realtime_estimate" | "official" | "account_forecasts";
             baseline_at_assumed?: boolean;
             /** Format: date-time */
             calculated_at?: string;
@@ -6923,6 +6943,7 @@ export interface operations {
     listQuotas: {
         parameters: {
             query?: {
+                /** @description Use an account ID, or all to aggregate enabled accounts only. Disabled accounts remain available individually. */
                 account_id?: string;
             };
             header?: never;
@@ -6948,6 +6969,7 @@ export interface operations {
     getDailyTraffic: {
         parameters: {
             query: {
+                /** @description Use an account ID, or all to aggregate enabled accounts only. Disabled accounts remain available individually. */
                 account_id: string;
             };
             header?: never;

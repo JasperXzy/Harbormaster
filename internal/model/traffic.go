@@ -37,24 +37,38 @@ type CDTObservation struct {
 }
 
 type QuotaStatus struct {
-	Reconciliation    *CDTReconciliation `json:"reconciliation"`
-	Estimation        *TrafficEstimation `json:"estimation"`
-	AccountID         string             `json:"account_id"`
-	Scope             string             `json:"scope"`
-	CycleStart        time.Time          `json:"cycle_start"`
-	CycleEnd          time.Time          `json:"cycle_end"`
-	QuotaBytes        int64              `json:"quota_bytes"`
-	OfficialBytes     *int64             `json:"official_bytes"`
-	OfficialAsOf      *time.Time         `json:"official_as_of"`
-	OfficialStatus    string             `json:"official_status"`
-	OfficialQuality   string             `json:"official_quality"`
-	FetchedAt         *time.Time         `json:"fetched_at"`
-	RealtimeIncrement *int64             `json:"realtime_increment_bytes"`
-	WorstCaseBytes    *int64             `json:"worst_case_bytes"`
-	EstimatedBytes    *int64             `json:"estimated_bytes"`
-	EffectiveBytes    *int64             `json:"effective_bytes"`
-	Thresholds        []int              `json:"thresholds_percent"`
-	Forecast          *TrafficForecast   `json:"forecast"`
-	ForecastStatus    string             `json:"forecast_status"`
-	UpdatedAt         *time.Time         `json:"updated_at"`
+	Aggregation       *TrafficAggregation `json:"aggregation,omitempty"`
+	Reconciliation    *CDTReconciliation  `json:"reconciliation"`
+	Estimation        *TrafficEstimation  `json:"estimation"`
+	AccountID         string              `json:"account_id"`
+	Scope             string              `json:"scope"`
+	CycleStart        time.Time           `json:"cycle_start"`
+	CycleEnd          time.Time           `json:"cycle_end"`
+	QuotaBytes        int64               `json:"quota_bytes"`
+	OfficialBytes     *int64              `json:"official_bytes"`
+	OfficialAsOf      *time.Time          `json:"official_as_of"`
+	OfficialStatus    string              `json:"official_status"`
+	OfficialQuality   string              `json:"official_quality"`
+	FetchedAt         *time.Time          `json:"fetched_at"`
+	RealtimeIncrement *int64              `json:"realtime_increment_bytes"`
+	WorstCaseBytes    *int64              `json:"worst_case_bytes"`
+	EstimatedBytes    *int64              `json:"estimated_bytes"`
+	EffectiveBytes    *int64              `json:"effective_bytes"`
+	Thresholds        []int               `json:"thresholds_percent"`
+	Forecast          *TrafficForecast    `json:"forecast"`
+	ForecastStatus    string              `json:"forecast_status"`
+	UpdatedAt         *time.Time          `json:"updated_at"`
+}
+
+type TrafficAggregation struct {
+	AccountCount      int   `json:"account_count"`
+	OfficialAccounts  int   `json:"official_accounts"`
+	EstimatedAccounts int   `json:"estimated_accounts"`
+	ForecastAccounts  int   `json:"forecast_accounts"`
+	KnownOfficial     int64 `json:"known_official_bytes"`
+	KnownEstimated    int64 `json:"known_estimated_bytes"`
+	KnownForecast     int64 `json:"known_forecast_bytes"`
+	ForecastDaysMin   int   `json:"forecast_sample_days_min"`
+	ForecastDaysMax   int   `json:"forecast_sample_days_max"`
+	ForecastExceeding int   `json:"forecast_exceeding_accounts"`
 }

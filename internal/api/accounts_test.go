@@ -129,6 +129,15 @@ func TestAccountAPIUsesEncryptedTasksAndSnapshotReads(t *testing.T) {
 			t.Fatal("absent scope changed into zero")
 		}
 	}
+	w = panelRequest(p, "GET", "/traffic/quotas?account_id=all", nil, cookie, "")
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &quotas) != nil || len(quotas.Items) != 2 || quotas.Items[0].AccountID != "all" || quotas.Items[0].Aggregation == nil || quotas.Items[0].Aggregation.AccountCount != 1 {
+		t.Fatal("aggregate quotas", w.Body)
+	}
+	w = panelRequest(p, "GET", "/traffic/daily?account_id=all", nil, cookie, "")
+	var total model.DailyTraffic
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &total) != nil || total.AccountID != "all" || total.Aggregation == nil || total.Aggregation.AccountCount != 1 || total.Days[0].Overseas != nil {
+		t.Fatal("aggregate daily", w.Body)
+	}
 	w = panelRequest(p, "GET", "/traffic/daily?account_id="+created.Account.ID, nil, cookie, "")
 	var daily struct {
 		Source  string           `json:"source_status"`

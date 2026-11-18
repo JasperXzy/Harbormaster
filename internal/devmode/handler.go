@@ -251,6 +251,15 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/traffic/estimation-settings":
 		respond(w, 200, map[string]any{"revision": 0, "lag_window_seconds": 3600, "bandwidth_mode_instance_ids": []string{}})
 	case "/traffic/quotas":
+		if r.URL.Query().Get("account_id") == store.AggregateAccountID {
+			rows, err := demoAggregateQuotas(f, h.loc, now)
+			if err != nil {
+				failure(w, 500, "internal_error")
+			} else {
+				respond(w, 200, object{"items": rows})
+			}
+			return
+		}
 		respond(w, 200, object{"items": filter(f.Quotas, "account_id", r.URL.Query().Get("account_id"))})
 	case "/traffic/observations":
 		respond(w, 200, object{"items": []object{}, "next_cursor": nil})
@@ -260,6 +269,15 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, object{"items": f.Packages})
 	case "/traffic/daily":
 		id := r.URL.Query().Get("account_id")
+		if id == store.AggregateAccountID {
+			data, err := demoAggregateDaily(f, h.loc, now)
+			if err != nil {
+				failure(w, 500, "internal_error")
+			} else {
+				respond(w, 200, data)
+			}
+			return
+		}
 		if len(filter(f.Accounts, "id", id)) == 0 || id == "" {
 			failure(w, 404, "not_found")
 			return
