@@ -20,13 +20,12 @@ const VIEW: [View, string][] = [["chart", "图表"], ["table", "表格"]];
 
 export function Traffic() {
   const { accounts, quotas, instances } = useShared();
-  const [picked, setPicked] = useState<string>();
+  const [accountId, setAccountId] = useState("all");
   const accs = accounts.data;
-  const accountId = picked ?? accs?.[0]?.id;
 
   if (accounts.error) return <div className="card"><ErrorState error={accounts.error} onRetry={accounts.reload} /></div>;
   if (!accs) return <div className="card"><Skeleton lines={6} /></div>;
-  if (!accs.length || !accountId)
+  if (!accs.length)
     return (
       <div className="card">
         <EmptyState title="还没有流量数据" action={<Link className="btn primary" to="/settings">去添加账号</Link>}>添加阿里云账号后，这里会显示每天用了多少流量、月底大概会用到多少。</EmptyState>
@@ -41,7 +40,7 @@ export function Traffic() {
     <>
       <div className="filters">
         <label className="sub" htmlFor="traffic-account">账号</label>
-        <select id="traffic-account" value={accountId} onChange={(e) => setPicked(e.target.value)}>
+        <select id="traffic-account" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
           <option value="all">全部账号（合计）</option>
           {accs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
