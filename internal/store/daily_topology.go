@@ -26,6 +26,34 @@ func (v dailySubject) knownEmpty() bool {
 	return v.Kind == "cbwp_dominant_traffic" && v.PublicIPs != nil && len(v.PublicIPs) == 0 && len(v.Members) == 0
 }
 
+// Realtime zero needs the same address-aware observation for the entire lag
+// window. The older topology fingerprint alone cannot prove an empty package.
+func emptySubjectWindow(ctx context.Context, tx *sql.Tx, a model.Account, sub meteringSubject, from, now time.Time) (bool, error) {
+	var raw, first, last string
+	err := tx.QueryRowContext(ctx, `SELECT subjects_json,observed_from,last_seen FROM daily_topology WHERE account_id=? AND region=? AND credential_version=? AND closed_at IS NULL`, a.ID, sub.Region, a.CredentialVersion).Scan(&raw, &first, &last)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	f, _ := time.Parse(time.RFC3339Nano, first)
+	at, _ := time.Parse(time.RFC3339Nano, last)
+	if f.IsZero() || f.After(from) || at.After(now) || now.Sub(at) > meteringTopologyFreshness {
+		return false, nil
+	}
+	var objects []dailySubject
+	if err = json.Unmarshal([]byte(raw), &objects); err != nil {
+		return false, err
+	}
+	for _, v := range objects {
+		if v.ID == sub.ID {
+			return v.knownEmpty(), nil
+		}
+	}
+	return false, nil
+}
+
 func dailyGraph(raw []map[string]any) (string, string, bool, error) {
 	subs := []dailySubject{}
 	empty := false

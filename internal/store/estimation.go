@@ -21,6 +21,7 @@ type meteringSubject struct {
 	Scope     *string  `json:"cdt_scope"`
 	Members   []string `json:"instance_ids"`
 	Bandwidth *int64   `json:"bandwidth_mbps"`
+	Empty     bool     `json:"-"`
 }
 type meteringAgent struct {
 	ID, Status         string
@@ -200,11 +201,13 @@ func calculateEstimateAt(ctx context.Context, tx *sql.Tx, a model.Account, scope
 		if !slices.Contains(a.RegionIDs, region) {
 			continue
 		}
-		var sub meteringSubject
-		if err = json.Unmarshal([]byte(raw), &sub); err != nil {
+		var observed dailySubject
+		if err = json.Unmarshal([]byte(raw), &observed); err != nil {
 			rows.Close()
 			return v, err
 		}
+		sub := observed.meteringSubject
+		sub.Empty = observed.knownEmpty()
 		if sub.Eligible != nil && !*sub.Eligible {
 			continue
 		}
@@ -280,6 +283,18 @@ func calculateEstimateAt(ctx context.Context, tx *sql.Tx, a model.Account, scope
 			reason("cdt_eligibility_unknown")
 		}
 		if len(sub.Members) == 0 {
+			if sub.Empty {
+				known, e := emptySubjectWindow(ctx, tx, a, sub, from, now)
+				if e != nil {
+					return v, e
+				}
+				if known {
+					qualified = false
+					reason("topology_observed_only")
+					reason("empty_bandwidth_package_observed")
+					continue
+				}
+			}
 			complete = false
 			rateKnown = false
 			reason("unattributed_subject")

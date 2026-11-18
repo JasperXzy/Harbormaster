@@ -96,6 +96,44 @@ func TestDualEstimateNeverPromotesInferredBasis(t *testing.T) {
 		t.Fatal(v)
 	}
 }
+
+func TestEmptyPackageNeedsAddressAwareHistoryBeforeRealtimeZero(t *testing.T) {
+	s, _, _, base := estimateFixture(t)
+	now := base.Add(120 * time.Second)
+	object := map[string]any{"id": "subject", "kind": "cbwp_dominant_traffic", "metering_rule": "max_in_out_per_period", "counts_toward_cdt": true, "cdt_scope": "mainland", "instance_ids": []string{}, "public_ips": []string{}}
+	raw, _ := json.Marshal(object)
+	if _, err := s.DB.Exec("UPDATE resource_snapshot SET payload_json=? WHERE kind='subject'", string(raw)); err != nil {
+		t.Fatal(err)
+	}
+	v := estimateRow(t, s, now)
+	if v.Status != "incomplete" || v.Estimated != nil {
+		t.Fatal("legacy hash proved zero", v)
+	}
+	history, _ := json.Marshal([]any{object})
+	if _, err := s.DB.Exec("INSERT INTO daily_topology(account_id,region,credential_version,fingerprint,observed_from,last_seen,subjects_json) VALUES('a','cn-shanghai',1,'empty',?,?,?)", timestamp(base.Add(time.Second)), timestamp(now), string(history)); err != nil {
+		t.Fatal(err)
+	}
+	v = estimateRow(t, s, now)
+	if v.Status != "incomplete" {
+		t.Fatal("backdated proof of empty", v)
+	}
+	if _, err := s.DB.Exec("UPDATE daily_topology SET observed_from=?", timestamp(base)); err != nil {
+		t.Fatal(err)
+	}
+	v = estimateRow(t, s, now)
+	if v.Status != "ready" || v.Increment == nil || *v.Increment != 0 || v.Estimated == nil || *v.Estimated != 1000 || v.Qualified {
+		t.Fatal(v)
+	}
+	object["public_ips"] = []string{"8.8.8.8"}
+	raw, _ = json.Marshal(object)
+	if _, err := s.DB.Exec("UPDATE resource_snapshot SET payload_json=? WHERE kind='subject'", string(raw)); err != nil {
+		t.Fatal(err)
+	}
+	v = estimateRow(t, s, now)
+	if v.Status != "incomplete" {
+		t.Fatal("address without member became zero", v)
+	}
+}
 func TestTrustedCutoffAndPeriodAreNecessaryForAlignedPath(t *testing.T) {
 	s, _, _, base := estimateFixture(t)
 	now := base.Add(120 * time.Second)
