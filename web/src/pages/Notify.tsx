@@ -3,14 +3,14 @@ import { useState } from "react";
 import { api } from "../api/client";
 import { useEvent } from "../api/events";
 import { ALERT_RULE, DELIVERY, errorText } from "../api/labels";
-import type { AlertRule, Notification } from "../api/types";
+import type { AlertRule, Notification, TelegramChannel } from "../api/types";
 import { TelegramForm } from "../components/TelegramForm";
 import { Async, Badge, Card, EmptyState, errMsg, Spinner, Switch, useToast, type Level } from "../components/ui";
 import { stamp } from "../lib/format";
 import { useResource } from "../lib/useResource";
 import { NotificationItem } from "./Overview";
 
-const TG_STATUS: Record<string, [Level, string]> = { ok: ["good", "工作正常"], failing: ["critical", "发送失败"], not_configured: ["neutral", "还没有设置"] };
+const TG_STATUS: Record<TelegramChannel["status"], [Level, string]> = { ok: ["good", "工作正常"], failing: ["critical", "发送失败"], not_tested: ["warning", "已保存，还没测试"], not_configured: ["neutral", "还没有设置"] };
 
 export function Notify() {
   const tg = useResource(api.telegram, []);

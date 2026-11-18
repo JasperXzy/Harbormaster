@@ -1604,7 +1604,10 @@ export interface paths {
         };
         /** Telegram 渠道设置 */
         get: operations["getTelegramChannel"];
-        /** 保存 Telegram 渠道设置 */
+        /**
+         * 保存 Telegram 渠道设置
+         * @description Session+CSRF. Saving a changed configuration resets status to not_tested, fails unsent queued notifications with telegram_configuration_changed (never redirects them to the new chat) and records telegram_channel_updated in the audit journal with field names and a credentials_changed marker only. Saving identical values is a no-op.
+         */
         put: operations["updateTelegramChannel"];
         post?: never;
         delete?: never;
@@ -1624,7 +1627,7 @@ export interface paths {
         put?: never;
         /**
          * 发送一条测试消息
-         * @description 用已保存的设置发送。任务失败时 `Job.error.code` 说明原因（如 `telegram_unauthorized`、`telegram_chat_not_found`、`telegram_unreachable`）。
+         * @description 用已保存的设置发送。任务失败时 `Job.error.code` 说明原因（如 `telegram_unauthorized`、`telegram_chat_not_found`、`telegram_unreachable`、`telegram_rate_limited`、`telegram_proxy_unauthorized`、`telegram_delivery_uncertain`）。An unfinished test is reused instead of queueing another. Tests bypass quiet hours.
          */
         post: operations["sendTelegramTest"];
         delete?: never;
@@ -1830,9 +1833,9 @@ export interface components {
                 /** @description Validated internal API-key ID when applicable; never the token. Null for the single administrator and system/CLI sources. */
                 id: string | null;
             };
-            /** @description Stable codes include account_created/account_updated/account_disabled; alert_rule_updated; quiet_hours_updated; branding_updated; probe_target_created/updated/deleted; probe_plan_created/updated/deleted; trace_schedule_updated; api_key_created/revoked; agent_registration_issued/agent_registered/agent_revoked; instance_power_requested/started/dispatch_started/dispatch_recorded/finished. */
+            /** @description Stable codes include account_created/account_updated/account_disabled; alert_rule_updated; quiet_hours_updated; telegram_channel_updated; branding_updated; probe_target_created/updated/deleted; probe_plan_created/updated/deleted; trace_schedule_updated; api_key_created/revoked; agent_registration_issued/agent_registered/agent_revoked; instance_power_requested/started/dispatch_started/dispatch_recorded/finished. */
             action: string;
-            /** @description account / alert_rule / quiet_hours / branding / probe_target / probe_plan / trace_schedule / api_key / instance */
+            /** @description account / alert_rule / quiet_hours / telegram_channel / branding / probe_target / probe_plan / trace_schedule / api_key / instance */
             target_type: string;
             target_id: string;
             account_id: string | null;
@@ -3963,11 +3966,16 @@ export interface components {
             last_success_at: string | null;
         };
         TelegramChannelUpdate: {
-            /** @description 不传表示保留已保存的 Token。 */
+            /** @description 不传表示保留已保存的 Token；首次保存必须提供。 */
             bot_token?: string;
             chat_id: string;
             proxy_mode: components["schemas"]["TelegramProxyMode"];
+            /** @description Must be empty when proxy_mode is none. reverse_proxy requires https without credentials/query; socks5 requires socks5://host:port. */
             proxy_url: string;
+            /** @description Write-only; send together with proxy_password. Omit both to keep saved authentication only while proxy_mode and proxy_url are unchanged; changing either clears saved authentication unless new values are sent in the same request. Two empty strings clear it explicitly. */
+            proxy_username?: string;
+            /** @description Write-only; see proxy_username. */
+            proxy_password?: string;
         };
         /**
          * @description 内置规则；仅返回当前已实现且有可用来源的规则。
@@ -7296,7 +7304,25 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            /** @description 并发修改（`telegram_configuration_changed`） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             422: components["responses"]["ValidationFailed"];
+            /** @description 主密钥不可用，无法加密保存（`telegram_configuration_unavailable`） */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     sendTelegramTest: {

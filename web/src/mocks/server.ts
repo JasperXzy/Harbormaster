@@ -321,14 +321,16 @@ export async function handle(method: string, fullPath: string, body: unknown): P
     if (!u.chat_id?.trim()) fields.chat_id = "required";
     if (u.proxy_mode !== "none" && !u.proxy_url?.trim()) fields.proxy_url = "required";
     if (Object.keys(fields).length) return fail(422, "validation_failed", { fields });
-    db.telegram = { ...db.telegram, bot_token_set: true, chat_id: u.chat_id, proxy_mode: u.proxy_mode, proxy_url: u.proxy_mode === "none" ? "" : u.proxy_url, status: db.telegram.status === "not_configured" ? "ok" : db.telegram.status };
+    const sameProxy = u.proxy_mode === db.telegram.proxy_mode && u.proxy_url === db.telegram.proxy_url;
+    const authSet = u.proxy_mode !== "none" && (u.proxy_username !== undefined ? u.proxy_username !== "" : sameProxy && !!db.telegram.proxy_auth_set);
+    db.telegram = { ...db.telegram, bot_token_set: true, chat_id: u.chat_id, proxy_mode: u.proxy_mode, proxy_url: u.proxy_mode === "none" ? "" : u.proxy_url, proxy_auth_set: authSet, status: "not_tested", last_error: null, last_success_at: null };
     return ok(db.telegram);
   }
   if (is("POST", "/notify/telegram/test")) {
     if (!db.telegram.bot_token_set) return fail(409, "telegram_not_configured");
     return ok(startJob("telegram_test", 1500, () => {
       if (scene === "stale") return { error: { code: "telegram_unreachable", message: "mock" } };
-      const n: T.Notification = { id: "ntf_" + Date.now(), created_at: iso(), kind: "test", severity: "info", rule_key: null, title: "测试消息", body: "如果你在 Telegram 里看到这条消息，说明通知已经配置好了。", account_id: null, instance_id: null, probe_plan_id:null, delivery_status: "sent" };
+      const n: T.Notification = { id: "ntf_" + Date.now(), created_at: iso(), kind: "test", severity: "info", rule_key: null, title: "⚪ 测试消息", body: "如果你在 Telegram 里看到这条消息，说明通知已经配置好了。", account_id: null, instance_id: null, probe_plan_id:null, delivery_status: "sent" };
       db.notifications.unshift(n);
       db.telegram.status = "ok";
       db.telegram.last_error = null;
