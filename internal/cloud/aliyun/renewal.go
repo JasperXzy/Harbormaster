@@ -10,13 +10,34 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/model"
 )
 
+func subscriptionRenewalQueryable(row map[string]any, now time.Time) bool {
+	if charge(row) != "subscription" {
+		return false
+	}
+	if locked := instanceLocked(row); locked != nil && *locked {
+		return false
+	}
+	if raw := text(row, "ExpiredTime"); raw != "" {
+		for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04Z"} {
+			if exp, err := time.Parse(layout, raw); err == nil && !exp.After(now) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func (c Inventory) renewals(ctx context.Context, cred Credentials, region, kind string, instances collection, before func() error) collection {
+	return c.renewalsAt(ctx, cred, region, kind, instances, time.Now().UTC(), before)
+}
+
+func (c Inventory) renewalsAt(ctx context.Context, cred Credentials, region, kind string, instances collection, now time.Time, before func() error) collection {
 	if instances.err != nil {
 		return collection{err: instances.err}
 	}
 	ids := []string{}
 	for _, row := range instances.rows {
-		if charge(row) == "subscription" {
+		if subscriptionRenewalQueryable(row, now) {
 			ids = append(ids, text(row, "InstanceId"))
 		}
 	}

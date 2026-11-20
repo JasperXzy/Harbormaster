@@ -198,12 +198,20 @@ func (c Inventory) Scan(ctx context.Context, a model.Account, credential model.C
 		types := c.instanceTypes(ctx, cred, region, ecs, before)
 		observe("ecs_read", types.err)
 		ecsRenewal := c.renewals(ctx, cred, region, "ecs", ecs, before)
-		observe("ecs_read", ecsRenewal.err)
+		if ecsRenewal.err == nil {
+			observe("ecs_read", nil)
+		} else if code := Code(ecsRenewal.err); code == "permission_denied" || code == "access_key_invalid" || code == "cancelled" {
+			observe("ecs_read", ecsRenewal.err)
+		}
 		swasRenewal := c.renewals(ctx, cred, region, "swas", swas, before)
 		if swas.err == nil {
 			for _, row := range swas.rows {
 				if charge(row) == "subscription" {
-					observe("bss_read", swasRenewal.err)
+					if swasRenewal.err == nil {
+						observe("bss_read", nil)
+					} else if code := Code(swasRenewal.err); code == "permission_denied" || code == "access_key_invalid" || code == "cancelled" {
+						observe("bss_read", swasRenewal.err)
+					}
 					break
 				}
 			}

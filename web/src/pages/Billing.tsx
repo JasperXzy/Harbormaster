@@ -154,13 +154,15 @@ function Renewals({ instances, accounts }: { instances: Instance[] | undefined; 
             <thead><tr><th>实例</th><th>到期</th><th>续费方式</th></tr></thead>
             <tbody>
               {rows.map((i) => {
-                const days = Math.ceil((Date.parse(i.expires_at!) - now) / 86400_000);
+                const diffMs = Date.parse(i.expires_at!) - now;
+                const expired = diffMs <= 0;
+                const days = Math.ceil(diffMs / 86400_000);
                 const r = i.renewal ? RENEWAL[i.renewal.status] : RENEWAL.unknown;
-                const soon = days <= 7 && i.renewal?.status !== "auto_renewal";
+                const soon = !expired && days <= 7 && i.renewal?.status !== "auto_renewal";
                 return (
                   <tr key={i.id}>
                     <td><b>{i.name}</b><div className="sub">{accounts.find((a) => a.id === i.account_id)?.name}</div></td>
-                    <td>{ymd(i.expires_at!)}<div className="sub">{days < 0 ? "已过期" : days === 0 ? "今天到期" : soon ? <Badge level="critical">还剩 {days} 天</Badge> : `还剩 ${days} 天`}</div></td>
+                    <td>{ymd(i.expires_at!)}<div className="sub">{expired ? <Badge level="critical">已过期</Badge> : soon ? <Badge level="critical">还剩 {days} 天</Badge> : `还剩 ${days} 天`}</div></td>
                     <td><Badge level={r[0]}>{r[1]}</Badge></td>
                   </tr>
                 );

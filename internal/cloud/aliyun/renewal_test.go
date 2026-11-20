@@ -153,3 +153,41 @@ func TestRenewalReadSigningAndWriteGate(t *testing.T) {
 		}
 	}
 }
+
+func TestExpiredOrLockedSubscriptionInstancesDoNotPoisonRenewalOrAccountScan(t *testing.T) {
+	now := time.Date(2026, 11, 20, 18, 50, 0, 0, time.UTC)
+	instances := collection{rows: []map[string]any{
+		{"InstanceId": "i-expired", "InstanceChargeType": "PrePaid", "ExpiredTime": "2026-11-20T16:00Z"},
+		{"InstanceId": "i-locked", "InstanceChargeType": "PrePaid", "ExpiredTime": "2026-12-01T16:00Z", "OperationLocks": map[string]any{"LockReason": []any{map[string]any{"LockReason": "Expired"}}}},
+		{"InstanceId": "i-active", "InstanceChargeType": "PrePaid", "ExpiredTime": "2026-12-20T16:00Z"},
+	}}
+	queried := ""
+	c := Inventory{Caller: callFunc(func(_ context.Context, _ Credentials, action, _ string, q map[string]string) (map[string]any, error) {
+		if action != "DescribeInstanceAutoRenewAttribute" {
+			t.Fatal(action)
+		}
+		queried = q["InstanceId"]
+		return map[string]any{"TotalCount": 1, "InstanceRenewAttributes": map[string]any{"InstanceRenewAttribute": []any{map[string]any{"InstanceId": "i-active", "RenewalStatus": "AutoRenewal", "AutoRenewEnabled": true}}}}, nil
+	})}
+	res := c.renewalsAt(context.Background(), fakeCredentials(), "cn-shanghai", "ecs", instances, now, func() error { return nil })
+	if res.err != nil || queried != "i-active" || len(res.rows) != 1 {
+		t.Fatal("expired or locked instances were not skipped:", res.err, queried, res.rows)
+	}
+
+	// Auxiliary non-auth renewal errors stay attached to instance.renewal without failing the whole account scan.
+	scanInv := Inventory{Caller: callFunc(func(ctx context.Context, cred Credentials, action, region string, q map[string]string) (map[string]any, error) {
+		if action == "DescribeInstanceAutoRenewAttribute" {
+			return nil, failure("aliyun_unreachable")
+		}
+		return inventoryFixture(ctx, cred, action, region, q)
+	})}
+	scanRes := scanInv.Scan(context.Background(), testAccount(), fakeCredentials().Credential, true, func() error { return nil })
+	if scanRes.Failure != "" {
+		t.Fatal("auxiliary renewal error poisoned account scan:", scanRes.Failure)
+	}
+	for _, p := range scanRes.Permissions.Items {
+		if p.Key == "ecs_read" && p.Result != "passed" {
+			t.Fatal("ecs_read poisoned by auxiliary renewal error:", p)
+		}
+	}
+}
