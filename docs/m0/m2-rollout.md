@@ -71,3 +71,14 @@ PASS
 1. 停止 `hm-server` 容器，将 `/var/backups/harbormaster/m2-4278091/` 中的 `harbormaster.db`（因本次包含 `050`–`054` 迁移）、`server.json`、`compose.readonly.yml`、`runtime.env` 拷回原路径（保持 `harbormaster.db` 属主 `65532:65532`、`0600`）。
 2. 在 `/opt/harbormaster/releases/20261117-nzs6aj96` 执行 `sudo docker compose --env-file runtime.env -f compose.yml -f compose.readonly.yml up -d hm-server`。
 3. 将 `/var/backups/harbormaster/m2-4278091/index.html` 原子拷回 `/opt/1panel/www/harbormaster-web/index.html`。
+
+## 6. `v0.2.1`（`d2abde5`）已到期包年包月 ECS 续费查询热修复
+
+- **现象与根因**：`JasperXzy` 账号下上海包年包月 ECS `Ali_ShangHai`（`i-uf65eqxuucx20ck92au3`）于 `2026-11-20T16:00:00Z`（北京时间 `11-21 00:00`）到期并锁定（`locked: true`）。`DescribeInstanceAutoRenewAttribute` 对已到期/锁定实例返回业务错误，被归类为 `aliyun_unreachable` 并上浮为整账号 `ecs_read` 失败，导致账号被误判为 `连接失败`。
+- **修复内容（提交 `d2abde5`）**：
+  - `internal/cloud/aliyun/renewal.go`：新增 `subscriptionRenewalQueryable(row, now)`，对 `locked == true` 或 `ExpiredTime <= now` 的包年包月实例直接跳过 `DescribeInstanceAutoRenewAttribute` / `QueryAvailableInstances`，保持实例 `expires_at` 展示而不再对过期实例发无效续费查询。
+  - `internal/cloud/aliyun/inventory.go`：辅助续费查询仅在鉴权/权限/取消错误（`permission_denied`、`access_key_invalid`、`cancelled`）时上浮至账号级 `observe(...)`，其余单实例业务异常仅记录于实例 `renewal.last_error`，不再污染账号 `sync_status` 与 `ecs_read`。
+  - `web/src/pages/Billing.tsx`：将到期时间比较由按整天取整改为精确毫秒比较（`Date.parse(i.expires_at) - now <= 0`），当天凌晨已到期的实例立即显示红色 `已过期` 标签而非 `今天到期`。
+- **热更新与在线核验（`2026-11-20T19:06Z`）**：
+  - 后端镜像更新为 `harbormaster-server:m2-d2abde5`（版本 `0.2.1`），通过 `deploy/check-container.sh` 自检并平滑重建 `harbormaster-hm-server-1`（`running / healthy`）；前端原子更新 `index-CHa5Hang.js` 与 `index.html`。
+  - 在线重跑 `permission_check` 后确认：`JasperXzy` 恢复 `sync_status="ok"`、`consecutive_failures=0`、`last_error=null`，6 项只读权限（含 `ecs_read`、`cms_read`、`bss_read`）全部 `passed`，`Ali_ShangHai` 快照 `renewal.last_error=null` 且保留到期时间 `2026-11-20T16:00:00Z`。
