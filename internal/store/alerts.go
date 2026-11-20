@@ -46,7 +46,7 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 	}
 	// Read account metadata, not credentials. Disabled accounts have no applicable
 	// observations, so their open incidents close silently below.
-	rows, err = tx.QueryContext(ctx, "SELECT account_id,credential_version,config_json FROM account_settings WHERE enabled=1 ORDER BY account_id")
+	rows, err = tx.QueryContext(ctx, "SELECT account_id,credential_version,revision,config_json FROM account_settings WHERE enabled=1 ORDER BY account_id")
 	if err != nil {
 		return err
 	}
@@ -54,8 +54,8 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 	for rows.Next() {
 		var a model.Account
 		var raw, id string
-		var version int64
-		if err = rows.Scan(&id, &version, &raw); err != nil {
+		var version, revision int64
+		if err = rows.Scan(&id, &version, &revision, &raw); err != nil {
 			rows.Close()
 			return err
 		}
@@ -65,6 +65,7 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 		}
 		a.ID = id
 		a.CredentialVersion = version
+		a.Revision = revision
 		accounts = append(accounts, a)
 	}
 	err = rows.Err()
@@ -197,6 +198,11 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 		return err
 	}
 	observations = append(observations, idle...)
+	cdtObs, err := cdtUsageAndForecastAlertsTx(ctx, tx, rules, accounts, now)
+	if err != nil {
+		return err
+	}
+	observations = append(observations, cdtObs...)
 	seen := map[string]bool{}
 	for _, o := range observations {
 		seen[o.rule+"/"+o.target] = true

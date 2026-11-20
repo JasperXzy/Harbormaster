@@ -30,6 +30,12 @@ type alertFacts struct {
 	resourceKind         string
 	resourceName         string
 	resourceReason       string
+	scope                string
+	usedBytes            int64
+	hasUsed              bool
+	quotaBytes           int64
+	dailyAvgBytes        int64
+	exceedsOn            string
 }
 
 func severitySymbol(kind, severity string) string {
@@ -201,6 +207,22 @@ func alertCopy(ctx context.Context, q queryRower, o alertObservation, kind, seve
 			return symbol + " " + plan() + " 的目标恢复可达", ""
 		}
 		return symbol + " " + plan() + " 的目标连不上了", "连续几次探测全部失败。"
+	case "cdt_forecast_exceed":
+		sc := copyScope(f.scope)
+		if recovered {
+			return symbol + " " + account() + " 的" + sc + "额度预计月底前够用了", ""
+		}
+		when := f.exceedsOn
+		if when == "" {
+			when = "月底前"
+		}
+		title := symbol + " " + account() + " 的" + sc + "额度预计 " + when + " 用完"
+		body := "最近 7 天平均每天 " + copyGB(f.dailyAvgBytes)
+		if f.hasUsed {
+			body += "，现在已用 " + copyGB(f.usedBytes) + " / " + copyGB(f.quotaBytes)
+		}
+		body += "。"
+		return title, body
 	case "idle_resource_detected":
 		what := idleKindCopy[f.resourceKind]
 		if what == "" {

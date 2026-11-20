@@ -1,3 +1,4 @@
+# 2026-11-21  CDT alerts and unverified quota execution opt-in: formally adopt 1024^3-byte GiB units for CDT usage and forecast alerts, enabling cdt_usage (cycle-deduplicated per crossed tier using max(official, ready_estimation)) and cdt_forecast_exceed (stateful with recovery). Add QuotaProtectionRuleInput.allow_unverified_execution (default false) so rules can explicitly opt in to real shutdown execution when estimation.status=ready or official_bytes crosses threshold.
 # 2026-11-21  M2 hourly history, attribution, pricing and retention: add time-prorated display-only agent hourly rollups (GET /instances/{instance_id}/agent-hourly-history), populate today and current-cycle attribution on /traffic/billing-subjects and /bandwidth-packages plus live /bandwidth-packages/{package_id}/hourly periods, add maintainable tiered CDT pricing (GET/PUT /traffic/pricing) with QuotaStatus.overage_cost, and run bounded background cleanup for rolled-up raw agent samples, hourly aggregates, cloud rate history, audit logs and unreferenced refresh jobs.
 # 2026-11-21  M2 metadata, settings and audit values: implement PATCH /settings for business_timezone and configurable retention policy (latency_probe_days, agent_raw_days, agent_hourly_months, audit_log_days, job_history_days). Add local-only Instance metadata (note, group, tags), GET /instances group/tag filters and PATCH /instances/{instance_id}/metadata; never write back to Alibaba Cloud. User-confirmed audit policy: AuditEntry.details adds optional non-sensitive before/after maps for configuration changes while credentials remain boolean markers only, and summary is rendered in Chinese.
 # 2026-11-18  Traffic account selector: reserve account_id=all on quotas/daily for enabled-account display aggregates. Full totals require every included account; known subtotals and coverage counts remain explicit. Daily values retain gaps and mixed sources. Forecasts sum independent account predictions, expose sample-count range, and never treat pooled quotas as transferable or authorize actions.
@@ -5625,6 +5626,7 @@ components:
         stop_mode: {type: string, enum: ["", keep_charging, stop_charging], description: CDT 停机指定 ECS 模式，轻量为空；预付费不允许 stop_charging。}
         reserve_seconds: {type: integer, minimum: 0, maximum: 3600, default: 60}
         dry_run: {type: boolean, default: true}
+        allow_unverified_execution: {type: boolean, default: false, description: 允许在官方未返回统计截止时间时，使用本地延迟窗口实时估算或已知官方累计触发真实停机。}
         confirmed_self_instance_id: {type: string, description: 默认空；显式确认当前服务自身绑定实例才能填写。}
     QuotaProtectionRule:
       type: object
@@ -5643,6 +5645,7 @@ components:
         stop_mode: {type: string, enum: ["", keep_charging, stop_charging], description: CDT 停机指定 ECS 模式，轻量为空；预付费不允许 stop_charging。}
         reserve_seconds: {type: integer, minimum: 0, maximum: 3600, default: 60}
         dry_run: {type: boolean, default: true}
+        allow_unverified_execution: {type: boolean, default: false}
         confirmed_self_instance_id: {type: string, description: 默认空；显式确认当前服务自身绑定实例才能填写。}
         id: {type: string}
         created_at: {type: string, format: date-time}

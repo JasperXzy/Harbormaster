@@ -50,7 +50,7 @@ func authorizeQuotaDispatch(ctx context.Context, tx *sql.Tx, p PowerOperation, p
 	if err != nil {
 		return err
 	}
-	if evaluation.key != key || evaluation.decision.Simulation || evaluation.decision.State != "triggered" || !evaluation.estimate.Qualified {
+	if evaluation.key != key || evaluation.decision.Simulation || evaluation.decision.State != "triggered" || !quotaSourceExecutable(r, evaluation) {
 		return ErrProtectionGuard
 	}
 	var active bool

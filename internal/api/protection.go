@@ -33,6 +33,38 @@ func readProtectionInput(w http.ResponseWriter, r *http.Request, out any, keys .
 	}
 	return true
 }
+func readProtectionRulePayload(w http.ResponseWriter, r *http.Request, out *model.ProtectionRuleInput) bool {
+	required := []string{"revision", "name", "enabled", "account_id", "scope", "source_instance_id", "threshold_kind", "threshold", "action", "target_instance_ids", "stop_mode", "reserve_seconds", "dry_run", "confirmed_self_instance_id"}
+	var raw map[string]json.RawMessage
+	if !readBody(w, r, &raw) {
+		return false
+	}
+	allowed := len(required)
+	if v, has := raw["allow_unverified_execution"]; has {
+		if string(v) == "null" {
+			fieldError(w, "allow_unverified_execution", "required")
+			return false
+		}
+		allowed++
+	}
+	if len(raw) != allowed {
+		fieldError(w, "protection", "required_fields")
+		return false
+	}
+	for _, key := range required {
+		v, ok := raw[key]
+		if !ok || string(v) == "null" {
+			fieldError(w, key, "required")
+			return false
+		}
+	}
+	data, err := json.Marshal(raw)
+	if err != nil || json.Unmarshal(data, out) != nil {
+		fieldError(w, "protection", "invalid_format")
+		return false
+	}
+	return true
+}
 func protectionError(w http.ResponseWriter, err error) {
 	if errors.Is(err, store.ErrEstimationRevision) {
 		writeError(w, 409, "revision_conflict")
@@ -99,7 +131,7 @@ func (p *productionPanel) quotaProtection(w http.ResponseWriter, r *http.Request
 			return true
 		}
 		var in model.ProtectionRuleInput
-		if !readProtectionInput(w, r, &in, "revision", "name", "enabled", "account_id", "scope", "source_instance_id", "threshold_kind", "threshold", "action", "target_instance_ids", "stop_mode", "reserve_seconds", "dry_run", "confirmed_self_instance_id") {
+		if !readProtectionRulePayload(w, r, &in) {
 			return true
 		}
 		if in.ConfirmedSelfID != "" && (!p.protectionPolicy.SelfKnown || p.protectionPolicy.SelfInstanceID != in.ConfirmedSelfID) {

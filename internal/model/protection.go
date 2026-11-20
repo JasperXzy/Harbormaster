@@ -3,20 +3,21 @@ package model
 import "time"
 
 type ProtectionRuleInput struct {
-	Revision         int64    `json:"revision"`
-	Name             string   `json:"name"`
-	Enabled          bool     `json:"enabled"`
-	AccountID        string   `json:"account_id"`
-	Scope            string   `json:"scope"`
-	SourceInstanceID string   `json:"source_instance_id"`
-	ThresholdKind    string   `json:"threshold_kind"`
-	Threshold        int64    `json:"threshold"`
-	Action           string   `json:"action"`
-	Targets          []string `json:"target_instance_ids"`
-	StopMode         string   `json:"stop_mode"`
-	ReserveSeconds   int      `json:"reserve_seconds"`
-	DryRun           bool     `json:"dry_run"`
-	ConfirmedSelfID  string   `json:"confirmed_self_instance_id"`
+	Revision                 int64    `json:"revision"`
+	Name                     string   `json:"name"`
+	Enabled                  bool     `json:"enabled"`
+	AccountID                string   `json:"account_id"`
+	Scope                    string   `json:"scope"`
+	SourceInstanceID         string   `json:"source_instance_id"`
+	ThresholdKind            string   `json:"threshold_kind"`
+	Threshold                int64    `json:"threshold"`
+	Action                   string   `json:"action"`
+	Targets                  []string `json:"target_instance_ids"`
+	StopMode                 string   `json:"stop_mode"`
+	ReserveSeconds           int      `json:"reserve_seconds"`
+	DryRun                   bool     `json:"dry_run"`
+	AllowUnverifiedExecution bool     `json:"allow_unverified_execution"`
+	ConfirmedSelfID          string   `json:"confirmed_self_instance_id"`
 }
 type ProtectionRule struct {
 	ProtectionRuleInput

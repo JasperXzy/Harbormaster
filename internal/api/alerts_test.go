@@ -15,16 +15,23 @@ func TestAlertRuleAPIUsesAvailableSourcesAndSharedOfflineTimeout(t *testing.T) {
 	var list struct {
 		Items []model.AlertRule `json:"items"`
 	}
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 12 {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 14 {
 		t.Fatal(w.Code, w.Body)
 	}
+	hasUsage, hasForecast := false, false
 	for _, rule := range list.Items {
-		if rule.Key == "cdt_usage" || rule.Key == "cdt_forecast_exceed" {
-			t.Fatal("unverified metering rule advertised")
+		if rule.Key == "cdt_usage" && rule.Enabled && rule.Urgent {
+			hasUsage = true
+		}
+		if rule.Key == "cdt_forecast_exceed" && rule.Enabled && !rule.Urgent {
+			hasForecast = true
 		}
 		if rule.Key == "idle_resource_detected" && (!rule.Enabled || rule.Urgent) {
 			t.Fatal("idle discovery rule defaults", rule)
 		}
+	}
+	if !hasUsage || !hasForecast {
+		t.Fatal("missing enabled cdt_usage or cdt_forecast_exceed", list.Items)
 	}
 	input := map[string]any{"params": map[string]int{"offline_after_seconds": 90}}
 	if w = panelRequest(p, "PATCH", "/alert-rules/agent_offline", input, cookie, ""); w.Code != 403 {
@@ -42,8 +49,11 @@ func TestAlertRuleAPIUsesAvailableSourcesAndSharedOfflineTimeout(t *testing.T) {
 			t.Fatal(w.Code, w.Body)
 		}
 	}
-	if w = panelRequest(p, "PATCH", "/alert-rules/cdt_usage", map[string]bool{"enabled": true}, cookie, csrf); w.Code != 404 {
-		t.Fatal("unavailable rule became enabled")
+	if w = panelRequest(p, "PATCH", "/alert-rules/cdt_usage", map[string]any{"enabled": true, "params": map[string]any{"thresholds_percent": []int{75, 90, 95}}}, cookie, csrf); w.Code != 200 {
+		t.Fatal("cdt_usage update failed", w.Code, w.Body.String())
+	}
+	if w = panelRequest(p, "PATCH", "/alert-rules/unknown_rule", map[string]bool{"enabled": true}, cookie, csrf); w.Code != 404 {
+		t.Fatal("unknown rule accepted", w.Code)
 	}
 	for _, days := range []int{-1, 366} {
 		if w = panelRequest(p, "PATCH", "/alert-rules/instance_expiring", map[string]any{"params": map[string]int{"before_days": days}}, cookie, csrf); w.Code != 422 {

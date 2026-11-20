@@ -19,7 +19,21 @@ import (
 type quotaEvaluation struct {
 	decision model.QuotaDecision
 	estimate model.TrafficEstimation
+	official *int64
 	key      string
+}
+
+func quotaSourceExecutable(r model.ProtectionRule, e quotaEvaluation) bool {
+	if e.estimate.Qualified {
+		return true
+	}
+	if !r.AllowUnverifiedExecution {
+		return false
+	}
+	if e.estimate.Status == "ready" && e.estimate.Estimated != nil {
+		return true
+	}
+	return e.official != nil && e.decision.Threshold != nil && *e.official >= *e.decision.Threshold
 }
 
 func evaluateQuota(ctx context.Context, tx *sql.Tx, r model.ProtectionRule, policy model.ProtectionPolicy, now time.Time) (quotaEvaluation, error) {
@@ -88,6 +102,7 @@ func evaluateQuota(ctx context.Context, tx *sql.Tx, r model.ProtectionRule, poli
 	if estimate == nil && official == nil {
 		return e, nil
 	}
+	e.official = official
 	value := int64(0)
 	if official != nil {
 		value = *official
@@ -210,7 +225,7 @@ func quotaTargetDecision(ctx context.Context, tx *sql.Tx, r model.ProtectionRule
 		target.Outcome = "would_stop"
 	case !policy.PowerEnabled:
 		target.Outcome = "power_disabled"
-	case !evaluation.estimate.Qualified:
+	case !quotaSourceExecutable(r, evaluation):
 		target.Outcome = "source_unqualified"
 	default:
 		sum := sha256.Sum256([]byte(fmt.Sprintf("%s|%s|%d|%s", r.ID, evaluation.key, generation, id)))
@@ -281,7 +296,7 @@ func (s *Store) EvaluateQuotaProtection(ctx context.Context, policy model.Protec
 				kind := "alert"
 				key := "quota_protection"
 				account := r.AccountID
-				rehearsal := d.Simulation || r.DryRun || !evaluation.estimate.Qualified || !policy.PowerEnabled
+				rehearsal := d.Simulation || r.DryRun || !quotaSourceExecutable(r, evaluation) || !policy.PowerEnabled
 				title, body := quotaProtectionCopy(ctx, tx, r, d, rehearsal)
 				if _, e = enqueueNotification(ctx, tx, model.Notification{EventKey: fmt.Sprintf("quota:%s:%s:%d:alert", r.ID, evaluation.key, generation), Kind: kind, Severity: "critical", RuleKey: &key, Title: title, Body: body, AccountID: &account, Urgent: true}, now); e != nil {
 					return e

@@ -28,6 +28,7 @@ type AlertParams struct {
 	RecoverySamples     *int                `json:"recovery_samples,omitempty"`
 	BalanceThresholds   *[]BalanceThreshold `json:"balance_thresholds,omitempty"`
 	BeforeDays          *int                `json:"before_days,omitempty"`
+	ThresholdsPercent   *[]int              `json:"thresholds_percent,omitempty"`
 	ConsecutiveFailures *int                `json:"consecutive_failures,omitempty"`
 	OfflineAfterSeconds *int                `json:"offline_after_seconds,omitempty"`
 }
@@ -61,7 +62,36 @@ func (r AlertRule) Validate() map[string]string {
 	if r.Key != "balance_low" && r.Params.BalanceThresholds != nil {
 		fields["params.balance_thresholds"] = "not_applicable"
 	}
+	if r.Key != "cdt_usage" && r.Params.ThresholdsPercent != nil {
+		fields["params.thresholds_percent"] = "not_applicable"
+	}
 	switch r.Key {
+	case "cdt_usage":
+		if r.Params.ThresholdsPercent == nil || len(*r.Params.ThresholdsPercent) == 0 || len(*r.Params.ThresholdsPercent) > 10 {
+			fields["params.thresholds_percent"] = "required_or_out_of_range"
+		} else {
+			prev := 0
+			for _, v := range *r.Params.ThresholdsPercent {
+				if v <= prev || v > 100 {
+					fields["params.thresholds_percent"] = "invalid_thresholds"
+					break
+				}
+				prev = v
+			}
+		}
+		if r.Params.ConsecutiveFailures != nil {
+			fields["params.consecutive_failures"] = "not_applicable"
+		}
+		if r.Params.OfflineAfterSeconds != nil {
+			fields["params.offline_after_seconds"] = "not_applicable"
+		}
+	case "cdt_forecast_exceed":
+		if r.Params.ConsecutiveFailures != nil {
+			fields["params.consecutive_failures"] = "not_applicable"
+		}
+		if r.Params.OfflineAfterSeconds != nil {
+			fields["params.offline_after_seconds"] = "not_applicable"
+		}
 	case "network_latency", "network_loss", "network_unreachable":
 		if r.Params.ProbeThresholds == nil || *r.Params.ProbeThresholds == nil {
 			fields["params.probe_thresholds"] = "required"
