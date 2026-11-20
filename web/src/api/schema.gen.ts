@@ -21,6 +21,100 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/automation/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 每日定时开关机规则列表 */
+        get: operations["listPowerSchedules"];
+        put?: never;
+        /** 创建每日定时开关机规则（从下个计划时间点起生效） */
+        post: operations["createPowerSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/automation/schedules/{schedule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** 修改每日定时开关机规则 */
+        put: operations["updatePowerSchedule"];
+        post?: never;
+        /** 删除每日定时开关机规则 */
+        delete: operations["deletePowerSchedule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/automation/keepalive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 实例意外停止保活配置 */
+        get: operations["getKeepaliveSettings"];
+        /** 修改实例意外停止保活配置 */
+        put: operations["updateKeepaliveSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/automation/monthly-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 每月 1 号额度停机自动开机配置 */
+        get: operations["getMonthlyResetSettings"];
+        /** 修改每月 1 号额度停机自动开机配置 */
+        put: operations["updateMonthlyResetSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{instance_id}/intent-confirmation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。 */
+                instance_id: components["parameters"]["InstanceId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 确认面板之外被关机实例的期望状态（保持停止 / 恢复运行） */
+        post: operations["confirmInstanceIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/protection/status": {
         parameters: {
             query?: never;
@@ -717,6 +811,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/instances/{instance_id}/agent-hourly-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 实例采集程序的小时聚合流量历史（最长 13 个月）
+         * @description Time-prorated UTC hourly buckets derived from cumulative agent samples. Boundary-crossing intervals are prorated and marked estimated=true.
+         *     Display and trend analysis only; never used for CDT cutoff alignment or automatic shutdown.
+         */
+        get: operations["listInstanceAgentHourlyHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/instances/{instance_id}/agent-network-history": {
         parameters: {
             query?: never;
@@ -1140,6 +1255,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/instances/{instance_id}/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** 修改实例的本地备注、分组与标签（不回写阿里云） */
+        patch: operations["updateInstanceMetadata"];
+        trace?: never;
+    };
     "/system-events": {
         parameters: {
             query?: never;
@@ -1250,6 +1382,23 @@ export interface paths {
          *     Production requires instance_power_enabled=true; default and development mode return 503 instance_power_disabled without enqueueing.
          */
         post: operations["controlInstancePower"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 手机 / 桌面小组件摘要接口（需要 summary:read 权限，不受管理来源 IP 白名单限制） */
+        get: operations["getWidgetSummary"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1371,6 +1520,24 @@ export interface paths {
         post?: never;
         /** 撤销该实例的 agent token */
         delete: operations["revokeAgentToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/traffic/pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** CDT 超额流量阶梯单价配置 */
+        get: operations["getTrafficPricing"];
+        /** 修改 CDT 超额流量阶梯单价配置 */
+        put: operations["updateTrafficPricing"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1636,6 +1803,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/notify/telegram/control": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Telegram 远程控制配置（启用开关与允许的用户 ID 白名单） */
+        get: operations["getTelegramControl"];
+        /** 修改 Telegram 远程控制配置 */
+        put: operations["updateTelegramControl"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/alert-rules": {
         parameters: {
             query?: never;
@@ -1841,12 +2026,18 @@ export interface components {
             account_id: string | null;
             /** @description Links operation evidence to its persistent task; not proof of cloud success. */
             job_id: string | null;
-            /** @description Placeholder action text; frontend owns final wording. */
+            /** @description Human-readable Chinese summary of the audited action. */
             summary: string;
-            /** @description Fixed safe metadata only. No values from credentials or arbitrary configuration/provider payloads. A credential replacement is a boolean marker. */
+            /** @description Non-sensitive metadata and before/after values only. Credentials, tokens, hashes, ciphertexts and raw provider errors never enter audit details; credential replacement is a boolean marker. */
             details: {
                 changed_fields: string[];
                 credentials_changed: boolean;
+                before?: {
+                    [key: string]: unknown;
+                };
+                after?: {
+                    [key: string]: unknown;
+                };
                 /** Format: int64 */
                 revision?: number;
                 /** @enum {string} */
@@ -2509,11 +2700,7 @@ export interface components {
         Settings: {
             /** @description IANA 时区名，面板按它显示时间、切分"今天"。 */
             business_timezone: string;
-            /** @description Read-only process configuration, not a guarantee that cleanup has already completed. Production serve runs bounded cleanup; development fixtures are synthetic. Agent raw/hourly and traceroute retention are separate. */
-            retention: {
-                /** @default 30 */
-                latency_probe_days: number;
-            };
+            retention: components["schemas"]["RetentionSettings"];
             /** @description 采集周期，只读，用于在界面上解释数据有多新。 */
             collection: {
                 /** @description Independent event polling interval; default 60 seconds. Queueing and provider latency can delay observation. */
@@ -2525,8 +2712,29 @@ export interface components {
                 resource_scan_interval_seconds: number;
             };
         };
+        /** @description Configured retention policy; production serve runs bounded background cleanup. */
+        RetentionSettings: {
+            /** @default 30 */
+            latency_probe_days: number;
+            /** @default 7 */
+            agent_raw_days: number;
+            /** @default 13 */
+            agent_hourly_months: number;
+            /** @default 180 */
+            audit_log_days: number;
+            /** @default 90 */
+            job_history_days: number;
+        };
+        RetentionSettingsUpdate: {
+            latency_probe_days?: number;
+            agent_raw_days?: number;
+            agent_hourly_months?: number;
+            audit_log_days?: number;
+            job_history_days?: number;
+        };
         SettingsUpdate: {
             business_timezone?: string;
+            retention?: components["schemas"]["RetentionSettingsUpdate"];
         };
         /**
          * @description china = 国内站；international = 国际站。
@@ -3038,6 +3246,19 @@ export interface components {
                 message?: string;
             } | null;
         };
+        InstanceMetadata: {
+            instance_id: string;
+            note: string;
+            group: string | null;
+            tags: string[];
+            /** Format: date-time */
+            updated_at: string | null;
+        };
+        InstanceMetadataUpdate: {
+            note?: string;
+            group?: string | null;
+            tags?: string[];
+        };
         Instance: {
             id: string;
             /** @description 阿里云实例 ID。 */
@@ -3060,6 +3281,19 @@ export interface components {
              * @description Time the latest distinct intent was enqueued. Replaying an event key does not change this time or overwrite newer intent.
              */
             desired_state_updated_at?: string | null;
+            /** @description 本地多行备注，不回写阿里云。 */
+            note?: string;
+            /** @description 本地分组名，不回写阿里云。 */
+            group?: string | null;
+            /** @description 本地文本标签列表，不回写阿里云。 */
+            tags?: string[];
+            /** @description 是否支持节省停机（按量付费 / 抢占式 ECS 支持，包年包月和轻量不支持）。 */
+            supports_stop_charging?: boolean | null;
+            /** @description 检测到在面板之外被关机且尚未确认期望状态时非空；未确认前不触发保活。 */
+            pending_intent_confirmation?: {
+                /** Format: date-time */
+                detected_at: string;
+            } | null;
             /** @description Cloud rate fallback for instances without agent; separate from realtime agent values. Collected in background, aged stale after ten minutes; GET never queries clouds. No history or byte aggregation yet. */
             cloud_network?: components["schemas"]["CloudNetwork"] | null;
             /** @description Cached CPU samples from ECS CMS or SWAS DescribeMonitorData. GET performs no cloud calls. */
@@ -3418,6 +3652,77 @@ export interface components {
          * @enum {string}
          */
         OfficialDataStatus: "ok" | "unavailable" | "never_fetched" | "cutoff_unknown";
+        PowerScheduleInput: {
+            /** Format: int64 */
+            revision: number;
+            name: string;
+            enabled: boolean;
+            account_id: string;
+            /** @enum {string} */
+            action: "start" | "stop";
+            /** @enum {string} */
+            stop_mode: "" | "keep_charging" | "stop_charging";
+            time_of_day: string;
+            /** @description 0=周日 … 6=周六（业务时区）。 */
+            days_of_week: number[];
+            /** @default 15 */
+            catch_up_minutes: number;
+            target_instance_ids: string[];
+            /** @default false */
+            dry_run: boolean;
+            confirmed_self_instance_id: string;
+        };
+        PowerSchedule: {
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            name: string;
+            enabled: boolean;
+            account_id: string;
+            /** @enum {string} */
+            action: "start" | "stop";
+            /** @enum {string} */
+            stop_mode: "" | "keep_charging" | "stop_charging";
+            time_of_day: string;
+            days_of_week: number[];
+            catch_up_minutes: number;
+            target_instance_ids: string[];
+            dry_run: boolean;
+            confirmed_self_instance_id: string;
+            /** Format: date-time */
+            activated_at: string;
+            /** Format: date-time */
+            last_triggered_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        KeepaliveSettings: {
+            /** Format: int64 */
+            revision: number;
+            enabled: boolean;
+            dry_run: boolean;
+            /**
+             * @description 抢占式实例意外停止时无需等待人工确认直接尝试拉起。
+             * @default true
+             */
+            spot_auto_recover: boolean;
+            target_instance_ids: string[];
+            /** Format: date-time */
+            updated_at?: string | null;
+        };
+        MonthlyResetSettings: {
+            /** Format: int64 */
+            revision: number;
+            enabled: boolean;
+            dry_run: boolean;
+            target_instance_ids: string[];
+            /** Format: date-time */
+            last_cycle_start?: string | null;
+            /** Format: date-time */
+            updated_at?: string | null;
+        };
         QuotaProtectionRuleInput: {
             /** Format: int64 */
             revision: number;
@@ -3447,6 +3752,11 @@ export interface components {
             reserve_seconds: number;
             /** @default true */
             dry_run: boolean;
+            /**
+             * @description 允许在官方未返回统计截止时间时，使用本地延迟窗口实时估算或已知官方累计触发真实停机。
+             * @default false
+             */
+            allow_unverified_execution?: boolean;
             /** @description 默认空；显式确认当前服务自身绑定实例才能填写。 */
             confirmed_self_instance_id: string;
         };
@@ -3480,6 +3790,8 @@ export interface components {
             reserve_seconds?: number;
             /** @default true */
             dry_run?: boolean;
+            /** @default false */
+            allow_unverified_execution?: boolean;
             /** @description 默认空；显式确认当前服务自身绑定实例才能填写。 */
             confirmed_self_instance_id?: string;
             id?: string;
@@ -3650,6 +3962,8 @@ export interface components {
             /** @enum {string} */
             forecast_status?: "ready" | "insufficient_data" | "baseline_missing";
             forecast: components["schemas"]["TrafficForecast"] | null;
+            /** @description 按可维护阶梯单价计算的当前与预测超额费用（仅供展示）。 */
+            overage_cost?: components["schemas"]["QuotaOverageCost"] | null;
             /**
              * Format: date-time
              * @description 这份数据最近的实际检查时间；未抓取时为 null，不是官方统计截止时间。
@@ -3831,6 +4145,26 @@ export interface components {
              * @description 今日按计量规则算出的计费流量；不按流量计费为 null。
              */
             today_metered_bytes: number | null;
+            /**
+             * Format: int64
+             * @description 本计费周期已采集入方向字节数。
+             */
+            cycle_rx_bytes?: number | null;
+            /**
+             * Format: int64
+             * @description 本计费周期已采集出方向字节数。
+             */
+            cycle_tx_bytes?: number | null;
+            /**
+             * Format: int64
+             * @description 本计费周期按计费规则计算的归因字节数。
+             */
+            cycle_metered_bytes?: number | null;
+            /**
+             * Format: double
+             * @description 占同账号同 CDT 范围本周期已知计费流量的百分比（0–100）。
+             */
+            cycle_share_percent?: number | null;
             /** Format: date-time */
             updated_at: string | null;
         };
@@ -3915,10 +4249,71 @@ export interface components {
             today_tx_bytes: number | null;
             /** Format: int64 */
             today_metered_bytes: number | null;
+            /** Format: int64 */
+            cycle_rx_bytes?: number | null;
+            /** Format: int64 */
+            cycle_tx_bytes?: number | null;
+            /** Format: int64 */
+            cycle_metered_bytes?: number | null;
             /** @description 今日流量较大的方向。 */
             dominant_direction: (string & components["schemas"]["TrafficDirection"]) | null;
             /** Format: date-time */
             updated_at: string | null;
+        };
+        AgentHourlyBucket: {
+            /** Format: date-time */
+            hour_start: string;
+            /** Format: int64 */
+            rx_bytes: number;
+            /** Format: int64 */
+            tx_bytes: number;
+            /** Format: double */
+            rx_bytes_per_second: number;
+            /** Format: double */
+            tx_bytes_per_second: number;
+            covered_seconds: number;
+            sample_count: number;
+            estimated: boolean;
+        };
+        AgentHourlyHistoryPage: {
+            items: components["schemas"]["AgentHourlyBucket"][];
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+        };
+        PriceTier: {
+            /**
+             * Format: int64
+             * @description 该阶梯覆盖的超额流量上限（GiB，从超额部分 0 起算）；最后一档为 null 表示无上限。
+             */
+            up_to_gib: number | null;
+            /** @description 每 GiB（1024^3 字节）单价十进制字符串。 */
+            unit_price: string;
+        };
+        SitePricingProfile: {
+            /** @enum {string} */
+            currency: "CNY" | "USD";
+            mainland_tiers: components["schemas"]["PriceTier"][];
+            overseas_tiers: components["schemas"]["PriceTier"][];
+        };
+        TrafficPricing: {
+            /** Format: int64 */
+            revision: number;
+            /** Format: date-time */
+            updated_at?: string | null;
+            china: components["schemas"]["SitePricingProfile"];
+            international: components["schemas"]["SitePricingProfile"];
+        };
+        QuotaOverageCost: {
+            currency: string;
+            /** Format: int64 */
+            current_overage_bytes: number | null;
+            estimated_cost: string | null;
+            /** Format: int64 */
+            forecast_overage_bytes: number | null;
+            forecast_cost: string | null;
+            unverified: boolean;
         };
         BandwidthPackageHourly: {
             package_id: string;
@@ -3976,6 +4371,56 @@ export interface components {
             proxy_username?: string;
             /** @description Write-only; see proxy_username. */
             proxy_password?: string;
+        };
+        TelegramControlSettings: {
+            /** Format: int64 */
+            revision: number;
+            enabled: boolean;
+            /** @description 允许发送远程控制命令的 Telegram 数字用户 ID 白名单。 */
+            allowed_user_ids: string[];
+            /** Format: date-time */
+            updated_at?: string | null;
+        };
+        WidgetSummary: {
+            /** Format: date-time */
+            updated_at: string;
+            power_enabled: boolean;
+            accounts: {
+                total: number;
+                enabled: number;
+                failing: number;
+            };
+            instances: {
+                total: number;
+                running: number;
+                stopped: number;
+                other: number;
+                unprotected: number;
+            };
+            agents: {
+                online: number;
+                offline: number;
+                not_installed: number;
+            };
+            quotas: {
+                account_id: string;
+                account_name: string;
+                scope: components["schemas"]["QuotaScope"];
+                /** Format: int64 */
+                quota_bytes: number;
+                /** Format: int64 */
+                official_bytes: number | null;
+                /** Format: int64 */
+                estimated_bytes: number | null;
+                /** Format: int64 */
+                remaining_bytes: number | null;
+                unverified: boolean;
+                overage_cost: string | null;
+                /** Format: int64 */
+                forecast_cycle_end_bytes: number | null;
+                /** Format: date-time */
+                updated_at: string | null;
+            }[];
         };
         /**
          * @description 内置规则；仅返回当前已实现且有可用来源的规则。
@@ -4204,6 +4649,247 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    listPowerSchedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 定时规则列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["PowerSchedule"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createPowerSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PowerScheduleInput"];
+            };
+        };
+        responses: {
+            /** @description 已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PowerSchedule"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    updatePowerSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PowerScheduleInput"];
+            };
+        };
+        responses: {
+            /** @description 已更新 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PowerSchedule"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    deletePowerSchedule: {
+        parameters: {
+            query: {
+                revision: number;
+            };
+            header?: never;
+            path: {
+                schedule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getKeepaliveSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 保活配置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeepaliveSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateKeepaliveSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeepaliveSettings"];
+            };
+        };
+        responses: {
+            /** @description 已保存 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeepaliveSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    getMonthlyResetSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 月初自动开机配置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthlyResetSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateMonthlyResetSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonthlyResetSettings"];
+            };
+        };
+        responses: {
+            /** @description 已保存 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthlyResetSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    confirmInstanceIntent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。 */
+                instance_id: components["parameters"]["InstanceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    decision: "keep_stopped" | "restore_running";
+                };
+            };
+        };
+        responses: {
+            /** @description 已确认期望状态 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        instance_id: string;
+                        /** @enum {string} */
+                        desired_state: "running" | "stopped" | "quota_stopped";
+                        job_id: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
         };
     };
     getProtectionStatus: {
@@ -5721,6 +6407,35 @@ export interface operations {
             422: components["responses"]["ValidationFailed"];
         };
     };
+    listInstanceAgentHourlyHistory: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+            };
+            header?: never;
+            path: {
+                /** @description Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。 */
+                instance_id: components["parameters"]["InstanceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 小时聚合流量序列 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentHourlyHistoryPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
     getAgentNetworkHistory: {
         parameters: {
             query: {
@@ -6524,6 +7239,10 @@ export interface operations {
             query?: {
                 account_id?: string;
                 kind?: components["schemas"]["InstanceKind"];
+                /** @description 按本地分组精确筛选。 */
+                group?: string;
+                /** @description 按本地标签精确筛选。 */
+                tag?: string;
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };
@@ -6551,6 +7270,37 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateInstanceMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。 */
+                instance_id: components["parameters"]["InstanceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstanceMetadataUpdate"];
+            };
+        };
+        responses: {
+            /** @description 修改后的本地元数据 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceMetadata"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
         };
     };
     listSystemEvents: {
@@ -6740,6 +7490,28 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+        };
+    };
+    getWidgetSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 小组件只读摘要 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WidgetSummary"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     refreshInstancesWithAPIKey: {
@@ -6946,6 +7718,55 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    getTrafficPricing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 阶梯单价配置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrafficPricing"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateTrafficPricing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrafficPricing"];
+            };
+        };
+        responses: {
+            /** @description 修改后的阶梯单价配置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrafficPricing"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
         };
     };
     listQuotas: {
@@ -7345,6 +8166,54 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+        };
+    };
+    getTelegramControl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 远程控制配置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramControlSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateTelegramControl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TelegramControlSettings"];
+            };
+        };
+        responses: {
+            /** @description 已保存 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TelegramControlSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
         };
     };
     listAlertRules: {

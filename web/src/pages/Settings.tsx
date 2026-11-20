@@ -1,38 +1,518 @@
-// 设置：账号与权限测试、采集程序、通用、登录与版本。API Key、Passkey、备份等在后续里程碑加入。
-import { useState, type FormEvent } from "react";
-import { api, ApiError, downloadBackup } from "../api/client";
+// 设置：账号与权限测试、采集程序、登录安全（Passkey 与密码开关）、接口与备份（含小组件说明）、系统（时区、数据保留期、外部心跳、外观品牌）、审计日志。
+import { useRef, useState, type FormEvent } from "react";
+import { api, ApiError, downloadBackup, uploadBrandingLogo } from "../api/client";
 import { waitForJob } from "../api/jobs";
-import { AGENT, API_SCOPE, errorText, RAM_LIMITATION, RAM_POLICY, regionName, SITE } from "../api/labels";
-import type { Account, APIKey, APIKeyScope, Instance } from "../api/types";
+import { AGENT, API_SCOPE, AUDIT_ACTOR, errorText, RAM_LIMITATION, RAM_POLICY, regionName, SITE } from "../api/labels";
+import type { Account, APIKey, APIKeyScope, HeartbeatSettings, Instance, Passkey } from "../api/types";
 import { AccountForm, PermissionList } from "../components/AccountForm";
-import { Async, Badge, Card, Confirm, CopyButton, EmptyState, ErrorState, errMsg, Modal, SegToggle, Skeleton, Spinner, Switch, useToast } from "../components/ui";
+import { Async, Badge, Card, Confirm, CopyButton, EmptyState, ErrorState, errMsg, Modal, SegToggle, Skeleton, Spinner, Switch, useToast, type Level } from "../components/ui";
 import { useShared } from "../lib/data";
 import { ago, duration, gb, setTimezone, stamp } from "../lib/format";
 import { Link } from "../lib/router";
 import { useNow, useResource } from "../lib/useResource";
+import { createPasskeyCredential, passkeySupported } from "../lib/webauthn";
 
 const TIMEZONES = ["Asia/Shanghai", "Asia/Hong_Kong", "Asia/Singapore", "Asia/Tokyo", "UTC", "Europe/London", "America/Los_Angeles", "America/New_York"];
+
+type Tab = "accounts" | "agents" | "security" | "access" | "system" | "audit";
+const TABS: [Tab, string][] = [
+  ["accounts", "账号"],
+  ["agents", "采集程序"],
+  ["security", "登录安全"],
+  ["access", "接口与备份"],
+  ["system", "系统"],
+  ["audit", "操作记录"],
+];
 
 export function Settings({ onLogout }: { onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>("accounts");
   return (
     <>
-      <div><SegToggle label="设置分类" value={tab} onChange={setTab} options={TABS} /></div>
+      <div style={{ overflowX: "auto" }}><SegToggle label="设置分类" value={tab} onChange={setTab} options={TABS} /></div>
       {tab === "accounts" && <><Accounts /><RamPolicies /></>}
       {tab === "agents" && <Agents />}
-      {tab === "access" && <><ApiKeys /><Backup /></>}
+      {tab === "security" && <SecurityTab onLogout={onLogout} />}
+      {tab === "access" && <><ApiKeys /><WidgetSummaryGuide /><Backup /></>}
       {tab === "system" && (
-        <div className="grid g2">
-          <General />
+        <>
+          <div className="grid g2">
+            <General />
+            <RetentionCard />
+          </div>
+          <div className="grid g2">
+            <HeartbeatCard />
+            <BrandingCard />
+          </div>
           <About onLogout={onLogout} />
-        </div>
+        </>
       )}
+      {tab === "audit" && <AuditLogCard />}
     </>
   );
 }
 
-type Tab = "accounts" | "agents" | "access" | "system";
-const TABS: [Tab, string][] = [["accounts", "账号"], ["agents", "采集程序"], ["access", "接口与备份"], ["system", "系统"]];
+/* ---------- 登录安全：Passkey 与关闭密码登录 ---------- */
+function SecurityTab({ onLogout }: { onLogout: () => void }) {
+  const toast = useToast();
+  const now = useNow(60_000);
+  const keys = useResource(api.passkeys, []);
+  const methods = useResource(api.loginMethods, []);
+  const [adding, setAdding] = useState(false);
+  const [pkName, setPkName] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [delKey, setDelKey] = useState<Passkey>();
+
+  const register = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!pkName.trim()) return toast("请给这把 Passkey 起个名字，例如 MacBook 指纹。", true);
+    if (!passkeySupported()) return toast("当前浏览器不支持 Passkey。", true);
+    setBusy(true);
+    try {
+      const begin = await api.beginPasskeyRegistration(pkName.trim());
+      const cred = await createPasskeyCredential(begin.options);
+      await api.finishPasskeyRegistration(begin.ceremony_id, cred);
+      setPkName("");
+      setAdding(false);
+      keys.reload();
+      methods.reload();
+      toast("Passkey 已绑定");
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "NotAllowedError") toast("已取消绑定", true);
+      else toast(errMsg(err), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const togglePassword = async (enabled: boolean) => {
+    try {
+      await api.setPasswordLogin(enabled);
+      methods.reload();
+      toast(enabled ? "已恢复允许密码登录" : "已关闭密码登录，以后仅可使用 Passkey 登录");
+    } catch (err) {
+      toast(errMsg(err), true);
+    }
+  };
+
+  return (
+    <div className="grid g2">
+      <Card title="Passkey 安全密钥" sub="用指纹、面容或硬件密钥免密登录，防钓鱼更安全" right={<button className="btn primary" onClick={() => setAdding(true)}>＋ 绑定 Passkey</button>}>
+        <Async res={keys}>
+          {(list) =>
+            !list.length ? (
+              <EmptyState title="还没有绑定 Passkey">通过正式 HTTPS 域名访问面板时，可绑定手机或电脑的指纹 / 面容登录。</EmptyState>
+            ) : (
+              <div>
+                {list.map((k) => (
+                  <div className="rowline" key={k.id}>
+                    <div className="grow">
+                      <b>{k.name}</b>
+                      <div className="sub">添加于 {stamp(k.created_at)}{k.last_used_at ? ` · 最近使用 ${ago(k.last_used_at, now)}` : " · 尚未使用"}</div>
+                    </div>
+                    <button className="btn sm danger" onClick={() => setDelKey(k)}>移除</button>
+                  </div>
+                ))}
+              </div>
+            )
+          }
+        </Async>
+        {adding && (
+          <Modal title="绑定新的 Passkey" onClose={() => setAdding(false)}>
+            <form className="stack" onSubmit={register}>
+              <div>
+                <label className="lbl" htmlFor="pk-name">设备或密钥名称</label>
+                <input id="pk-name" type="text" value={pkName} onChange={(e) => setPkName(e.target.value)} placeholder="例如：iPhone 面容、MacBook 指纹" maxLength={80} autoFocus />
+              </div>
+              <div className="actions">
+                <button type="button" className="btn" onClick={() => setAdding(false)}>取消</button>
+                <button className="btn primary" disabled={busy}>{busy && <Spinner />} 开始验证并绑定</button>
+              </div>
+            </form>
+          </Modal>
+        )}
+        {delKey && (
+          <Confirm
+            title={`移除“${delKey.name}”？`}
+            okText="移除"
+            danger
+            body="移除后不能再用这把安全密钥登录。如果已关闭密码登录，系统会保留至少一把可用 Passkey 以防锁死。"
+            onClose={() => setDelKey(undefined)}
+            onOk={async () => {
+              await api.deletePasskey(delKey.id);
+              keys.reload();
+              methods.reload();
+              toast("已移除");
+            }}
+          />
+        )}
+      </Card>
+
+      <Card title="登录方式与当前会话" sub="至少绑定一把当前域名下的 Passkey 后，可关闭密码登录">
+        <Async res={methods}>
+          {(m) => (
+            <>
+              <div className="rowline">
+                <div className="grow">
+                  <b>允许使用管理员密码登录</b>
+                  <div className="sub">关闭后登录页不再接受密码；万一丢失密钥可在服务器执行 <span className="mono">hm-server reset-password</span> 恢复。</div>
+                </div>
+                <Switch on={m.password_enabled} label="允许使用管理员密码登录" onChange={togglePassword} />
+              </div>
+              <div className="rowline">
+                <div className="grow"><b>退出当前登录</b><div className="sub">在公用电脑上操作完后请及时退出。</div></div>
+                <button className="btn" onClick={onLogout}>退出登录</button>
+              </div>
+            </>
+          )}
+        </Async>
+      </Card>
+    </div>
+  );
+}
+
+/* ---------- 小组件摘要说明 ---------- */
+function WidgetSummaryGuide() {
+  const origin = typeof location !== "undefined" ? location.origin : "https://example.com";
+  const url = `${origin}/api/v1/integrations/summary`;
+  const curl = `curl -H "Authorization: Bearer 你的API_Key" ${url}`;
+  return (
+    <details className="card fold">
+      <summary><h2>手机小组件与状态栏接入说明</h2><span className="sub">只读概况接口，不受管理端 IP 白名单限制</span><div className="spacer" /><span className="sub">展开</span></summary>
+      <div className="stack" style={{ marginTop: 12 }}>
+        <p className="sub" style={{ margin: 0 }}>
+          在上方创建一个仅勾选 <b>“读取概况”</b> 的 API Key，即可在 Scriptable、快捷指令、桌面状态栏或自建首页中安全轮询各账号免费流量余量与实例在线数。
+        </p>
+        <div>
+          <div className="sub" style={{ marginBottom: 4 }}>请求示例</div>
+          <div className="codebox"><code>{curl}</code><CopyButton text={curl} className="btn" /></div>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+/* ---------- 数据保留期 ---------- */
+function RetentionCard() {
+  const toast = useToast();
+  const res = useResource(api.settings, []);
+  return (
+    <Card title="历史数据保留时长" sub="到期自动清理旧样本，原始秒级流量在归档为小时数据后才会回收">
+      <Async res={res} lines={4}>
+        {(s) => <RetentionForm initial={s} onSaved={(ns) => { res.mutate(() => ns); toast("数据保留时长已保存"); }} />}
+      </Async>
+    </Card>
+  );
+}
+
+function RetentionForm({ initial, onSaved }: { initial: import("../api/types").Settings; onSaved: (s: import("../api/types").Settings) => void }) {
+  const toast = useToast();
+  const r = initial.retention ?? { latency_probe_days: 30, agent_raw_days: 7, agent_hourly_months: 13, audit_log_days: 365, job_history_days: 90 };
+  const [rawDays, setRawDays] = useState(String(r.agent_raw_days ?? 7));
+  const [hourlyMonths, setHourlyMonths] = useState(String(r.agent_hourly_months ?? 13));
+  const [probeDays, setProbeDays] = useState(String(r.latency_probe_days ?? 30));
+  const [jobDays, setJobDays] = useState(String(r.job_history_days ?? 90));
+  const [auditDays, setAuditDays] = useState(String(r.audit_log_days ?? 365));
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const saved = await api.updateSettings({
+        retention: {
+          agent_raw_days: Number(rawDays),
+          agent_hourly_months: Number(hourlyMonths),
+          latency_probe_days: Number(probeDays),
+          job_history_days: Number(jobDays),
+          audit_log_days: Number(auditDays),
+        },
+      });
+      onSaved(saved);
+    } catch (err) {
+      toast(errMsg(err), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="stack" onSubmit={submit}>
+      <div className="grid g2">
+        <div>
+          <label className="lbl" htmlFor="rt-raw">原始秒级流量（1–90 天）</label>
+          <input id="rt-raw" type="number" min={1} max={90} value={rawDays} onChange={(e) => setRawDays(e.target.value)} />
+        </div>
+        <div>
+          <label className="lbl" htmlFor="rt-hr">按小时汇总流量（1–60 个月）</label>
+          <input id="rt-hr" type="number" min={1} max={60} value={hourlyMonths} onChange={(e) => setHourlyMonths(e.target.value)} />
+        </div>
+        <div>
+          <label className="lbl" htmlFor="rt-job">任务与通知历史（7–3650 天）</label>
+          <input id="rt-job" type="number" min={7} max={3650} value={jobDays} onChange={(e) => setJobDays(e.target.value)} />
+        </div>
+        <div>
+          <label className="lbl" htmlFor="rt-aud">审计日志（30–3650 天）</label>
+          <input id="rt-aud" type="number" min={30} max={3650} value={auditDays} onChange={(e) => setAuditDays(e.target.value)} />
+        </div>
+      </div>
+      <div>
+        <label className="lbl" htmlFor="rt-prb">网络延迟探测记录（1–3650 天）</label>
+        <input id="rt-prb" type="number" min={1} max={3650} value={probeDays} onChange={(e) => setProbeDays(e.target.value)} />
+      </div>
+      <div className="inline" style={{ justifyContent: "flex-end" }}>
+        <button className="btn sm primary" disabled={busy}>{busy && <Spinner />} 保存保留策略</button>
+      </div>
+    </form>
+  );
+}
+
+/* ---------- 外部心跳自监控 ---------- */
+function heartbeatBadge(hb: HeartbeatSettings): [Level, string] {
+  if (!hb.url_configured) return ["neutral", "未配置"];
+  if (hb.last_error) return ["critical", "上报失败"];
+  if (hb.last_success_at) return ["good", "上报正常"];
+  return ["warning", "已保存，待上报"];
+}
+
+function HeartbeatCard() {
+  const toast = useToast();
+  const res = useResource(api.heartbeat, []);
+  const badge = res.data ? heartbeatBadge(res.data) : null;
+  return (
+    <Card
+      title="外部心跳自监控"
+      sub="定时向 Uptime Kuma / Healthchecks 等外部地址发请求；万一面板自身宕机由外部提醒你"
+      right={badge && <Badge level={badge[0]}>{badge[1]}</Badge>}
+    >
+      <Async res={res} lines={3}>
+        {(hb) => <HeartbeatForm value={hb} onSaved={(nh) => res.mutate(() => nh)} onTested={() => { toast("心跳测试已送达"); res.reload(); }} />}
+      </Async>
+    </Card>
+  );
+}
+
+function HeartbeatForm({ value, onSaved, onTested }: { value: HeartbeatSettings; onSaved: (v: HeartbeatSettings) => void; onTested: () => void }) {
+  const toast = useToast();
+  const [enabled, setEnabled] = useState(value.enabled);
+  const [interval, setIntervalSecs] = useState(String(value.interval_seconds));
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const payload: { revision: number; enabled: boolean; interval_seconds: number; url?: string } = {
+        revision: value.revision,
+        enabled,
+        interval_seconds: Math.max(15, Math.min(86400, Number(interval) || 60)),
+      };
+      if (url.trim() !== "") payload.url = url.trim();
+      const saved = await api.updateHeartbeat(payload);
+      setUrl("");
+      onSaved(saved);
+      toast("心跳监控设置已保存");
+    } catch (err) {
+      toast(errMsg(err), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runTest = async () => {
+    setTesting(true);
+    try {
+      const { job_id } = await api.testHeartbeat();
+      const job = await waitForJob(job_id);
+      if (job.status === "failed") toast(errorText(job.error?.code ?? "internal_error"), true);
+      else onTested();
+    } catch (err) {
+      toast(errMsg(err), true);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <form className="stack" onSubmit={save}>
+      <div className="inline">
+        <Switch on={enabled} label="开启外部心跳上报" onChange={setEnabled} />
+        <span>每</span>
+        <input type="number" min={15} max={86400} value={interval} onChange={(e) => setIntervalSecs(e.target.value)} style={{ width: 80, padding: "4px 8px" }} />
+        <span>秒主动上报一次</span>
+      </div>
+      <div>
+        <label className="lbl" htmlFor="hb-url">Push 地址（HTTPS，保存后加密存储且不再回显）</label>
+        <input id="hb-url" type="text" value={url} onChange={(e) => setUrl(e.target.value)} placeholder={value.url_configured ? "已加密保存；留空表示保持原地址不变" : "https://uptime.example.com/api/push/xxxx"} autoComplete="off" />
+      </div>
+      {value.last_success_at && <div className="sub">最近成功上报：{stamp(value.last_success_at)}</div>}
+      <div className="inline" style={{ justifyContent: "flex-end" }}>
+        {value.url_configured && <button type="button" className="btn sm" disabled={testing || busy} onClick={runTest}>{testing && <Spinner />} 立即测试一次</button>}
+        <button className="btn sm primary" disabled={busy || testing}>{busy && <Spinner />} 保存心跳设置</button>
+      </div>
+    </form>
+  );
+}
+
+/* ---------- 面板外观品牌 ---------- */
+function BrandingCard() {
+  const toast = useToast();
+  const { branding } = useShared();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [name, setName] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <Card title="面板名称与图标" sub="自定义左上角和浏览器标签页显示的名称与小图标">
+      <Async res={branding} lines={3}>
+        {(b) => {
+          const curName = name ?? b.name;
+          const saveName = async (e: FormEvent) => {
+            e.preventDefault();
+            if (!curName.trim()) return toast("名称不能为空", true);
+            setBusy(true);
+            try {
+              const saved = await api.updateBrandingName(b.revision, curName.trim());
+              branding.mutate(() => saved);
+              setName(null);
+              toast("面板名称已更新");
+            } catch (err) {
+              toast(errMsg(err), true);
+            } finally {
+              setBusy(false);
+            }
+          };
+          const onPickLogo = async (file?: File) => {
+            if (!file) return;
+            setBusy(true);
+            try {
+              const saved = await uploadBrandingLogo(b.revision, file);
+              branding.mutate(() => saved);
+              toast("图标已上传");
+            } catch (err) {
+              toast(errMsg(err), true);
+            } finally {
+              setBusy(false);
+              if (fileRef.current) fileRef.current.value = "";
+            }
+          };
+          const clearLogo = async () => {
+            setBusy(true);
+            try {
+              const saved = await api.deleteBrandingLogo(b.revision);
+              branding.mutate(() => saved);
+              toast("已恢复默认锚形图标");
+            } catch (err) {
+              toast(errMsg(err), true);
+            } finally {
+              setBusy(false);
+            }
+          };
+
+          return (
+            <form className="stack" onSubmit={saveName}>
+              <div>
+                <label className="lbl" htmlFor="br-name">显示名称（最多 40 字）</label>
+                <div className="inline">
+                  <input id="br-name" type="text" value={curName} maxLength={40} onChange={(e) => setName(e.target.value)} style={{ flex: 1 }} />
+                  <button className="btn sm primary" disabled={busy || curName.trim() === b.name}>{busy && <Spinner />} 保存名称</button>
+                </div>
+              </div>
+              <div className="inline">
+                <input ref={fileRef} type="file" accept="image/png,image/jpeg" hidden onChange={(e) => onPickLogo(e.target.files?.[0])} />
+                <button type="button" className="btn sm" disabled={busy} onClick={() => fileRef.current?.click()}>上传 PNG/JPEG 图标</button>
+                {b.logo && <button type="button" className="btn sm danger" disabled={busy} onClick={clearLogo}>恢复默认图标</button>}
+                <span className="sub">不超过 256 KB</span>
+              </div>
+            </form>
+          );
+        }}
+      </Async>
+    </Card>
+  );
+}
+
+/* ---------- 审计日志 ---------- */
+function AuditLogCard() {
+  const { accounts } = useShared();
+  const [actor, setActor] = useState("");
+  const [accountId, setAccountId] = useState("");
+  const [cursor, setCursor] = useState<string>();
+  const res = useResource(() => api.auditLog({ actor: actor || undefined, account_id: accountId || undefined, cursor, limit: 40 }), [actor, accountId, cursor]);
+  const accName = (id: string | null) => (id ? accounts.data?.find((a) => a.id === id)?.name ?? id : "—");
+
+  return (
+    <Card
+      title="操作审计记录"
+      sub="所有配置改动、开关机请求、API Key 与 Telegram 操作均留痕；密钥与密码永不写入日志"
+      right={
+        <div className="filters">
+          <select value={actor} onChange={(e) => { setActor(e.target.value); setCursor(undefined); }} aria-label="按操作来源筛选">
+            <option value="">全部来源</option>
+            {(Object.keys(AUDIT_ACTOR) as (keyof typeof AUDIT_ACTOR)[]).map((k) => <option key={k} value={k}>{AUDIT_ACTOR[k]}</option>)}
+          </select>
+          {(accounts.data?.length ?? 0) > 0 && (
+            <select value={accountId} onChange={(e) => { setAccountId(e.target.value); setCursor(undefined); }} aria-label="按账号筛选">
+              <option value="">全部账号</option>
+              {accounts.data!.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          )}
+        </div>
+      }
+    >
+      <Async res={res} lines={6}>
+        {(p) =>
+          !p.items.length ? <EmptyState title="没有符合条件的操作记录" /> : (
+            <>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>时间</th><th>操作人</th><th>摘要</th><th>账号</th><th>变更详情</th></tr></thead>
+                  <tbody>
+                    {p.items.map((a) => (
+                      <tr key={a.id}>
+                        <td>{stamp(a.created_at)}</td>
+                        <td>
+                          <span className="tag">{AUDIT_ACTOR[a.actor.kind] ?? a.actor.kind}</span>
+                          {a.actor.id && <div className="sub mono">{a.actor.id}</div>}
+                        </td>
+                        <td className="wrap">
+                          <b>{a.summary || a.action}</b>
+                          <div className="sub mono">{a.target_type}:{a.target_id}</div>
+                        </td>
+                        <td>{accName(a.account_id)}</td>
+                        <td className="wrap">
+                          {a.details.credentials_changed && <Badge level="warning">凭证已更换</Badge>}
+                          {a.details.before || a.details.after ? (
+                            <div className="sub mono" style={{ marginTop: 2 }}>
+                              {Object.keys({ ...(a.details.before ?? {}), ...(a.details.after ?? {}) }).map((k) => (
+                                <div key={k}>{k}: {JSON.stringify(a.details.before?.[k])} → {JSON.stringify(a.details.after?.[k])}</div>
+                              ))}
+                            </div>
+                          ) : a.details.changed_fields.length > 0 ? (
+                            <span className="sub">字段：{a.details.changed_fields.join("、")}</span>
+                          ) : (
+                            !a.details.credentials_changed && <span className="sub">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {(cursor || p.next_cursor) && (
+                <div className="inline" style={{ marginTop: 12 }}>
+                  {cursor && <button className="btn sm" onClick={() => setCursor(undefined)}>回到最新</button>}
+                  {p.next_cursor && <button className="btn sm" onClick={() => setCursor(p.next_cursor!)}>查看更早记录</button>}
+                </div>
+              )}
+            </>
+          )
+        }
+      </Async>
+    </Card>
+  );
+}
 
 /** 权限策略模板：复制到阿里云 RAM 里自己授权，面板不会替你授权 */
 function RamPolicies() {
@@ -112,14 +592,9 @@ function ApiKeys() {
           title={`撤销“${revoke.name}”？`} okText="撤销" danger onClose={() => setRevoke(undefined)}
           body="撤销后，用这个凭证的小组件或脚本会立刻失效，而且不能恢复。需要时只能重新创建一个。"
           onOk={async () => {
-            try {
-              await api.revokeApiKey(revoke.id);
-              res.reload();
-              toast("已撤销");
-            } catch (e) {
-              toast(errMsg(e), true);
-              throw e;
-            }
+            await api.revokeApiKey(revoke.id);
+            res.reload();
+            toast("已撤销");
           }}
         />
       )}
@@ -221,7 +696,7 @@ function Backup() {
           <button className="btn primary" disabled={busy || !pw}>{busy && <Spinner />} 下载备份</button>
         </div>
       </form>
-      <p className="note">恢复不在网页上做：把备份文件传到新机器，执行 <span className="mono">hm-server restore --input 备份文件 --data-dir 新的数据目录</span>。恢复后需要重新登录。</p>
+      <p className="note">恢复不在网页上做：把备份文件传到新机器，执行 <span className="mono">hm-server restore --input 备份文件 --data-dir 新的数据目录</span>。恢复后需要重新登录，且为防误操作，恢复后所有自动停机规则会默认转为试运行状态。</p>
     </Card>
   );
 }
@@ -297,14 +772,9 @@ function Accounts() {
       {del && (
         <Confirm
           title={`停用账号 ${del.name}？`} okText="停用" onClose={() => setDel(undefined)}
-          body={<>停用后，面板不再读取这个账号的数据，也不再为它发告警。它名下 {del.instance_count} 台实例的记录和历史数据都会保留，随时可以重新打开。这不会影响阿里云上的机器本身。</>}
+          body={<>停用后，面板不再读取这个账号的数据，也不再为它发告警，该账号下的自动化开关机规则也会同时停用。它名下 {del.instance_count} 台实例的记录和历史数据都会保留，随时可以重新打开。</>}
           onOk={async () => {
-            try {
-              await toggle(del, false);
-            } catch (e) {
-              toast(errMsg(e), true);
-              throw e;
-            }
+            await toggle(del, false);
           }}
         />
       )}
@@ -320,7 +790,7 @@ function Agents() {
   const [revoke, setRevoke] = useState<Instance>();
   const list = (instances.data?.items ?? []).filter((i) => i.agent.status !== "not_installed");
   return (
-    <Card title="采集程序" sub="装在实例上、上报公网流量的小程序" right={<Link className="btn" to="/instances">去实例页安装</Link>}>
+    <Card title="采集程序" sub="装在实例上、上报公网流量的小程序" right={<Link className="btn" to="/instances">去实例页安装或升级</Link>}>
       {instances.error ? <ErrorState error={instances.error} onRetry={instances.reload} /> : !instances.data ? <Skeleton /> : !list.length ? (
         <EmptyState title="还没有实例装上采集程序">到实例页，点某台机器的“安装采集程序”，按提示在机器上执行一行命令即可。</EmptyState>
       ) : (
@@ -330,12 +800,12 @@ function Agents() {
             <tbody>
               {list.map((i) => {
                 const [l, t] = AGENT[i.agent.status];
-                const old = info.data && i.agent.version && i.agent.version !== info.data.latest_agent_version;
+                const old = Boolean(i.agent.update_available || (info.data && i.agent.version && i.agent.version !== info.data.latest_agent_version));
                 return (
                   <tr key={i.id}>
                     <td><b>{i.name}</b><div className="sub">{accounts.data?.find((a) => a.id === i.account_id)?.name}</div></td>
                     <td><Badge level={l}>{t}</Badge>{i.agent.offline_since && <div className="sub">已掉线 {duration((now - new Date(i.agent.offline_since).getTime()) / 1000)}</div>}</td>
-                    <td className="only-wide">{i.agent.version ?? "—"}{old && <div className="sub">有新版本 {info.data!.latest_agent_version}</div>}</td>
+                    <td className="only-wide">{i.agent.version ?? "—"}{old && <div className="sub" style={{ color: "var(--warning)" }}>可升级至 {info.data?.latest_agent_version}</div>}</td>
                     <td>{i.agent.last_report_at ? ago(i.agent.last_report_at, now) : "—"}</td>
                     <td className="only-wide"><span className="sub">{i.agent.registered_at ? stamp(i.agent.registered_at) : "—"}</span></td>
                     <td><button className="btn sm danger" onClick={() => setRevoke(i)}>撤销凭证</button></td>
@@ -351,14 +821,9 @@ function Agents() {
           title={`撤销 ${revoke.name} 的采集程序凭证？`} okText="撤销" danger onClose={() => setRevoke(undefined)}
           body="撤销后，这台机器上的采集程序立刻无法再上报，这台机器会变回“未安装”。想恢复需要重新生成安装命令并在机器上再执行一次。怀疑凭证泄露时使用。"
           onOk={async () => {
-            try {
-              await api.revokeAgentToken(revoke.id);
-              instances.reload();
-              toast("已撤销");
-            } catch (e) {
-              toast(errMsg(e), true);
-              throw e;
-            }
+            await api.revokeAgentToken(revoke.id);
+            instances.reload();
+            toast("已撤销");
           }}
         />
       )}
@@ -384,7 +849,7 @@ function General() {
     }
   };
   return (
-    <Card title="时区">
+    <Card title="时区与采集周期">
       <Async res={res} lines={5}>
         {(s) => {
           const zones = TIMEZONES.includes(s.business_timezone) ? TIMEZONES : [s.business_timezone, ...TIMEZONES];
@@ -399,7 +864,7 @@ function General() {
                     </select>
                     {saving && <Spinner />}
                   </div>
-                  <div className="field-help">面板上的时间、“今天”从几点算起，都按这个时区。</div>
+                  <div className="field-help">面板上的时间、“今天”从几点算起、定时开关机与静默时段，都按这个时区。</div>
                 </div>
               </div>
               <p className="note" style={{ margin: 0 }}>
@@ -416,13 +881,10 @@ function General() {
 function About({ onLogout }: { onLogout: () => void }) {
   const info = useResource(api.systemInfo, []);
   return (
-    <Card title="登录与版本">
+    <Card title="版本与退出">
       <div className="rowline">
         <div className="grow"><b>退出登录</b><div className="sub">在公用电脑上用完后记得退出。</div></div>
         <button className="btn" onClick={onLogout}>退出登录</button>
-      </div>
-      <div className="rowline">
-        <div className="grow"><b>忘记密码</b><div className="sub">网页上不能重置密码。请登录服务器执行 <span className="mono">hm-server reset-password</span>。</div></div>
       </div>
       <div style={{ marginTop: 12 }}>
         <Async res={info} lines={2}>

@@ -29,6 +29,7 @@ export const NAV: (NavItem | "sep")[] = [
   { path: "/", title: "总览", icon: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></> },
   { path: "/instances", title: "实例", icon: <><rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" /><path d="M7 7.5h.01M7 16.5h.01" /></> },
   { path: "/traffic", title: "流量", icon: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /> },
+  { path: "/automation", title: "自动", icon: <path d="M13 2 4 14h7l-1 8 9-12h-7z" /> },
   { path: "/billing", title: "费用", icon: <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18M7 15h3" /></> },
   "sep",
   { path: "/notify", title: "通知", icon: <><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8" /><path d="M10 20a2 2 0 0 0 4 0" /></> },
@@ -40,7 +41,7 @@ export function Shell({ title, version, children, dataMode, readOnly }: { title:
   const [theme, setTheme] = useTheme();
   const toast = useToast();
   const conn = useConnState();
-  const { quotas, reloadAll } = useShared();
+  const { quotas, instances, branding, reloadAll } = useShared();
   const [refreshing, setRefreshing] = useState(false);
 
   const refresh = async () => {
@@ -61,19 +62,22 @@ export function Shell({ title, version, children, dataMode, readOnly }: { title:
 
   const q = quotas.data ?? [];
   const official = q.map((x) => x.official_as_of).filter((x): x is string => !!x).sort()[0];
-  const views=q.map((x)=>quotaView(x));
- const realtime=views.filter((v)=>v.usable).map((v)=>v.updatedAt).filter((x):x is string=>!!x).sort().at(-1);
- const unverified=views.some((v)=>v.usable&&v.unverified);
+  const views = q.map((x) => quotaView(x));
+  const realtime = views.filter((v) => v.usable).map((v) => v.updatedAt).filter((x): x is string => !!x).sort().at(-1);
+  const unverified = views.some((v) => v.usable && v.unverified);
+  const pendingConfirms = (instances.data?.items ?? []).filter((i) => i.pending_intent_confirmation).length;
 
   // 官方数据只在有问题（过期、统计时间不明）时单独提示；正常时并入“更新于”的悬停说明
   const officialProblem = q.some((x) => x.official_bytes !== null) && isStale(official, "official");
+  const brandName = branding.data?.name || "Harbormaster";
+  const brandLogo = branding.data?.logo?.url ?? null;
 
   return (
     <div className="app">
       <aside className="side">
         <div className="brand">
-          <Logo />
-          <span>Harbormaster</span>
+          {brandLogo ? <img src={brandLogo} alt="" width={24} height={24} style={{ borderRadius: 6, objectFit: "cover", flex: "none" }} /> : <Logo />}
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{brandName}</span>
         </div>
         <nav className="nav" aria-label="主导航">
           {NAV.map((item, i) =>
@@ -84,7 +88,8 @@ export function Shell({ title, version, children, dataMode, readOnly }: { title:
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   {item.icon}
                 </svg>
-                <span>{item.title}</span>
+                <span>{item.path === "/automation" ? <><span className="only-wide">自动化</span><span className="only-narrow">自动</span></> : item.title}</span>
+                {item.path === "/automation" && pendingConfirms > 0 && <span className="count" title="有待确认的外部关机">{pendingConfirms}</span>}
               </Link>
             ),
           )}

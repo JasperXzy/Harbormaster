@@ -55,8 +55,8 @@ export const PROTECTION: Record<T.RealtimeProtection, [Level, string, string]> =
 
 /** 实例的实时保护状态。采集程序在线但额度暂时算不出时，不说“未受保护”，以免和没装的机器混在一起。 */
 export function protectionOf(i: Pick<T.Instance, "realtime_protection" | "agent" | "traffic_estimation">): [Level, string, string] {
-  if(i.traffic_estimation?.status==="ready" && i.traffic_estimation.estimated_bytes!==null)
-    return ["warning",i.traffic_estimation.mode==="unverified" ? "未核实估算" : "估算可用","采集数据已纳入所在账号与区域的共享估算；这不代表已开启真实停机保护。"];
+  if (i.traffic_estimation?.status === "ready" && i.traffic_estimation.estimated_bytes !== null)
+    return ["warning", i.traffic_estimation.mode === "unverified" ? "未核实估算" : "估算可用", "采集数据已纳入所在账号与区域的共享估算；这不代表已开启真实停机保护。"];
   if (i.realtime_protection === "unprotected" && i.agent.status === "online")
     return ["warning", "暂无法估算", "采集程序在正常上报，所在范围还缺少完整的计量覆盖。请在流量页查看具体原因。"];
   return PROTECTION[i.realtime_protection];
@@ -94,14 +94,14 @@ export const DELIVERY: Record<T.Notification["delivery_status"], [Level, string]
 };
 
 export const ALERT_RULE: Record<T.AlertRuleKey, { title: string; desc: string }> = {
- balance_low:{title:"余额不足",desc:"可用余额低于配置阈值时提醒。"},
- network_latency:{title:"网络延迟升高",desc:"连续探测超过已配置的延迟阈值时提醒。"},
- network_loss:{title:"网络连接失败",desc:"探测失败比例超过阈值时提醒。"},
- network_unreachable:{title:"目标不可达",desc:"连续探测全部失败时提醒。"},
- network_route_change:{title:"线路变化",desc:"可比较的线路快照发生变化时提醒。"},
- idle_resource_detected:{title:"闲置资源",desc:"发现已确认的闲置资源候选时提醒。"},
- quota_protection:{title:"额度保护",desc:"记录额度规则的判定和执行结果。"},
- cdt_estimation_deviation:{title:"估算偏差",desc:"同一截止时刻的估算与官方值持续相差超过 10% 时提醒。"},
+  balance_low: { title: "余额不足", desc: "可用余额低于所设金额时提醒（在费用页按账号设置金额）。" },
+  network_latency: { title: "网络延迟升高", desc: "连续探测超过已配置的延迟阈值时提醒。" },
+  network_loss: { title: "网络连接失败", desc: "探测失败比例超过阈值时提醒。" },
+  network_unreachable: { title: "目标不可达", desc: "连续探测全部失败时提醒。" },
+  network_route_change: { title: "线路变化", desc: "可比较的线路快照发生变化时提醒。" },
+  idle_resource_detected: { title: "闲置资源", desc: "发现已确认的闲置资源候选时提醒。" },
+  quota_protection: { title: "额度保护", desc: "记录额度规则的判定和执行结果。" },
+  cdt_estimation_deviation: { title: "估算偏差", desc: "同一截止时刻的估算与官方值持续相差超过 10% 时提醒。" },
   cdt_usage: { title: "免费额度用量", desc: "每越过一个档位通知一次。" },
   cdt_forecast_exceed: { title: "预计月底超额", desc: "按最近 7 天的日均推算，月底前会超出时通知。" },
   account_api_failure: { title: "账号连接失败", desc: "通常是 AccessKey 失效或权限被改。" },
@@ -110,6 +110,68 @@ export const ALERT_RULE: Record<T.AlertRuleKey, { title: string; desc: string }>
   instance_expiring: { title: "实例快到期", desc: "包年包月的机器到期前提醒，避免忘记续费。" },
   spec_bandwidth_insufficient: { title: "规格带宽不足", desc: "买的公网带宽超过了机器规格能跑的上限时通知。" },
   instance_public_ip_changed: { title: "公网 IP 变了", desc: "每次发现实例的公网 IP 变化都通知。" },
+};
+
+export const JOB_TYPE: Record<T.JobType, string> = {
+  refresh: "读取资源与用量",
+  permission_check: "检查权限",
+  telegram_test: "发送测试通知",
+  heartbeat_test: "测试心跳上报",
+  instance_power: "实例开关机",
+  instance_release: "释放云服务器",
+  network_probe: "网络延迟探测",
+};
+
+export const JOB_STATUS: Record<T.JobStatus, [Level, string]> = {
+  queued: ["neutral", "等待执行"],
+  running: ["warning", "执行中"],
+  succeeded: ["good", "已完成"],
+  failed: ["critical", "失败"],
+};
+
+export const JOB_TRIGGER: Record<T.JobTrigger, string> = {
+  panel: "网页手动",
+  api: "API Key",
+  cli: "服务器命令行",
+  telegram: "Telegram",
+  schedule: "自动策略 / 定时",
+  system: "系统自动",
+  unknown: "未知来源",
+};
+
+export const AUDIT_ACTOR: Record<T.AuditEntry["actor"]["kind"], string> = {
+  admin: "管理员",
+  api_key: "API Key",
+  cli: "服务器命令行",
+  telegram: "Telegram",
+  system: "系统自动",
+};
+
+export const STOP_MODE: Record<"keep_charging" | "stop_charging", [string, string]> = {
+  keep_charging: ["普通停机", "保留实例公网 IP 与计算资源，停机期间继续按配置收费，开机快。"],
+  stop_charging: ["节省停机", "按量付费的计算与云盘停止计费，但非弹性公网 IP 会释放且下次开机可能变慢或因库存不足失败。"],
+};
+
+export const DECISION_STATE: Record<T.QuotaDecision["state"], [Level, string]> = {
+  below: ["good", "未越线"],
+  triggered: ["critical", "触发规则"],
+  unknown: ["warning", "数据不足未触发"],
+  inactive: ["neutral", "未启用"],
+};
+
+export const DECISION_OUTCOME: Record<string, string> = {
+  would_stop: "试运行/模拟：本应停机",
+  queued: "已下发停机任务",
+  power_disabled: "服务器未开启开关机权限",
+  self_identity_unknown: "未识别面板所在实例，已拦截",
+  self_excluded: "跳过面板自身所在实例",
+  exempt: "处于临时豁免期，已跳过",
+  already_stopped: "实例已是停止状态",
+  operation_limited: "触发 10 分钟最多 3 台的熔断保护",
+  source_unqualified: "数据来源尚未满足真实停机条件",
+  busy: "已有进行中的电源任务",
+  target_unavailable: "目标实例不存在或不可操作",
+  restore_quarantine: "备份恢复隔离中，暂不自动停机",
 };
 
 // 常见地域的中文名；不认识的直接显示地域 ID。
@@ -134,6 +196,24 @@ const ERROR: Record<string, string> = {
   not_found: "要找的内容不存在，可能已被删除。",
   validation_failed: "填写的内容有问题，请检查标红的项目。",
   rate_limited: "尝试次数太多，请稍后再试。",
+  revision_conflict: "配置刚刚被改动过，请刷新页面后再保存。",
+  quiet_hours_changed: "静默时段配置刚刚被改动过，请刷新页面后再保存。",
+  heartbeat_configuration_changed: "心跳配置刚刚被改动过，请刷新页面后再保存。",
+  heartbeat_not_configured: "还没有保存外部心跳地址，请先填写并保存后再测试。",
+  heartbeat_unavailable: "当前环境暂无法加密保存心跳地址，请检查主密钥。",
+  branding_changed: "面板外观配置刚刚被改动过，请刷新后再试。",
+  branding_logo_too_large: "图标文件太大了，请上传不超过 256 KB 的 PNG 或 JPEG 图片。",
+  unsupported_media_type: "文件格式不支持，请使用 PNG 或 JPEG 图片。",
+  instance_power_disabled: "服务器还没有开启实例开关机能力（HM_INSTANCE_POWER_ENABLED=false）。",
+  instance_power_busy: "这台实例正在执行另一个开关机任务，请等它完成后再试。",
+  idempotency_key_conflict: "重复的开关机请求已被拦截，请刷新状态后重试。",
+  passkey_unavailable: "当前访问地址未配置正式 HTTPS 域名，暂无法使用 Passkey。",
+  invalid_passkey: "Passkey 验证没有通过，请重试或改用密码登录。",
+  passkey_required: "必须至少在当前域名下注册一把 Passkey，才能关闭密码登录。",
+  last_passkey: "已关闭密码登录时不能删除最后一把 Passkey，否则将无法登录。",
+  passkey_limit: "最多只能注册 20 把 Passkey。",
+  passkey_exists: "这把安全密钥已经注册过了。",
+  password_login_disabled: "已关闭密码登录，请使用 Passkey 登录。",
   invalid_setup_token: "初始化凭证不正确或已过期。请检查部署时提供的凭证；过期后需更换凭证并重启服务。",
   already_initialized: "已经完成过首次设置，请直接登录。",
   invalid_credentials: "密码不正确。",
@@ -141,7 +221,7 @@ const ERROR: Record<string, string> = {
   account_disabled: "这个账号已停用。重新启用后才能刷新或测试权限。",
   account_changed: "账号配置已修改，旧任务已停止；启用的账号会按新配置重新读取。",
   collection_failed: "这次读取没有完成，已保留上一次的数据。",
-  permission_denied: "阿里云拒绝了读取请求，请检查账号的只读权限。",
+  permission_denied: "阿里云拒绝了请求，请检查子账号的 RAM 权限。",
   aliyun_throttled: "阿里云接口暂时限流，任务会稍后重试。",
   retry_exhausted: "任务多次中断，已停止重试。请检查服务状态后重新刷新。",
   cdt_line_unverified: "阿里云返回了一种还没核实的线路类型，先不把它算进额度。",
@@ -178,6 +258,8 @@ const FIELD_ERROR: Record<string, string> = {
   invalid_value: "选项不对",
   not_allowed: "不使用代理时不能填这一项",
   out_of_range: "数值超出允许的范围",
+  invalid_for_instance: "这台机器不支持所选的关机方式（包年包月或轻量服务器不能节省停机）",
+  not_current_server: "所填实例 ID 与当前检测到的面板所在机器不一致",
 };
 export const fieldErrorText = (code: string) => FIELD_ERROR[code] ?? "填写有误";
 
@@ -213,7 +295,7 @@ export const RAM_LIMITATION: Record<T.RAMPolicyDraft["limitations"][number], str
   cdt_action_unverified: "读取 CDT 流量所需的权限名还没有在真实账号上核对过。",
   public_metadata_actions_unverified: "部分公共信息查询的权限名还没有核对过。",
   resource_scope_not_account_bound: "策略没有限定到你的账号或某几台机器，范围比实际需要的大。",
-  runtime_writes_unimplemented: "面板目前还不会真的执行这些写操作，现在授予没有用处。",
+  runtime_writes_unimplemented: "释放实例等高危资源写操作默认保持关闭。",
   creation_dependencies_pending: "创建实例还需要的其他权限没有列全。",
 };
 

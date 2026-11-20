@@ -61,6 +61,8 @@ export function QuotaMeter({ q }: { q: QuotaStatus }) {
     </div>
     <div className="meter-foot"><span>官方 <b>{gb(q.official_bytes)}</b>{q.official_as_of ? `（截至 ${time(q.official_as_of)}）` : "（截止时间未知）"} + 采集 <b>{v.increment === null ? "—" : bytes(v.increment)}</b></span>
       <span>{q.forecast ? <>{q.forecast.unverified ? "未核实预测 · " : ""}{q.aggregation?`${q.aggregation.account_count} 个账号预测合计`:`按 ${q.forecast.sample_days ?? "—"} 个完整日`}，月底约 <b>{gb(q.forecast.cycle_end_bytes, q.forecast.cycle_end_bytes >= 100 * GB ? 0 : 1)}</b>{q.forecast.exceeds_on ? `，预计 ${shortDate(q.forecast.exceeds_on)} 超出` : ""}</> : q.aggregation ? "等待各账号的可用预测" : "日样本不足，暂不预测"}</span>
+      {q.overage_cost && Number(q.overage_cost.estimated_cost ?? 0) > 0 && <span>当前超额约 <b>{q.overage_cost.currency === "USD" ? "$" : "¥"}{q.overage_cost.estimated_cost}</b></span>}
+      {q.overage_cost && Number(q.overage_cost.estimated_cost ?? 0) === 0 && Number(q.overage_cost.forecast_cost ?? 0) > 0 && <span>月底预计超额约 <b>{q.overage_cost.currency === "USD" ? "$" : "¥"}{q.overage_cost.forecast_cost}</b></span>}
     </div>
     <div className="sub" style={{ marginTop: 5 }}>估算更新于 {v.updatedAt ? stamp(v.updatedAt) : "—"}</div>
     {!!q.aggregation?.forecast_exceeding_accounts&&<div className="note">{q.aggregation.forecast_exceeding_accounts} 个账号预测超额，请单独查看；额度不能跨账号使用。</div>}

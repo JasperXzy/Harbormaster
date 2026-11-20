@@ -3,11 +3,12 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { api, ApiError, MOCK, setReadOnly, setUnauthenticatedHandler } from "./api/client";
 import { connectEvents, disconnectEvents } from "./api/events";
 import { Shell } from "./components/Shell";
-import { ErrorState, Skeleton, ToastProvider } from "./components/ui";
+import { EmptyState, ErrorState, Skeleton, ToastProvider } from "./components/ui";
 import { DataProvider } from "./lib/data";
 import { setTimezone } from "./lib/format";
-import { navigate, usePath } from "./lib/router";
+import { Link, navigate, usePath } from "./lib/router";
 import { useTheme } from "./lib/theme";
+import { Automation } from "./pages/Automation";
 import { Billing } from "./pages/Billing";
 import { Instances } from "./pages/Instances";
 import { Login } from "./pages/Login";
@@ -16,8 +17,6 @@ import { Overview } from "./pages/Overview";
 import { Settings } from "./pages/Settings";
 import { Setup } from "./pages/Setup";
 import { Traffic } from "./pages/Traffic";
-import { EmptyState } from "./components/ui";
-import { Link } from "./lib/router";
 
 const ScenePanel = import.meta.env.VITE_API_MODE === "mock" ? lazy(() => import("./components/ScenePanel")) : null;
 
@@ -27,6 +26,7 @@ const PAGES: Record<string, { title: string; el: (p: { onLogout: () => void }) =
   "/": { title: "总览", el: () => <Overview /> },
   "/instances": { title: "实例", el: () => <Instances /> },
   "/traffic": { title: "流量", el: () => <Traffic /> },
+  "/automation": { title: "自动化", el: () => <Automation /> },
   "/billing": { title: "费用", el: () => <Billing /> },
   "/notify": { title: "通知", el: () => <Notify /> },
   "/settings": { title: "设置", el: (p) => <Settings onLogout={p.onLogout} /> },

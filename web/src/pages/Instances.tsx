@@ -1,11 +1,13 @@
-// 实例：表格（手机上是卡片）、筛选、详情、采集程序安装引导。M1 只读，开关机等操作在 M2 加入。
-import { useEffect, useState } from "react";
+// 实例：表格（手机上是卡片）、分组与标签筛选、详情弹窗（开关机控制、临时豁免、流量曲线、本地备注标签）、采集程序安装引导。
+import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../api/client";
-import { AGENT, CHARGE, INSTANCE_EVENT, INSTANCE_STATUS, KIND, protectionOf, regionName, RENEWAL, RULE, SCOPE, SUBJECT_KIND } from "../api/labels";
+import { waitForJob } from "../api/jobs";
+import { AGENT, CHARGE, errorText, INSTANCE_EVENT, INSTANCE_STATUS, KIND, protectionOf, regionName, RENEWAL, RULE, SCOPE, STOP_MODE, SUBJECT_KIND } from "../api/labels";
 import type { AgentInstallCommand, Instance, InstanceEvent } from "../api/types";
-import { Async, Badge, Card, Confirm, CopyButton, EmptyState, ErrorState, errMsg, Fresh, Modal, Skeleton, Spinner, useToast } from "../components/ui";
+import { LineChart } from "../components/charts/LineChart";
+import { Async, Badge, Banner, Card, Confirm, CopyButton, EmptyState, ErrorState, errMsg, Fresh, Modal, SegToggle, Skeleton, Spinner, useToast } from "../components/ui";
 import { useShared } from "../lib/data";
-import { ago, duration, rate, stamp, ymd } from "../lib/format";
+import { ago, duration, gb, gbValue, num, rate, stamp, time, ymd } from "../lib/format";
 import { Link } from "../lib/router";
 import { useNow, useResource } from "../lib/useResource";
 
@@ -13,7 +15,19 @@ const canInstall = (i: Instance) => i.agent.status === "not_installed";
 
 function Rate({ i }: { i: Instance }) {
   if (i.agent.status === "offline") return <span className="sub">掉线，没有数据</span>;
-  if (!i.realtime) return <span className="sub">—</span>;
+  if (!i.realtime) {
+    const stream = i.cloud_network?.streams?.[0];
+    if (stream && (stream.egress.value != null || stream.ingress.value != null)) {
+      const tx = (stream.egress.value ?? 0) / 8;
+      const rx = (stream.ingress.value ?? 0) / 8;
+      return (
+        <span className="num" title="来自云监控（约晚 1–2 分钟）">
+          <span>↑ {rate(tx)}</span> <span className="sub">↓ {rate(rx)}</span>
+        </span>
+      );
+    }
+    return <span className="sub">—</span>;
+  }
   return (
     <span className="num">
       <span title="发出">↑ {rate(i.realtime.tx_bytes_per_second)}</span>{" "}
@@ -22,7 +36,6 @@ function Rate({ i }: { i: Instance }) {
   );
 }
 
-/** 规格带宽不足的解释：买的公网带宽超过了机器规格能跑的上限 */
 function specNote(i: Instance): string {
   const c = i.network_capacity;
   if (!c?.public_outbound_exceeds_spec || c.tx_kbps === null || c.public_outbound_mbps === null) return "";
@@ -46,7 +59,10 @@ function AgentCell({ i, onInstall }: { i: Instance; onInstall: () => void }) {
   const [pl, pt, pd] = protectionOf(i);
   return (
     <div className="cell-stack" style={{ justifyItems: "start" }}>
-      {i.realtime_protection === "not_applicable" ? <Badge level={al}>{at}</Badge> : <Badge level={pl} title={pd}>{pt}</Badge>}
+      <div className="inline" style={{ gap: 4 }}>
+        {i.realtime_protection === "not_applicable" ? <Badge level={al}>{at}</Badge> : <Badge level={pl} title={pd}>{pt}</Badge>}
+        {i.agent.update_available && <span className="tag" title="采集程序有新版本，点进实例详情可生成升级命令">可升级</span>}
+      </div>
       {canInstall(i) && (
         <button className="linkbtn sub" onClick={(e) => { e.stopPropagation(); onInstall(); }}>
           {i.realtime_protection === "unprotected" ? "安装采集程序" : "也可以安装"}
@@ -57,19 +73,54 @@ function AgentCell({ i, onInstall }: { i: Instance; onInstall: () => void }) {
 }
 
 export function Instances() {
-  const { accounts, instances } = useShared();
+  const toast = useToast();
+  const now = useNow(15_000);
+  const { accounts, instances, reloadAll } = useShared();
   const [account, setAccount] = useState("");
+  const [group, setGroup] = useState("");
+  const [tag, setTag] = useState("");
   const [only, setOnly] = useState(false);
   const [detail, setDetail] = useState<string>();
   const [install, setInstall] = useState<string>();
+  const [answering, setAnswering] = useState<string>();
 
   if (instances.error) return <div className="card"><ErrorState error={instances.error} onRetry={instances.reload} /></div>;
   if (!instances.data || !accounts.data) return <div className="card"><Skeleton lines={6} height={18} /></div>;
   const all = instances.data.items, accs = accounts.data;
   const accName = (id: string) => accs.find((a) => a.id === id)?.name ?? "—";
-  const needs = (i: Instance) => i.realtime_protection === "worst_case" || (i.realtime_protection === "unprotected" && i.status === "running" && i.agent.status === "not_installed");
-  const rows = all.filter((i) => (!account || i.account_id === account) && (!only || needs(i)));
+  const groups = [...new Set(all.map((i) => i.group).filter((g): g is string => !!g))].sort();
+  const tags = [...new Set(all.flatMap((i) => i.tags ?? []))].sort();
+  const needs = (i: Instance) =>
+    Boolean(i.pending_intent_confirmation) ||
+    i.realtime_protection === "worst_case" ||
+    (i.realtime_protection === "unprotected" && i.status === "running" && i.agent.status === "not_installed");
+  const rows = all.filter(
+    (i) =>
+      (!account || i.account_id === account) &&
+      (!group || i.group === group) &&
+      (!tag || (i.tags ?? []).includes(tag)) &&
+      (!only || needs(i)),
+  );
   const cur = all.find((i) => i.id === detail), inst = all.find((i) => i.id === install);
+  const pendingConfirms = all.filter((i) => i.pending_intent_confirmation);
+
+  const answerIntent = async (target: Instance, decision: "keep_stopped" | "resume") => {
+    setAnswering(target.id);
+    try {
+      const r = await api.confirmInstanceIntent(target.id, decision);
+      if (r.job_id) {
+        toast(`已发送开机请求，正在恢复 ${target.name}…`);
+        await waitForJob(r.job_id);
+      } else {
+        toast(`已将 ${target.name} 设为保持停止`);
+      }
+      reloadAll();
+    } catch (e) {
+      toast(errMsg(e), true);
+    } finally {
+      setAnswering(undefined);
+    }
+  };
 
   if (!all.length)
     return (
@@ -88,6 +139,21 @@ export function Instances() {
 
   return (
     <>
+      {pendingConfirms.map((i) => (
+        <Banner
+          key={i.id}
+          level="warning"
+          action={
+            <div className="inline">
+              <button className="btn sm" disabled={answering === i.id} onClick={() => answerIntent(i, "keep_stopped")}>保持停止</button>
+              <button className="btn sm primary" disabled={answering === i.id} onClick={() => answerIntent(i, "resume")}>{answering === i.id && <Spinner />} 恢复运行</button>
+            </div>
+          }
+        >
+          <b>发现 {i.name} 在面板外被关机。</b> 请确认这是你有意关机，还是需要恢复运行。
+        </Banner>
+      ))}
+
       <Card
         title={rows.length === all.length ? `${all.length} 台` : `${rows.length} / ${all.length} 台`}
         right={
@@ -97,12 +163,24 @@ export function Instances() {
               <option value="">全部账号</option>
               {accs.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
+            {groups.length > 0 && (
+              <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label="按分组筛选">
+                <option value="">全部分组</option>
+                {groups.map((g) => <option key={g} value={g}>{g}</option>)}
+              </select>
+            )}
+            {tags.length > 0 && (
+              <select value={tag} onChange={(e) => setTag(e.target.value)} aria-label="按标签筛选">
+                <option value="">全部标签</option>
+                {tags.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            )}
             <label className={`check ${only ? "on" : ""}`}><input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} />只看需要处理的</label>
           </div>
         }
       >
         {!rows.length ? (
-          <EmptyState title="没有符合条件的实例" action={<button className="btn" onClick={() => { setAccount(""); setOnly(false); }}>清除筛选</button>} />
+          <EmptyState title="没有符合条件的实例" action={<button className="btn" onClick={() => { setAccount(""); setGroup(""); setTag(""); setOnly(false); }}>清除筛选</button>} />
         ) : (
           <>
             <div className="table-wrap only-wide">
@@ -113,10 +191,27 @@ export function Instances() {
                 <tbody>
                   {rows.map((i) => {
                     const [sl, st] = INSTANCE_STATUS[i.status];
+                    const exempt = i.quota_exemption_until && Date.parse(i.quota_exemption_until) > now;
                     return (
                       <tr key={i.id} className="clickable" onClick={() => setDetail(i.id)}>
-                        <td><div className="cell-stack" style={{ justifyItems: "start" }}><button className="linkbtn" style={{ fontWeight: 650, color: "var(--text)", textDecoration: "none" }} onClick={(e) => { e.stopPropagation(); setDetail(i.id); }}>{i.name}</button><span className="sub">{accName(i.account_id)} · {regionName(i.region_id)}{i.kind === "swas" ? " · 轻量" : ""}</span></div></td>
-                        <td><Badge level={sl}>{st}</Badge></td>
+                        <td>
+                          <div className="cell-stack" style={{ justifyItems: "start" }}>
+                            <div className="inline" style={{ gap: 6 }}>
+                              <button className="linkbtn" style={{ fontWeight: 650, color: "var(--text)", textDecoration: "none" }} onClick={(e) => { e.stopPropagation(); setDetail(i.id); }}>{i.name}</button>
+                              {i.is_server_self && <span className="tag" title="运行 Harbormaster 面板自身的机器">面板自身</span>}
+                              {i.group && <span className="tag">{i.group}</span>}
+                              {(i.tags ?? []).slice(0, 2).map((t) => <span className="tag" key={t}>#{t}</span>)}
+                            </div>
+                            <span className="sub">{accName(i.account_id)} · {regionName(i.region_id)}{i.kind === "swas" ? " · 轻量" : ""}{i.note ? ` · ${i.note.split("\n")[0].slice(0, 24)}` : ""}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="cell-stack" style={{ justifyItems: "start" }}>
+                            <Badge level={sl}>{st}</Badge>
+                            {exempt && <span className="sub">豁免至 {stamp(i.quota_exemption_until!)}</span>}
+                            {i.pending_intent_confirmation && <Badge level="warning">待确认关机</Badge>}
+                          </div>
+                        </td>
                         <td className="mono">{i.public_ips.map((p) => <div key={p.address}>{p.address}{p.type === "eip" ? "（弹性）" : ""}</div>)}{!i.public_ips.length && "—"}</td>
                         <td><Billing i={i} /></td>
                         <td><Rate i={i} /></td>
@@ -132,7 +227,14 @@ export function Instances() {
                 const [sl, st] = INSTANCE_STATUS[i.status];
                 return (
                   <div key={i.id} className="icard" role="button" tabIndex={0} onClick={() => setDetail(i.id)} onKeyDown={(e) => e.key === "Enter" && setDetail(i.id)}>
-                    <div className="hd"><b>{i.name}</b>{i.kind === "swas" && <span className="tag">轻量</span>}<div className="spacer" /><Badge level={sl}>{st}</Badge></div>
+                    <div className="hd">
+                      <b>{i.name}</b>
+                      {i.kind === "swas" && <span className="tag">轻量</span>}
+                      {i.is_server_self && <span className="tag">面板自身</span>}
+                      {i.group && <span className="tag">{i.group}</span>}
+                      <div className="spacer" />
+                      <Badge level={sl}>{st}</Badge>
+                    </div>
                     <div className="sub">{accName(i.account_id)} · {regionName(i.region_id)} · <span className="mono">{i.public_ips[0]?.address ?? "没有公网 IP"}</span></div>
                     <Billing i={i} />
                     <div className="hd"><AgentCell i={i} onInstall={() => setInstall(i.id)} /><div className="spacer" /><Rate i={i} /></div>
@@ -150,66 +252,334 @@ export function Instances() {
   );
 }
 
+type DetailTab = "overview" | "traffic" | "meta";
+
 function InstanceDetail({ i, account, onClose, onInstall }: { i: Instance; account: string; onClose: () => void; onInstall: () => void }) {
   const toast = useToast();
   const now = useNow();
+  const [tab, setTab] = useState<DetailTab>("overview");
   const [revoke, setRevoke] = useState(false);
-  const { instances } = useShared();
+  const [powerConfirm, setPowerConfirm] = useState<"start" | "stop" | "reboot" | null>(null);
+  const [stopMode, setStopMode] = useState<"keep_charging" | "stop_charging">("keep_charging");
+  const [powerBusy, setPowerBusy] = useState(false);
+  const { instances, reloadAll } = useShared();
   const [sl, st] = INSTANCE_STATUS[i.status];
   const [al, at] = AGENT[i.agent.status];
   const [pl, pt, pd] = protectionOf(i);
+  const exemptActive = Boolean(i.quota_exemption_until && Date.parse(i.quota_exemption_until) > now);
+
+  const runPower = async (action: "start" | "stop" | "reboot") => {
+    setPowerBusy(true);
+    try {
+      const mode = action === "stop" && i.kind === "ecs" ? (i.supports_stop_charging ? stopMode : "keep_charging") : undefined;
+      const { job_id } = await api.controlInstancePower(i.id, action, mode);
+      setPowerConfirm(null);
+      toast(`已提交${action === "start" ? "开机" : action === "stop" ? "关机" : "重启"}任务，等待阿里云确认…`);
+      const job = await waitForJob(job_id);
+      if (job.status === "failed") toast(errorText(job.error?.code ?? "internal_error"), true);
+      else toast(`${i.name} ${action === "start" ? "已开机" : action === "stop" ? "已关机" : "已重启"}`);
+      reloadAll();
+    } catch (e) {
+      toast(errMsg(e), true);
+    } finally {
+      setPowerBusy(false);
+    }
+  };
+
+  const setExempt = async (secs: number | null) => {
+    try {
+      if (secs === null) {
+        await api.clearProtectionExemption(i.id);
+        toast("已取消临时豁免");
+      } else {
+        await api.setProtectionExemption(i.id, secs);
+        toast("已设置临时豁免自动关机");
+      }
+      instances.reload();
+    } catch (e) {
+      toast(errMsg(e), true);
+    }
+  };
+
   if (revoke)
     return (
       <Confirm
         title={`撤销 ${i.name} 的采集程序凭证？`} okText="撤销" danger onClose={() => setRevoke(false)}
         body="撤销后，这台机器上的采集程序立刻无法再上报，这台机器会变回“未安装”。想恢复需要重新生成安装命令并在机器上再执行一次。"
         onOk={async () => {
-          try {
-            await api.revokeAgentToken(i.id);
-            instances.reload();
-            toast("已撤销");
-            onClose();
-          } catch (e) {
-            toast(errMsg(e), true);
-            throw e;
-          }
+          await api.revokeAgentToken(i.id);
+          instances.reload();
+          toast("已撤销");
+          onClose();
         }}
       />
     );
+
+  if (powerConfirm) {
+    const label = powerConfirm === "start" ? "开机" : powerConfirm === "stop" ? "关机" : "重启";
+    return (
+      <Modal title={`确认将 ${i.name} ${label}？`} onClose={() => setPowerConfirm(null)}>
+        {i.is_server_self && powerConfirm !== "start" && (
+          <div className="banner critical" style={{ marginBottom: 12 }}>
+            <div className="body"><b>这是运行 Harbormaster 面板自身的实例！</b> 关机或重启期间你将无法打开本面板。</div>
+          </div>
+        )}
+        {powerConfirm === "stop" && i.supports_stop_charging ? (
+          <div className="stack" style={{ marginBottom: 12 }}>
+            <SegToggle label="关机方式" value={stopMode} onChange={setStopMode} options={[["keep_charging", STOP_MODE.keep_charging[0]], ["stop_charging", STOP_MODE.stop_charging[0]]]} />
+            <div className="field-help">{STOP_MODE[stopMode][1]}</div>
+          </div>
+        ) : (
+          <p>{powerConfirm === "stop" ? "这台机器将执行普通停机（包年包月或轻量服务器不支持节省停机）。" : `将向阿里云发送${label}指令，并等待实例状态确认。`}</p>
+        )}
+        <div className="actions">
+          <button className="btn" onClick={() => setPowerConfirm(null)}>取消</button>
+          <button className={`btn ${powerConfirm === "start" ? "primary" : "danger"}`} disabled={powerBusy} onClick={() => runPower(powerConfirm)}>
+            {powerBusy && <Spinner />} 确认{label}
+          </button>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal title={i.name} onClose={onClose} wide>
-      <dl className="kv">
-        <dt>状态</dt><dd><Badge level={sl}>{st}</Badge></dd>
-        <dt>账号 / 地域</dt><dd>{account} · {regionName(i.region_id)}{i.zone_id ? `（${i.zone_id}）` : ""}</dd>
-        <dt>类型</dt><dd>{KIND[i.kind]} · {CHARGE[i.charge_type]}{i.expires_at ? ` · ${ymd(i.expires_at)} 到期` : ""}{i.renewal && i.renewal.status !== "not_applicable" ? ` · ${RENEWAL[i.renewal.status][1]}` : ""}</dd>
-        <dt>规格</dt><dd>{i.spec}</dd>
-        <dt>阿里云实例 ID</dt><dd className="mono">{i.cloud_instance_id}</dd>
-        <dt>公网 IP</dt><dd className="mono">{i.public_ips.map((p) => `${p.address}${p.type === "eip" ? "（弹性公网 IP）" : ""}`).join("、") || "—"}</dd>
-        {!!i.ipv6?.addresses.length && <><dt>IPv6</dt><dd className="mono">{i.ipv6.addresses.join("、")}{i.ipv6.status === "stale" ? "（上次查到的，这次没查成功）" : ""}</dd></>}
-        <dt>公网怎么计费</dt><dd>{(i.billing_subject_ids?.length ?? 0) > 1 ? "多个公网出口，按各自规则计费，详见流量页" : i.billing_subject_kind ? SUBJECT_KIND[i.billing_subject_kind] : i.public_ips.length ? "公网计费类型待确认" : "未发现公网出口"}{i.bandwidth_package_name ? `（${i.bandwidth_package_name}）` : ""}</dd>
-        <dt>计量规则</dt><dd>{i.metering_rule ? RULE[i.metering_rule] : "—"}{i.counts_toward_cdt === null ? " · 是否计入免费额度待确认" : i.counts_toward_cdt && i.cdt_scope ? ` · 计入${SCOPE[i.cdt_scope]}免费额度` : " · 不计入免费额度"}</dd>
-        {i.kind === "swas" && <><dt>套餐流量包</dt><dd>{i.billing_subject_kind === "swas_no_traffic_package" ? "无流量包（这个套餐不按流量计费）" : i.billing_subject_kind === "swas_traffic_package" ? "有流量包" : "待确认"}</dd></>}
-        <dt>带宽上限</dt><dd>{i.bandwidth_mbps ? `${i.bandwidth_mbps} Mbps` : "—"}{specNote(i) && <div style={{ marginTop: 4 }}><Badge level="warning">规格带宽不足</Badge><div className="sub" style={{ marginTop: 4 }}>{specNote(i)}</div></div>}</dd>
-        <dt>资源信息更新于</dt><dd>{stamp(i.updated_at)}</dd>
-      </dl>
-      <h3 style={{ fontSize: "var(--fs-md)", margin: "18px 0 8px" }}>采集程序（hm-agent）</h3>
-      <dl className="kv">
-        <dt>实时保护</dt><dd><Badge level={pl}>{pt}</Badge><div className="sub" style={{ marginTop: 4 }}>{pd}</div></dd>
-        <dt>采集程序</dt><dd><Badge level={al}>{at}</Badge>{i.agent.version ? ` 版本 ${i.agent.version}` : ""}</dd>
-        {i.agent.last_report_at && <><dt>最后上报</dt><dd>{stamp(i.agent.last_report_at)}（{ago(i.agent.last_report_at, now)}）</dd></>}
-        {i.agent.offline_since && <><dt>已掉线</dt><dd>{duration((now - new Date(i.agent.offline_since).getTime()) / 1000)}</dd></>}
-        {i.agent.worst_case && <><dt>推算依据</dt><dd>{i.agent.worst_case.basis === "recent_peak" ? "掉线前 10 分钟的最高速度" : "带宽上限"} {rate(i.agent.worst_case.rate_bytes_per_second)}</dd></>}
-        {i.realtime && <><dt>当前速度</dt><dd>发出 {rate(i.realtime.tx_bytes_per_second)} · 收到 {rate(i.realtime.rx_bytes_per_second)}</dd></>}
-      </dl>
-      {i.agent.status === "offline" && (
-        <p className="note">排查方法：登录这台机器，执行 <span className="mono">systemctl status hm-agent</span> 看它是否在运行；再确认机器能访问面板的地址。</p>
-      )}
-      <div className="actions">
-        {i.agent.status !== "not_installed" && <button className="btn danger" onClick={() => setRevoke(true)}>撤销凭证</button>}
-        {canInstall(i) && <button className="btn primary" onClick={onInstall}>安装采集程序</button>}
-        <button className="btn" onClick={onClose}>关闭</button>
+      <div className="inline" style={{ marginBottom: 14 }}>
+        <SegToggle label="详情分页" value={tab} onChange={setTab} options={[["overview", "概览与控制"], ["traffic", "流量曲线"], ["meta", "备注与分组"]]} />
+        <div className="spacer" />
+        {i.status === "stopped" && <button className="btn sm primary" disabled={powerBusy} onClick={() => setPowerConfirm("start")}>{powerBusy && <Spinner />} 开机</button>}
+        {i.status === "running" && (
+          <>
+            <button className="btn sm" disabled={powerBusy} onClick={() => setPowerConfirm("reboot")}>重启</button>
+            <button className="btn sm danger" disabled={powerBusy} onClick={() => setPowerConfirm("stop")}>关机</button>
+          </>
+        )}
       </div>
+
+      {tab === "overview" && (
+        <>
+          <dl className="kv">
+            <dt>状态</dt>
+            <dd>
+              <Badge level={sl}>{st}</Badge>
+              {i.desired_state && <span className="sub"> · 期望状态：{i.desired_state === "running" ? "运行中" : "已停止"}</span>}
+              {i.is_server_self && <span className="tag" style={{ marginLeft: 6 }}>面板自身</span>}
+            </dd>
+            <dt>账号 / 地域</dt><dd>{account} · {regionName(i.region_id)}{i.zone_id ? `（${i.zone_id}）` : ""}</dd>
+            <dt>类型</dt><dd>{KIND[i.kind]} · {CHARGE[i.charge_type]}{i.expires_at ? ` · ${ymd(i.expires_at)} 到期` : ""}{i.renewal && i.renewal.status !== "not_applicable" ? ` · ${RENEWAL[i.renewal.status][1]}` : ""}</dd>
+            <dt>规格</dt><dd>{i.spec}</dd>
+            {i.cpu?.usage.value != null && (
+              <>
+                <dt>CPU 负载</dt>
+                <dd>
+                  {num(i.cpu.usage.value, 1)}%
+                  {i.cpu.credit_balance?.value != null && <span className="sub"> · 突发性能积分剩余 {num(i.cpu.credit_balance.value, 1)}</span>}
+                </dd>
+              </>
+            )}
+            <dt>阿里云实例 ID</dt><dd className="mono">{i.cloud_instance_id}</dd>
+            <dt>公网 IP</dt><dd className="mono">{i.public_ips.map((p) => `${p.address}${p.type === "eip" ? "（弹性公网 IP）" : ""}`).join("、") || "—"}</dd>
+            {!!i.ipv6?.addresses.length && <><dt>IPv6</dt><dd className="mono">{i.ipv6.addresses.join("、")}{i.ipv6.status === "stale" ? "（上次查到的，这次没查成功）" : ""}</dd></>}
+            <dt>公网怎么计费</dt><dd>{(i.billing_subject_ids?.length ?? 0) > 1 ? "多个公网出口，按各自规则计费，详见流量页" : i.billing_subject_kind ? SUBJECT_KIND[i.billing_subject_kind] : i.public_ips.length ? "公网计费类型待确认" : "未发现公网出口"}{i.bandwidth_package_name ? `（${i.bandwidth_package_name}）` : ""}</dd>
+            <dt>计量规则</dt><dd>{i.metering_rule ? RULE[i.metering_rule] : "—"}{i.counts_toward_cdt === null ? " · 是否计入免费额度待确认" : i.counts_toward_cdt && i.cdt_scope ? ` · 计入${SCOPE[i.cdt_scope]}免费额度` : " · 不计入免费额度"}</dd>
+            {i.kind === "swas" && (
+              <>
+                <dt>套餐流量包</dt>
+                <dd>
+                  {i.swas_traffic_package?.usage ? `${gb(i.swas_traffic_package.usage.used_bytes)} / ${gb(i.swas_traffic_package.usage.total_bytes, 0)}（剩余 ${gb(i.swas_traffic_package.usage.remaining_bytes)}）` : i.billing_subject_kind === "swas_no_traffic_package" ? "无流量包（这个套餐不按流量计费）" : "待确认"}
+                </dd>
+              </>
+            )}
+            <dt>带宽上限</dt><dd>{i.bandwidth_mbps ? `${i.bandwidth_mbps} Mbps` : "—"}{specNote(i) && <div style={{ marginTop: 4 }}><Badge level="warning">规格带宽不足</Badge><div className="sub" style={{ marginTop: 4 }}>{specNote(i)}</div></div>}</dd>
+            <dt>临时豁免关机</dt>
+            <dd>
+              {exemptActive ? (
+                <div className="inline">
+                  <span>豁免至 {stamp(i.quota_exemption_until!)}</span>
+                  <button className="btn sm" onClick={() => setExempt(null)}>取消豁免</button>
+                </div>
+              ) : (
+                <div className="inline">
+                  <span className="sub">未豁免</span>
+                  <button className="btn sm" onClick={() => setExempt(3600)}>豁免 1 小时</button>
+                  <button className="btn sm" onClick={() => setExempt(6 * 3600)}>6 小时</button>
+                  <button className="btn sm" onClick={() => setExempt(24 * 3600)}>24 小时</button>
+                </div>
+              )}
+            </dd>
+            {(i.group || (i.tags?.length ?? 0) > 0 || i.note) && (
+              <>
+                <dt>本地备注</dt>
+                <dd>
+                  {i.group && <span className="tag" style={{ marginRight: 4 }}>{i.group}</span>}
+                  {(i.tags ?? []).map((t) => <span className="tag" key={t} style={{ marginRight: 4 }}>#{t}</span>)}
+                  {i.note && <div className="sub" style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{i.note}</div>}
+                </dd>
+              </>
+            )}
+            <dt>资源信息更新于</dt><dd>{stamp(i.updated_at)}</dd>
+          </dl>
+
+          <h3 style={{ fontSize: "var(--fs-md)", margin: "18px 0 8px" }}>采集程序（hm-agent）</h3>
+          <dl className="kv">
+            <dt>实时保护</dt><dd><Badge level={pl}>{pt}</Badge><div className="sub" style={{ marginTop: 4 }}>{pd}</div></dd>
+            <dt>采集程序</dt>
+            <dd>
+              <Badge level={al}>{at}</Badge>{i.agent.version ? ` 版本 ${i.agent.version}` : ""}
+              {i.agent.update_available && <span className="sub"> · 有新版本可升级（重新执行安装命令即可平滑覆盖，不丢数据）</span>}
+            </dd>
+            {i.agent.last_report_at && <><dt>最后上报</dt><dd>{stamp(i.agent.last_report_at)}（{ago(i.agent.last_report_at, now)}）</dd></>}
+            {i.agent.offline_since && <><dt>已掉线</dt><dd>{duration((now - new Date(i.agent.offline_since).getTime()) / 1000)}</dd></>}
+            {i.agent.worst_case && <><dt>推算依据</dt><dd>{i.agent.worst_case.basis === "recent_peak" ? "掉线前 10 分钟的最高速度" : "带宽上限"} {rate(i.agent.worst_case.rate_bytes_per_second)}</dd></>}
+            {i.realtime && <><dt>当前速度</dt><dd>发出 {rate(i.realtime.tx_bytes_per_second)} · 收到 {rate(i.realtime.rx_bytes_per_second)}</dd></>}
+          </dl>
+          {i.agent.status === "offline" && (
+            <p className="note">排查方法：登录这台机器，执行 <span className="mono">systemctl status hm-agent</span> 看它是否在运行；再确认机器能访问面板的地址。</p>
+          )}
+          <div className="actions">
+            {i.agent.status !== "not_installed" && <button className="btn danger" onClick={() => setRevoke(true)}>撤销凭证</button>}
+            {i.agent.update_available && <button className="btn" onClick={onInstall}>获取升级命令</button>}
+            {canInstall(i) && <button className="btn primary" onClick={onInstall}>安装采集程序</button>}
+            <button className="btn" onClick={onClose}>关闭</button>
+          </div>
+        </>
+      )}
+
+      {tab === "traffic" && <InstanceTrafficTab i={i} onClose={onClose} />}
+      {tab === "meta" && <InstanceMetaTab i={i} onClose={onClose} />}
     </Modal>
+  );
+}
+
+function InstanceTrafficTab({ i, onClose }: { i: Instance; onClose: () => void }) {
+  const [range, setRange] = useState<"24h" | "7d">("24h");
+  const hasAgent = i.agent.status !== "not_installed";
+  const res = useResource(async () => {
+    const to = new Date().toISOString();
+    const from = new Date(Date.now() - (range === "24h" ? 24 : 7 * 24) * 3600_000).toISOString();
+    if (hasAgent) {
+      const hourly = await api.agentHourlyHistory(i.id, { from, to, limit: 200 });
+      if (hourly.items.length >= 2) {
+        return {
+          mode: "hourly" as const,
+          unit: "GB",
+          labels: hourly.items.map((b) => (range === "24h" ? time(b.hour_start) : stamp(b.hour_start))),
+          tx: hourly.items.map((b) => gbValue(b.tx_bytes)),
+          rx: hourly.items.map((b) => gbValue(b.rx_bytes)),
+          note: "数据来自 hm-agent 本地小时归档（跨整点样本按时长分摊，仅用于历史图表展示）。",
+        };
+      }
+      const raw = await api.agentNetworkHistory(i.id, { from, to, limit: 300 });
+      const pts = [...raw.items].reverse().filter((s) => s.interval);
+      return {
+        mode: "raw" as const,
+        unit: "Mbps",
+        labels: pts.map((s) => (range === "24h" ? time(s.sampled_at) : stamp(s.sampled_at))),
+        tx: pts.map((s) => ((s.interval!.tx_bytes_per_second * 8) / 1e6)),
+        rx: pts.map((s) => ((s.interval!.rx_bytes_per_second * 8) / 1e6)),
+        note: "数据来自 hm-agent 实时采集样本。",
+      };
+    }
+    const cloud = await api.cloudNetworkHistory(i.id, { from, to, limit: 400 });
+    const byTime = new Map<string, { tx: number | null; rx: number | null }>();
+    for (const s of cloud.items) {
+      const entry = byTime.get(s.sampled_at) ?? { tx: null, rx: null };
+      if (s.direction === "egress") entry.tx = s.value / 1e6;
+      else entry.rx = s.value / 1e6;
+      byTime.set(s.sampled_at, entry);
+    }
+    const sorted = [...byTime.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    return {
+      mode: "cloud" as const,
+      unit: "Mbps",
+      labels: sorted.map(([t]) => (range === "24h" ? time(t) : stamp(t))),
+      tx: sorted.map(([, v]) => v.tx),
+      rx: sorted.map(([, v]) => v.rx),
+      note: "这台机器尚未安装采集程序，当前展示阿里云云监控的分钟级带宽曲线（约延迟 1–2 分钟）。",
+    };
+  }, [i.id, range, hasAgent]);
+
+  return (
+    <div className="stack">
+      <div className="inline">
+        <SegToggle label="时间范围" value={range} onChange={setRange} options={[["24h", "过去 24 小时"], ["7d", "过去 7 天"]]} />
+      </div>
+      <Async res={res} lines={6}>
+        {(d) =>
+          d.labels.length < 2 ? (
+            <EmptyState title="还没有足够的历史点画图">刚启动或刚装上采集程序时，稍等几分钟就会积累出曲线。</EmptyState>
+          ) : (
+            <>
+              <div className="legend">
+                <span><i className="line" style={{ background: "var(--series-1)" }} />发出（{d.unit}）</span>
+                <span><i className="line" style={{ background: "var(--series-3)" }} />收到（{d.unit}）</span>
+              </div>
+              <LineChart
+                ariaLabel={`${i.name} 公网收发历史曲线`}
+                labels={d.labels}
+                unit={d.unit}
+                digits={2}
+                series={[
+                  { name: "发出", color: "var(--series-1)", data: d.tx },
+                  { name: "收到", color: "var(--series-3)", data: d.rx },
+                ]}
+              />
+              <p className="note" style={{ margin: 0 }}>{d.note}</p>
+            </>
+          )
+        }
+      </Async>
+      <div className="actions"><button className="btn" onClick={onClose}>关闭</button></div>
+    </div>
+  );
+}
+
+function InstanceMetaTab({ i, onClose }: { i: Instance; onClose: () => void }) {
+  const toast = useToast();
+  const { instances } = useShared();
+  const [group, setGroup] = useState(i.group ?? "");
+  const [tagsStr, setTagsStr] = useState((i.tags ?? []).join(", "));
+  const [note, setNote] = useState(i.note ?? "");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const tags = tagsStr.split(/[,，]+/).map((t) => t.trim()).filter(Boolean);
+      const saved = await api.updateInstanceMetadata(i.id, { group: group.trim(), tags, note });
+      instances.mutate((l) => ({
+        ...l,
+        items: l.items.map((x) => (x.id === i.id ? { ...x, group: saved.group, tags: saved.tags, note: saved.note } : x)),
+      }));
+      toast("备注与分组已保存");
+    } catch (err) {
+      toast(errMsg(err), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form className="stack" onSubmit={submit}>
+      <div>
+        <label className="lbl" htmlFor="im-group">分组（单选归类，例如：出口节点、核心业务）</label>
+        <input id="im-group" type="text" value={group} onChange={(e) => setGroup(e.target.value)} maxLength={40} placeholder="留空表示不分组" />
+      </div>
+      <div>
+        <label className="lbl" htmlFor="im-tags">标签（多个标签用逗号分隔，最多 10 个）</label>
+        <input id="im-tags" type="text" value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} placeholder="例如：主力, 香港, 晚高峰" />
+      </div>
+      <div>
+        <label className="lbl" htmlFor="im-note">多行备注（记录用途、端口说明等）</label>
+        <textarea id="im-note" rows={4} value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} style={{ width: "100%" }} placeholder="只保存在 Harbormaster 本地数据库，不会写回阿里云。" />
+      </div>
+      <p className="note" style={{ margin: 0 }}>分组、标签与备注仅存放在本面板数据库中，绝不会调用阿里云标签接口修改云上资源。</p>
+      <div className="actions">
+        <button type="button" className="btn" onClick={onClose}>关闭</button>
+        <button className="btn primary" disabled={busy}>{busy && <Spinner />} 保存</button>
+      </div>
+    </form>
   );
 }
 
@@ -219,7 +589,7 @@ function AgentInstall({ i, onClose }: { i: Instance; onClose: () => void }) {
   const [cmd, setCmd] = useState<AgentInstallCommand>();
   const [error, setError] = useState<string>();
   const [startedAt, setStartedAt] = useState(Date.now());
-  const online = i.agent.status === "online";
+  const online = i.agent.status === "online" && !i.agent.update_available;
 
   const generate = () => {
     setCmd(undefined);
@@ -233,7 +603,7 @@ function AgentInstall({ i, onClose }: { i: Instance; onClose: () => void }) {
   const waited = (now - startedAt) / 1000;
 
   return (
-    <Modal title={`给 ${i.name} 安装采集程序`} onClose={onClose} wide>
+    <Modal title={`给 ${i.name} 安装 / 升级采集程序`} onClose={onClose} wide>
       <p>采集程序只统计这台机器的公网流量并每 10 秒上报一次。它不会执行任何其他命令，也不需要在机器上开放端口。</p>
       <ol className="steps">
         <li className={online ? "done" : ""}>
@@ -267,12 +637,12 @@ function AgentInstall({ i, onClose }: { i: Instance; onClose: () => void }) {
             <div className="st">等待上线</div>
             {online ? (
               <div style={{ marginTop: 4 }}>
-                <Badge level="good">已上线</Badge>{" "}
+                <Badge level="good">已上线（最新版本）</Badge>{" "}
                 {i.realtime && <span className="sub">当前速度：发出 {rate(i.realtime.tx_bytes_per_second)} · 收到 {rate(i.realtime.rx_bytes_per_second)}</span>}
               </div>
             ) : cmd && !expired ? (
               <div className="sub">
-                <Spinner /> 正在等它第一次上报（已等 {duration(waited)}）。执行命令后通常几十秒内出现。
+                <Spinner /> 正在等它上报（已等 {duration(waited)}）。执行命令后通常几十秒内出现。
                 {waited > 90 && <div style={{ marginTop: 4 }}>等了比较久。请确认命令执行没有报错，并且这台机器能访问面板的地址。</div>}
               </div>
             ) : (

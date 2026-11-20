@@ -3,7 +3,7 @@ import { mockQuotaTotals, mockDailyTotal } from "./traffic-aggregate";
 import type * as T from "../api/types";
 import type { EventName } from "../api/types";
 import { GB } from "../lib/format";
-import { buildDb, noAgent, REGIONS, type Db, type Scene, SCENES } from "./data";
+import { buildDb, computeOverageCost, noAgent, REGIONS, type Db, type Scene, SCENES } from "./data";
 
 const SCENE_KEY = "hm-mock-scene";
 const AUTH_KEY = "hm-mock-auth";
@@ -81,14 +81,22 @@ function tick() {
     q.estimated_bytes = q.official_bytes + q.realtime_increment_bytes;
     q.effective_bytes = Math.max(q.official_bytes, q.estimated_bytes);
     q.updated_at = iso(now);
+    const acc = db.accounts.find((a) => a.id === q.account_id);
+    q.overage_cost = computeOverageCost(q, acc?.site ?? "china", db.pricing, q.effective_bytes);
     emit("quota.updated", q);
   }
-  for(const q of db.quotas){
-    q.updated_at=iso(now);
-    const e=q.estimation;if(!e)continue;
-    e.calculated_at=iso(now);e.to_at=iso(now);
-    if(e.status==="ready" && e.increment_bytes!==null && q.official_bytes!==null){e.increment_bytes+=(e.current_rate_bytes_per_second??0)*TICK_SECONDS;e.known_increment_bytes=e.increment_bytes;e.estimated_bytes=q.official_bytes+e.increment_bytes;}
-    emit("quota.updated",q);
+  for (const q of db.quotas) {
+    q.updated_at = iso(now);
+    const e = q.estimation;
+    if (!e) continue;
+    e.calculated_at = iso(now);
+    e.to_at = iso(now);
+    if (e.status === "ready" && e.increment_bytes !== null && q.official_bytes !== null) {
+      e.increment_bytes += (e.current_rate_bytes_per_second ?? 0) * TICK_SECONDS;
+      e.known_increment_bytes = e.increment_bytes;
+      e.estimated_bytes = q.official_bytes + e.increment_bytes;
+    }
+    emit("quota.updated", q);
   }
   emit("ping", {});
 }
@@ -109,8 +117,25 @@ export function subscribeMock(fn: Emit, onState: (open: boolean) => void): () =>
 
 /* ---------- 任务 ---------- */
 let jobSeq = 0xa100;
-function startJob(type: T.Job["type"], ms: number, run: () => { result?: Record<string, unknown>; error?: { code: string; message: string } }): T.JobAccepted {
-  const job: T.Job = { id: "job_" + (jobSeq++).toString(16), type, status: "queued", created_at: iso(), started_at: null, finished_at: null, error: null, result: null };
+function startJob(
+  type: T.Job["type"],
+  ms: number,
+  run: () => { result?: Record<string, unknown>; error?: { code: string; message: string } },
+  meta?: { account_ids?: string[]; instance_id?: string | null; trigger?: T.JobTrigger },
+): T.JobAccepted {
+  const job: T.Job = {
+    id: "job_" + (jobSeq++).toString(16),
+    type,
+    account_ids: meta?.account_ids ?? [],
+    instance_id: meta?.instance_id ?? null,
+    trigger: meta?.trigger ?? "panel",
+    status: "queued",
+    created_at: iso(),
+    started_at: null,
+    finished_at: null,
+    error: null,
+    result: null,
+  };
   db.jobs.set(job.id, job);
   setTimeout(() => {
     job.status = "running";
@@ -150,9 +175,10 @@ const apiKeys: T.APIKey[] = scene === "empty" || scene === "setup" ? [] : [
 ];
 
 let failedLogins = 0;
+let pendingCeremonyName = "安全密钥";
 
-export async function handle(method: string, fullPath: string, body: unknown): Promise<Res> {
-  await sleep(scene === "slow" ? 4000 : 180 + Math.random() * 220);
+export async function handle(method: string, fullPath: string, body: unknown, _headers?: Record<string, string>): Promise<Res> {
+  await sleep(scene === "slow" ? 4000 : 120 + Math.random() * 140);
   const [path, query = ""] = fullPath.split("?");
   const q = new URLSearchParams(query);
   const b = (body ?? {}) as Record<string, unknown>;
@@ -169,7 +195,18 @@ export async function handle(method: string, fullPath: string, body: unknown): P
     setAuthed(true);
     return ok(session(), 201);
   }
+  if (is("GET", "/session/methods")) return ok({ password_enabled: db.initialized && db.passwordEnabled, passkey_enabled: db.initialized && db.passkeys.length > 0 } satisfies T.LoginMethods);
+  if (is("POST", "/session/passkey/options")) {
+    if (!db.passkeys.length) return fail(401, "invalid_passkey");
+    return ok({ ceremony_id: "c".repeat(64), expires_at: iso(Date.now() + 300_000), options: { publicKey: { challenge: "bW9jaw" } } } satisfies T.PasskeyOptions);
+  }
+  if (is("POST", "/session/passkey/finish")) {
+    setAuthed(true);
+    if (db.passkeys[0]) db.passkeys[0].last_used_at = iso();
+    return ok(session());
+  }
   if (is("POST", "/session")) {
+    if (!db.passwordEnabled) return fail(403, "password_login_disabled");
     if (b.password === "wrong" || String(b.password ?? "").length < 4) {
       failedLogins++;
       if (failedLogins >= 4) return fail(429, "rate_limited", { retry_after_seconds: 30 });
@@ -185,18 +222,99 @@ export async function handle(method: string, fullPath: string, body: unknown): P
     setAuthed(false);
     return ok(undefined, 204);
   }
+  if (is("PATCH", "/session/password")) {
+    const enabled = Boolean(b.enabled);
+    if (!enabled && !db.passkeys.length) return fail(409, "passkey_required");
+    db.passwordEnabled = enabled;
+    return ok({ password_enabled: db.passwordEnabled });
+  }
+  if (is("GET", "/passkeys")) return ok({ items: db.passkeys });
+  if (is("POST", "/passkeys/registration/options")) {
+    const name = String(b.name ?? "").trim();
+    if (!name) return fail(422, "validation_failed", { fields: { name: "required" } });
+    pendingCeremonyName = name;
+    return ok({ ceremony_id: "r".repeat(64), expires_at: iso(Date.now() + 300_000), options: { publicKey: { challenge: "bW9jaw", user: { id: "dXNlcg", name: "administrator", displayName: "Harbormaster" } } } } satisfies T.PasskeyOptions);
+  }
+  if (is("POST", "/passkeys/registration/finish")) {
+    const pk: T.Passkey = { id: "pk_" + Math.random().toString(36).slice(2, 8), name: pendingCeremonyName, created_at: iso(), last_used_at: null };
+    db.passkeys.unshift(pk);
+    return ok(pk, 201);
+  }
+  if (seg[0] === "passkeys" && seg[1] && method === "DELETE") {
+    if (!db.passwordEnabled && db.passkeys.length <= 1) return fail(409, "last_passkey");
+    db.passkeys = db.passkeys.filter((x) => x.id !== seg[1]);
+    return ok(undefined, 204);
+  }
 
   /* 出错场景：登录正常，数据接口全部失败 */
   if (scene === "error" && !(seg[0] === "settings" || seg[0] === "system")) return fail(500, "internal_error");
 
-  if (is("GET", "/system/info")) return ok({ version: "0.1.0-mock", commit: "0000000", built_at: iso(Date.now() - 86400_000), latest_agent_version: "0.1.0", data_mode: "demo", read_only: false } satisfies T.SystemInfo);
+  if (is("GET", "/system/info")) return ok({ version: "0.2.0-mock", commit: "e7b926b", built_at: iso(Date.now() - 86400_000), latest_agent_version: "0.2.0", data_mode: "demo", read_only: false } satisfies T.SystemInfo);
+  if (is("GET", "/settings/branding")) return ok(db.branding);
+  if (is("PUT", "/settings/branding")) {
+    const name = String(b.name ?? "").trim();
+    if (!name || name.length > 40) return fail(422, "validation_failed", { fields: { name: "invalid_format" } });
+    db.branding = { ...db.branding, revision: db.branding.revision + 1, name, updated_at: iso() };
+    return ok(db.branding);
+  }
+  if (is("PUT", "/settings/branding/logo")) {
+    db.branding = { ...db.branding, revision: db.branding.revision + 1, logo: { url: "/favicon.svg", media_type: "image/png", width: 64, height: 64, bytes: 1024 }, updated_at: iso() };
+    return ok(db.branding);
+  }
+  if (is("DELETE", "/settings/branding/logo")) {
+    db.branding = { ...db.branding, revision: db.branding.revision + 1, logo: null, updated_at: iso() };
+    return ok(db.branding);
+  }
   if (is("GET", "/settings")) return ok(db.settings);
   if (is("PATCH", "/settings")) {
     if (typeof b.business_timezone === "string") db.settings.business_timezone = b.business_timezone;
+    if (b.retention && typeof b.retention === "object") Object.assign(db.settings.retention!, b.retention);
     return ok(db.settings);
   }
+  if (is("GET", "/settings/heartbeat")) return ok(db.heartbeat);
+  if (is("PUT", "/settings/heartbeat")) {
+    const urlStr = typeof b.url === "string" ? b.url.trim() : undefined;
+    const urlSet = urlStr !== undefined ? urlStr !== "" : db.heartbeat.url_configured;
+    if (Boolean(b.enabled) && !urlSet) return fail(422, "validation_failed", { fields: { url: "required" } });
+    db.heartbeat = {
+      ...db.heartbeat,
+      revision: db.heartbeat.revision + 1,
+      enabled: Boolean(b.enabled),
+      interval_seconds: Number(b.interval_seconds) || 60,
+      url_configured: urlSet,
+      updated_at: iso(),
+    };
+    return ok(db.heartbeat);
+  }
+  if (is("POST", "/settings/heartbeat/test")) {
+    if (!db.heartbeat.url_configured) return fail(409, "heartbeat_not_configured");
+    return ok(startJob("heartbeat_test", 1000, () => {
+      db.heartbeat.last_attempt_at = iso();
+      db.heartbeat.last_success_at = iso();
+      db.heartbeat.last_error = null;
+      return {};
+    }), 202);
+  }
+  if (is("GET", "/audit-log")) {
+    const items = db.auditLog.filter((a) =>
+      (!q.get("actor") || a.actor.kind === q.get("actor")) &&
+      (!q.get("target_type") || a.target_type === q.get("target_type")) &&
+      (!q.get("account_id") || a.account_id === q.get("account_id")),
+    );
+    return ok(page(items, q));
+  }
   if (is("GET", "/regions")) return ok({ items: REGIONS[(q.get("site") as T.AccountSite) ?? "china"] ?? REGIONS.china });
-  if (seg[0] === "jobs" && method === "GET") {
+  if (is("GET", "/jobs")) {
+    const all = [...db.jobs.values()].reverse().filter((j) =>
+      (!q.get("account_id") || j.account_ids?.includes(q.get("account_id")!)) &&
+      (!q.get("instance_id") || j.instance_id === q.get("instance_id")) &&
+      (!q.get("type") || j.type === q.get("type")) &&
+      (!q.get("status") || j.status === q.get("status")) &&
+      (!q.get("trigger") || j.trigger === q.get("trigger")),
+    );
+    return ok(page(all, q));
+  }
+  if (seg[0] === "jobs" && seg[1] && method === "GET") {
     const job = db.jobs.get(seg[1]);
     return job ? ok(job) : fail(404, "not_found");
   }
@@ -224,7 +342,7 @@ export async function handle(method: string, fullPath: string, body: unknown): P
       account.sync_status = "ok";
       account.last_sync_at = iso();
       return { result: account.permission_check as unknown as Record<string, unknown> };
-    });
+    }, { account_ids: [account.id] });
     return ok({ account, permission_check_job_id: job.job_id }, 201);
   }
   if (seg[0] === "accounts" && seg[1]) {
@@ -252,7 +370,7 @@ export async function handle(method: string, fullPath: string, body: unknown): P
         const prev = a.permission_check;
         a.permission_check = { checked_at: iso(), items: prev?.items ?? [] };
         return { result: a.permission_check as unknown as Record<string, unknown> };
-      }), 202);
+      }, { account_ids: [a.id] }), 202);
   }
 
   /* 实例与采集程序 */
@@ -261,40 +379,165 @@ export async function handle(method: string, fullPath: string, body: unknown): P
     return ok({ ...page(items, q), updated_at: db.instancesUpdatedAt });
   }
   if (is("POST", "/instances/refresh"))
-    return ok(startJob("refresh", 2400, () => {
+    return ok(startJob("refresh", 1800, () => {
       if (scene === "stale") return { error: { code: "aliyun_unreachable", message: "mock" } };
       db.instancesUpdatedAt = iso();
       db.instances.forEach((i) => (i.updated_at = iso()));
       db.accounts.forEach((a) => (a.last_sync_at = iso()));
       return {};
     }), 202);
-  if (seg[0] === "instances" && seg[2] === "agent") {
+
+  if (seg[0] === "instances" && seg[1]) {
     const i = db.instances.find((x) => x.id === seg[1]);
     if (!i) return fail(404, "not_found");
-    if (method === "POST" && seg[3] === "install-command") {
-      const code = Math.random().toString(36).slice(2, 10);
-      // 模拟：命令生成约 12 秒后，采集程序"装好并上线"
-      setTimeout(() => {
-        i.agent = { status: "online", version: "0.1.0", registered_at: iso(), last_report_at: iso(), offline_since: null, worst_case: null };
-        if (i.counts_toward_cdt) i.realtime_protection = "protected";
-        i.realtime = { rx_bytes_per_second: 420_000, tx_bytes_per_second: 610_000, sampled_at: iso() };
-        emit("agent.status", { instance_id: i.id, agent: i.agent, realtime_protection: i.realtime_protection });
-        emit("instance.realtime", { instance_id: i.id, realtime: i.realtime });
-      }, 12_000);
-      return ok({ command: `curl -fsSL https://harbor.example.com/install-agent.sh | sudo sh -s -- --server https://harbor.example.com --code ${code}`, expires_at: iso(Date.now() + 15 * 60_000) } satisfies T.AgentInstallCommand, 201);
+    if (method === "PATCH" && seg[2] === "metadata") {
+      const u = b as T.InstanceMetadataUpdate;
+      if (u.note !== undefined) i.note = u.note ?? "";
+      if (u.group !== undefined) i.group = (u.group ?? "").trim();
+      if (u.tags !== undefined) i.tags = (u.tags ?? []).map((t) => t.trim()).filter(Boolean);
+      const updated_at = iso();
+      i.updated_at = updated_at;
+      return ok({ instance_id: i.id, note: i.note ?? "", group: i.group ?? "", tags: i.tags ?? [], updated_at });
     }
-    if (method === "DELETE" && seg[3] === "token") {
-      i.agent = noAgent();
-      i.realtime = null;
-      if (i.counts_toward_cdt) i.realtime_protection = "unprotected";
-      emit("agent.status", { instance_id: i.id, agent: i.agent, realtime_protection: i.realtime_protection });
-      return ok(undefined, 204);
+    if (method === "POST" && seg[2] === "power") {
+      const action = b.action as "start" | "stop" | "reboot";
+      const stopMode = b.stop_mode as "keep_charging" | "stop_charging" | undefined;
+      if (action === "stop" && stopMode === "stop_charging" && !i.supports_stop_charging) return fail(422, "validation_failed", { fields: { stop_mode: "invalid_for_instance" } });
+      i.status = action === "stop" ? "stopping" : "starting";
+      return ok(startJob("instance_power", 1400, () => {
+        i.status = action === "stop" ? "stopped" : "running";
+        i.desired_state = i.status;
+        i.desired_state_updated_at = iso();
+        i.pending_intent_confirmation = null;
+        return { result: { action, stop_mode: stopMode ?? null, target_status: i.status, stage: "confirmed" } };
+      }, { account_ids: [i.account_id], instance_id: i.id }), 202);
+    }
+    if (seg[2] === "protection-exemption") {
+      if (method === "PUT") {
+        const secs = Number(b.duration_seconds) || 3600;
+        const expires_at = iso(Date.now() + secs * 1000);
+        i.quota_exemption_until = expires_at;
+        return ok({ instance_id: i.id, expires_at });
+      }
+      if (method === "DELETE") {
+        i.quota_exemption_until = null;
+        return ok(undefined, 204);
+      }
+    }
+    if (method === "POST" && seg[2] === "intent-confirmation") {
+      const decision = b.decision as "keep_stopped" | "resume";
+      i.pending_intent_confirmation = null;
+      if (decision === "keep_stopped") {
+        i.desired_state = "stopped";
+        i.desired_state_updated_at = iso();
+        return ok({ instance_id: i.id, decision, job_id: null });
+      }
+      const job = startJob("instance_power", 1400, () => {
+        i.status = "running";
+        i.desired_state = "running";
+        i.desired_state_updated_at = iso();
+        return { result: { action: "start", target_status: "running", stage: "confirmed" } };
+      }, { account_ids: [i.account_id], instance_id: i.id, trigger: "panel" });
+      return ok({ instance_id: i.id, decision, job_id: job.job_id });
+    }
+    if (method === "GET" && seg[2] === "agent-hourly-history") {
+      const fromMs = Date.parse(q.get("from") ?? iso(Date.now() - 24 * 3600_000));
+      const toMs = Date.parse(q.get("to") ?? iso());
+      if (i.agent.status === "not_installed") return ok({ items: [], from: iso(fromMs), to: iso(toMs) });
+      const startHour = Math.floor(fromMs / 3600_000) * 3600_000;
+      const count = Math.min(200, Math.max(1, Math.floor((toMs - startHour) / 3600_000)));
+      const items: T.AgentHourlyBucket[] = Array.from({ length: count }, (_, k) => {
+        const hs = startHour + k * 3600_000;
+        const wave = 0.5 + 0.4 * Math.sin(k / 3.5);
+        const rx = Math.round(wave * 0.45 * GB);
+        const tx = Math.round(wave * 0.52 * GB);
+        return { hour_start: iso(hs), rx_bytes: rx, tx_bytes: tx, rx_bytes_per_second: Math.floor(rx / 3600), tx_bytes_per_second: Math.floor(tx / 3600), covered_seconds: 3600, sample_count: 360, estimated: true };
+      });
+      return ok({ items, from: iso(fromMs), to: iso(toMs) });
+    }
+    if (method === "GET" && seg[2] === "agent-network-history") {
+      const fromMs = Date.parse(q.get("from") ?? iso(Date.now() - 24 * 3600_000));
+      const toMs = Date.parse(q.get("to") ?? iso());
+      if (i.agent.status === "not_installed") return ok({ items: [], next_cursor: null, from: iso(fromMs), to: iso(toMs) });
+      const step = Math.max(600_000, Math.floor((toMs - fromMs) / 48));
+      const items: T.AgentNetworkSample[] = Array.from({ length: 48 }, (_, k) => {
+        const end = toMs - k * step;
+        const wave = 0.5 + 0.4 * Math.cos(k / 4);
+        const rxRate = Math.round(wave * 4_200_000);
+        const txRate = Math.round(wave * 5_100_000);
+        return {
+          counter_epoch: "ep1",
+          sequence: 1000 - k,
+          sampled_at: iso(end),
+          received_at: iso(end),
+          uptime_ms: (1000 - k) * step,
+          rx_bytes: (1000 - k) * rxRate * 10,
+          tx_bytes: (1000 - k) * txRate * 10,
+          quality: "ok",
+          rules_version: "1",
+          report_interval_seconds: 10,
+          dropped_samples: 0,
+          interval_status: "continuous",
+          interval_unavailable_reason: null,
+          interval: { previous_sequence: 999 - k, start_at: iso(end - step), end_at: iso(end), duration_ms: step, rx_bytes: rxRate * Math.round(step / 1000), tx_bytes: txRate * Math.round(step / 1000), rx_bytes_per_second: rxRate, tx_bytes_per_second: txRate },
+        };
+      });
+      return ok({ items, next_cursor: null, from: iso(fromMs), to: iso(toMs) });
+    }
+    if (method === "GET" && seg[2] === "cloud-network-history") {
+      const fromMs = Date.parse(q.get("from") ?? iso(Date.now() - 24 * 3600_000));
+      const toMs = Date.parse(q.get("to") ?? iso());
+      const step = Math.max(600_000, Math.floor((toMs - fromMs) / 36));
+      const items: T.CloudNetworkSample[] = [];
+      for (let k = 0; k < 36; k++) {
+        const at = iso(toMs - k * step);
+        const wave = 0.4 + 0.35 * Math.sin(k / 3);
+        items.push(
+          { source: i.kind === "swas" ? "swas_describe_monitor_data" : "cms", network_type: i.kind === "swas" ? "swas" : "vpc", ip: i.public_ips[0]?.address ?? null, direction: "egress", metric_name: "InternetOutRate", unit: "bit/s", period_seconds: 60, value: Math.round(wave * 28_000_000), sampled_at: at, checked_at: at },
+          { source: i.kind === "swas" ? "swas_describe_monitor_data" : "cms", network_type: i.kind === "swas" ? "swas" : "vpc", ip: i.public_ips[0]?.address ?? null, direction: "ingress", metric_name: "InternetInRate", unit: "bit/s", period_seconds: 60, value: Math.round(wave * 19_000_000), sampled_at: at, checked_at: at },
+        );
+      }
+      return ok({ items, next_cursor: null, from: iso(fromMs), to: iso(toMs) });
+    }
+    if (seg[2] === "agent") {
+      if (method === "POST" && seg[3] === "install-command") {
+        const code = Math.random().toString(36).slice(2, 10);
+        setTimeout(() => {
+          i.agent = { status: "online", version: "0.2.0", update_available: false, registered_at: iso(), last_report_at: iso(), offline_since: null, worst_case: null };
+          if (i.counts_toward_cdt) i.realtime_protection = "protected";
+          i.realtime = { rx_bytes_per_second: 420_000, tx_bytes_per_second: 610_000, sampled_at: iso() };
+          emit("agent.status", { instance_id: i.id, agent: i.agent, realtime_protection: i.realtime_protection });
+          emit("instance.realtime", { instance_id: i.id, realtime: i.realtime });
+        }, 12_000);
+        return ok({ command: `curl -fsSL https://harbor.example.com/install-agent.sh | sudo sh -s -- --server https://harbor.example.com --code ${code}`, expires_at: iso(Date.now() + 15 * 60_000) } satisfies T.AgentInstallCommand, 201);
+      }
+      if (method === "DELETE" && seg[3] === "token") {
+        i.agent = noAgent();
+        i.realtime = null;
+        if (i.counts_toward_cdt) i.realtime_protection = "unprotected";
+        emit("agent.status", { instance_id: i.id, agent: i.agent, realtime_protection: i.realtime_protection });
+        return ok(undefined, 204);
+      }
     }
   }
 
-  /* 流量 */
+  /* 流量与计费单价 */
   const byAccount = <X extends { account_id: string }>(xs: X[]) => xs.filter((x) => !q.get("account_id") || x.account_id === q.get("account_id"));
-  if (is("GET", "/traffic/quotas")) return ok({ items: q.get("account_id")==="all"?mockQuotaTotals(db):byAccount(db.quotas) });
+  if (is("GET", "/traffic/quotas")) return ok({ items: q.get("account_id") === "all" ? mockQuotaTotals(db) : byAccount(db.quotas) });
+  if (is("GET", "/traffic/pricing")) return ok(db.pricing);
+  if (is("PUT", "/traffic/pricing")) {
+    const next = b as unknown as T.TrafficPricing;
+    db.pricing = { ...next, revision: db.pricing.revision + 1, updated_at: iso() };
+    for (const qt of db.quotas) {
+      const acc = db.accounts.find((a) => a.id === qt.account_id);
+      qt.overage_cost = computeOverageCost(qt, acc?.site ?? "china", db.pricing, qt.effective_bytes);
+    }
+    return ok(db.pricing);
+  }
+  if (is("GET", "/traffic/reconciliations")) {
+    const items = db.reconciliations.filter((r) => (!q.get("account_id") || r.account_id === q.get("account_id")) && (!q.get("scope") || r.scope === q.get("scope")));
+    return ok({ items, next_before: null });
+  }
   if (is("GET", "/traffic/observations")) {
     const id = q.get("account_id");
     if (!db.accounts.some((a) => a.id === id)) return fail(404, "not_found");
@@ -302,7 +545,7 @@ export async function handle(method: string, fullPath: string, body: unknown): P
     return ok({ items: Array.from({ length: 8 }, (_, i) => ({ id: String(8 - i), account_id: id, fetched_at: iso(Date.now() - i * 300_000), mainland_bytes: known("mainland", i), overseas_bytes: known("overseas", i), official_quality: "inferred", error: null })), next_cursor: null });
   }
   if (is("GET", "/traffic/daily")) {
-    const d = q.get("account_id")==="all"?mockDailyTotal(db):db.daily[q.get("account_id") ?? ""];
+    const d = q.get("account_id") === "all" ? mockDailyTotal(db) : db.daily[q.get("account_id") ?? ""];
     return d ? ok(d) : fail(404, "not_found");
   }
   if (is("GET", "/traffic/billing-subjects")) return ok({ items: byAccount(db.subjects) });
@@ -310,6 +553,111 @@ export async function handle(method: string, fullPath: string, body: unknown): P
   if (seg[0] === "bandwidth-packages" && seg[2] === "hourly") {
     const h = db.hourly[seg[1]];
     return h ? ok(h) : fail(404, "not_found");
+  }
+
+  /* 自动化与额度保护 */
+  if (is("GET", "/protection/status")) return ok(db.protectionStatus);
+  if (is("GET", "/protection/rules")) return ok({ items: db.protectionRules });
+  if (is("POST", "/protection/rules")) {
+    const inRule = b as unknown as T.QuotaProtectionRuleInput;
+    const rule: T.QuotaProtectionRule = {
+      ...inRule,
+      id: "rule_" + Math.random().toString(36).slice(2, 8),
+      revision: 1,
+      reserve_seconds: inRule.reserve_seconds ?? 60,
+      dry_run: inRule.dry_run ?? true,
+      confirmed_self_instance_id: inRule.confirmed_self_instance_id ?? "",
+      created_at: iso(),
+      updated_at: iso(),
+    };
+    db.protectionRules.unshift(rule);
+    return ok(rule, 201);
+  }
+  if (seg[0] === "protection" && seg[1] === "rules" && seg[2]) {
+    const idx = db.protectionRules.findIndex((r) => r.id === seg[2]);
+    if (idx < 0) return fail(404, "not_found");
+    if (method === "PUT") {
+      const inRule = b as unknown as T.QuotaProtectionRuleInput;
+      db.protectionRules[idx] = {
+        ...db.protectionRules[idx],
+        ...inRule,
+        revision: db.protectionRules[idx].revision + 1,
+        updated_at: iso(),
+      };
+      return ok(db.protectionRules[idx]);
+    }
+    if (method === "DELETE") {
+      db.protectionRules.splice(idx, 1);
+      return ok(undefined, 204);
+    }
+  }
+  if (is("GET", "/protection/simulations")) {
+    db.simulations = db.simulations.filter((s) => Date.parse(s.expires_at) > Date.now());
+    return ok({ items: db.simulations });
+  }
+  if (is("PUT", "/protection/simulations")) {
+    const sim = b as unknown as T.QuotaSimulation;
+    const idx = db.simulations.findIndex((s) => s.account_id === sim.account_id && s.scope === sim.scope && s.source_instance_id === sim.source_instance_id);
+    const saved: T.QuotaSimulation = { ...sim, revision: (idx >= 0 ? db.simulations[idx].revision : sim.revision) + 1 };
+    if (idx >= 0) db.simulations[idx] = saved;
+    else db.simulations.push(saved);
+    return ok(saved);
+  }
+  if (is("DELETE", "/protection/simulations")) {
+    db.simulations = db.simulations.filter((s) => !(s.account_id === q.get("account_id") && s.scope === q.get("scope") && s.source_instance_id === (q.get("source_instance_id") ?? "")));
+    return ok(undefined, 204);
+  }
+  if (is("GET", "/protection/decisions")) {
+    const items = db.decisions.filter((d) => !q.get("rule_id") || d.rule_id === q.get("rule_id"));
+    return ok({ items, next_before: null });
+  }
+  if (is("GET", "/automation/schedules")) return ok({ items: db.schedules });
+  if (is("POST", "/automation/schedules")) {
+    const inSch = b as unknown as T.PowerScheduleInput;
+    const sch: T.PowerSchedule = {
+      ...inSch,
+      id: "sch_" + Math.random().toString(36).slice(2, 8),
+      revision: 1,
+      catch_up_minutes: inSch.catch_up_minutes ?? 15,
+      activated_at: iso(),
+      last_triggered_at: null,
+      created_at: iso(),
+      updated_at: iso(),
+    };
+    db.schedules.unshift(sch);
+    return ok(sch, 201);
+  }
+  if (seg[0] === "automation" && seg[1] === "schedules" && seg[2]) {
+    const idx = db.schedules.findIndex((s) => s.id === seg[2]);
+    if (idx < 0) return fail(404, "not_found");
+    if (method === "PUT") {
+      const inSch = b as unknown as T.PowerScheduleInput;
+      db.schedules[idx] = {
+        ...db.schedules[idx],
+        ...inSch,
+        revision: db.schedules[idx].revision + 1,
+        catch_up_minutes: inSch.catch_up_minutes ?? db.schedules[idx].catch_up_minutes,
+        activated_at: inSch.enabled && !db.schedules[idx].enabled ? iso() : db.schedules[idx].activated_at,
+        updated_at: iso(),
+      };
+      return ok(db.schedules[idx]);
+    }
+    if (method === "DELETE") {
+      db.schedules.splice(idx, 1);
+      return ok(undefined, 204);
+    }
+  }
+  if (is("GET", "/automation/keepalive")) return ok(db.keepalive);
+  if (is("PUT", "/automation/keepalive")) {
+    const u = b as unknown as T.KeepaliveSettings;
+    db.keepalive = { ...u, revision: db.keepalive.revision + 1, updated_at: iso() };
+    return ok(db.keepalive);
+  }
+  if (is("GET", "/automation/monthly-reset")) return ok(db.monthlyReset);
+  if (is("PUT", "/automation/monthly-reset")) {
+    const u = b as unknown as T.MonthlyResetSettings;
+    db.monthlyReset = { ...db.monthlyReset, ...u, revision: db.monthlyReset.revision + 1, updated_at: iso() };
+    return ok(db.monthlyReset);
   }
 
   /* 通知 */
@@ -330,7 +678,7 @@ export async function handle(method: string, fullPath: string, body: unknown): P
     if (!db.telegram.bot_token_set) return fail(409, "telegram_not_configured");
     return ok(startJob("telegram_test", 1500, () => {
       if (scene === "stale") return { error: { code: "telegram_unreachable", message: "mock" } };
-      const n: T.Notification = { id: "ntf_" + Date.now(), created_at: iso(), kind: "test", severity: "info", rule_key: null, title: "⚪ 测试消息", body: "如果你在 Telegram 里看到这条消息，说明通知已经配置好了。", account_id: null, instance_id: null, probe_plan_id:null, delivery_status: "sent" };
+      const n: T.Notification = { id: "ntf_" + Date.now(), created_at: iso(), kind: "test", severity: "info", rule_key: null, title: "⚪ 测试消息", body: "如果你在 Telegram 里看到这条消息，说明通知已经配置好了。", account_id: null, instance_id: null, probe_plan_id: null, delivery_status: "sent" };
       db.notifications.unshift(n);
       db.telegram.status = "ok";
       db.telegram.last_error = null;
@@ -339,7 +687,33 @@ export async function handle(method: string, fullPath: string, body: unknown): P
       return {};
     }), 202);
   }
-  if (is("GET", "/alert-rules")) return ok({ items: db.rules });
+  if (is("GET", "/notify/telegram/control")) return ok(db.telegramControl);
+  if (is("PUT", "/notify/telegram/control")) {
+    const u = b as unknown as T.TelegramControlSettings;
+    db.telegramControl = { revision: db.telegramControl.revision + 1, enabled: u.enabled, allowed_user_ids: u.allowed_user_ids, updated_at: iso() };
+    return ok(db.telegramControl);
+  }
+  if (is("GET", "/notify/quiet-hours")) return ok(db.quietHours);
+  if (is("PUT", "/notify/quiet-hours")) {
+    const maint = (b.maintenance ?? null) as T.MaintenanceWindow | null;
+    const maintActive = !!maint && Date.parse(maint.end_at) > Date.now();
+    db.quietHours = {
+      revision: db.quietHours.revision + 1,
+      enabled: Boolean(b.enabled),
+      start: String(b.start ?? "23:30"),
+      end: String(b.end ?? "07:30"),
+      timezone: db.settings.business_timezone,
+      active: maintActive,
+      active_reason: maintActive ? "maintenance" : null,
+      maintenance: maint,
+      updated_at: iso(),
+    };
+    return ok(db.quietHours);
+  }
+  if (is("GET", "/alert-rules")) {
+    const items = q.get("include_reconciliation") === "true" ? db.rules : db.rules.filter((r) => r.key !== "cdt_estimation_deviation");
+    return ok({ items });
+  }
   if (seg[0] === "alert-rules" && method === "PATCH") {
     const r = db.rules.find((x) => x.key === seg[1]);
     if (!r) return fail(404, "not_found");
@@ -392,7 +766,7 @@ export async function handle(method: string, fullPath: string, body: unknown): P
     const power = [...read, "ecs:StartInstance", "ecs:StopInstance", "ecs:RebootInstance", "swas-open:StartInstance", "swas-open:StopInstance", "swas-open:RebootInstance"];
     const items: T.RAMPolicyDraft[] = [
       { id: "readonly", reviewed_on: "2026-11-12", verification: "draft", cloud_write_permissions: false, limitations: ["cdt_action_unverified", "resource_scope_not_account_bound"], document: doc(read) },
-      { id: "instance_power", reviewed_on: "2026-11-12", verification: "draft", cloud_write_permissions: true, limitations: ["cdt_action_unverified", "resource_scope_not_account_bound", "runtime_writes_unimplemented"], document: doc(power) },
+      { id: "instance_power", reviewed_on: "2026-11-12", verification: "draft", cloud_write_permissions: true, limitations: ["cdt_action_unverified", "resource_scope_not_account_bound"], document: doc(power) },
       { id: "resource_management", reviewed_on: "2026-11-12", verification: "draft", cloud_write_permissions: true, limitations: ["cdt_action_unverified", "resource_scope_not_account_bound", "runtime_writes_unimplemented", "creation_dependencies_pending"], document: doc([...power, "vpc:AllocateEipAddress", "vpc:AssociateEipAddress", "vpc:UnassociateEipAddress", "vpc:ReleaseEipAddress", "ecs:RunInstances", "ecs:DeleteInstance"]) },
     ];
     return ok({ items });

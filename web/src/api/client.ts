@@ -26,13 +26,15 @@ export function setUnauthenticatedHandler(fn: () => void) {
 
 type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-async function transport(method: Method, path: string, body?: unknown): Promise<{ status: number; body: unknown }> {
-  if (readOnly && method !== "GET" && path !== "/session" && path !== "/setup") throw new ApiError(501, "not_implemented", "read only");
+const PUBLIC_WRITES = new Set(["/session", "/setup", "/session/passkey/options", "/session/passkey/finish"]);
+
+async function transport(method: Method, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<{ status: number; body: unknown }> {
+  if (readOnly && method !== "GET" && !PUBLIC_WRITES.has(path)) throw new ApiError(501, "not_implemented", "read only");
   if (import.meta.env.VITE_API_MODE === "mock") {
     const { handle } = await import("../mocks/server");
-    return handle(method, path, body);
+    return handle(method, path, body, extraHeaders);
   }
-  const headers: Record<string, string> = { Accept: "application/json" };
+  const headers: Record<string, string> = { Accept: "application/json", ...extraHeaders };
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET" && csrfToken) headers["X-CSRF-Token"] = csrfToken;
   let res: Response;
@@ -52,15 +54,15 @@ async function transport(method: Method, path: string, body?: unknown): Promise<
   return { status: res.status, body: parsed };
 }
 
-async function request<R>(method: Method, path: string, body?: unknown, opts?: { quiet401?: boolean }): Promise<R> {
-  const res = await transport(method, path, body);
+async function request<R>(method: Method, path: string, body?: unknown, opts?: { quiet401?: boolean; headers?: Record<string, string> }): Promise<R> {
+  const res = await transport(method, path, body, opts?.headers);
   if (res.status >= 200 && res.status < 300) return res.body as R;
   const err = (res.body as T.ErrorBody | null)?.error;
   if (res.status === 401 && !opts?.quiet401) onUnauthenticated();
   throw new ApiError(res.status, err?.code ?? (res.status >= 500 ? "internal_error" : "unknown_error"), err?.message ?? "", err?.fields, err?.retry_after_seconds);
 }
 
-const qs = (params: Record<string, string | number | undefined | null>) => {
+const qs = (params: Record<string, string | number | boolean | undefined | null>) => {
   const p = Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== "");
   return p.length ? "?" + p.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join("&") : "";
 };
@@ -69,6 +71,11 @@ const keepSession = (s: T.Session) => {
   csrfToken = s.csrf_token;
   return s;
 };
+
+export function randomIdempotencyKey(prefix = "pwr"): string {
+  const rand = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID().replace(/-/g, "") : Math.random().toString(36).slice(2) + Date.now().toString(36);
+  return `${prefix}_${rand}`;
+}
 
 /** 下载加密备份：响应是二进制文件，不走 JSON 解析。 */
 export async function downloadBackup(backup_password: string): Promise<{ blob: Blob; filename: string }> {
@@ -94,6 +101,35 @@ export async function downloadBackup(backup_password: string): Promise<{ blob: B
   return { blob: await res.blob(), filename: name };
 }
 
+/** 上传自定义面板图标（PNG / JPEG 二进制） */
+export async function uploadBrandingLogo(revision: number, file: File): Promise<T.Branding> {
+  if (readOnly) throw new ApiError(501, "not_implemented", "read only");
+  const path = `/settings/branding/logo?revision=${encodeURIComponent(String(revision))}`;
+  if (import.meta.env.VITE_API_MODE === "mock") {
+    const { handle } = await import("../mocks/server");
+    const res = await handle("PUT", path, { size: file.size, type: file.type });
+    if (res.status >= 200 && res.status < 300) return res.body as T.Branding;
+    const err = (res.body as T.ErrorBody | null)?.error;
+    throw new ApiError(res.status, err?.code ?? "internal_error", err?.message ?? "", err?.fields);
+  }
+  let res: Response;
+  try {
+    res = await fetch(BASE + path, {
+      method: "PUT",
+      credentials: "same-origin",
+      headers: { Accept: "application/json", "Content-Type": file.type || "application/octet-stream", ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}) },
+      body: file,
+    });
+  } catch {
+    throw new ApiError(0, "network_error", "network error");
+  }
+  const parsed = await res.json().catch(() => null);
+  if (res.ok) return parsed as T.Branding;
+  const err = (parsed as T.ErrorBody | null)?.error;
+  if (res.status === 401) onUnauthenticated();
+  throw new ApiError(res.status, err?.code ?? "internal_error", err?.message ?? "", err?.fields, err?.retry_after_seconds);
+}
+
 export const api = {
   finance: (account_id: string) => request<T.AccountFinance>("GET", `/accounts/${account_id}/finance`),
   apiKeys: () => request<{ items: T.APIKey[]; next_cursor: string | null }>("GET", "/api-keys" + qs({ limit: 100 })).then((r) => r.items),
@@ -105,13 +141,34 @@ export const api = {
   setupStatus: () => request<T.SetupStatus>("GET", "/setup/status"),
   completeSetup: (b: T.SetupRequest) => request<T.Session>("POST", "/setup", b, { quiet401: true }).then(keepSession),
   session: () => request<T.Session>("GET", "/session", undefined, { quiet401: true }).then(keepSession),
+  loginMethods: () => request<T.LoginMethods>("GET", "/session/methods", undefined, { quiet401: true }),
   login: (password: string) => request<T.Session>("POST", "/session", { password }, { quiet401: true }).then(keepSession),
+  beginPasskeyLogin: () => request<T.PasskeyOptions>("POST", "/session/passkey/options", {}, { quiet401: true }),
+  finishPasskeyLogin: (ceremony_id: string, credential: Record<string, unknown>) =>
+    request<T.Session>("POST", "/session/passkey/finish", { ceremony_id, credential }, { quiet401: true }).then(keepSession),
   logout: () => request<void>("DELETE", "/session"),
+  setPasswordLogin: (enabled: boolean) => request<{ password_enabled: boolean }>("PATCH", "/session/password", { enabled }),
+  passkeys: () => request<{ items: T.Passkey[] }>("GET", "/passkeys").then((r) => r.items),
+  beginPasskeyRegistration: (name: string) => request<T.PasskeyOptions>("POST", "/passkeys/registration/options", { name }),
+  finishPasskeyRegistration: (ceremony_id: string, credential: Record<string, unknown>) =>
+    request<T.Passkey>("POST", "/passkeys/registration/finish", { ceremony_id, credential }),
+  deletePasskey: (id: string) => request<void>("DELETE", `/passkeys/${id}`),
 
   systemInfo: () => request<T.SystemInfo>("GET", "/system/info"),
+  branding: () => request<T.Branding>("GET", "/settings/branding"),
+  updateBrandingName: (revision: number, name: string) => request<T.Branding>("PUT", "/settings/branding", { revision, name }),
+  deleteBrandingLogo: (revision: number) => request<T.Branding>("DELETE", `/settings/branding/logo?revision=${encodeURIComponent(String(revision))}`),
   settings: () => request<T.Settings>("GET", "/settings"),
-  updateSettings: (b: { business_timezone?: string }) => request<T.Settings>("PATCH", "/settings", b),
+  updateSettings: (b: T.SettingsUpdate) => request<T.Settings>("PATCH", "/settings", b),
+  heartbeat: () => request<T.HeartbeatSettings>("GET", "/settings/heartbeat"),
+  updateHeartbeat: (b: { revision: number; enabled: boolean; interval_seconds: number; url?: string }) => request<T.HeartbeatSettings>("PUT", "/settings/heartbeat", b),
+  testHeartbeat: () => request<T.JobAccepted>("POST", "/settings/heartbeat/test", {}),
+  auditLog: (p: { actor?: string; action?: string; target_type?: string; account_id?: string; cursor?: string; limit?: number } = {}) =>
+    request<{ items: T.AuditEntry[]; next_cursor: string | null }>("GET", "/audit-log" + qs(p)),
+
   regions: (site: T.AccountSite) => request<{ items: T.Region[] }>("GET", "/regions" + qs({ site })).then((r) => r.items),
+  jobs: (p: { account_id?: string; instance_id?: string; type?: T.JobType; status?: T.JobStatus; trigger?: T.JobTrigger; cursor?: string; limit?: number } = {}) =>
+    request<{ items: T.Job[]; next_cursor: string | null }>("GET", "/jobs" + qs(p)),
   job: (id: string) => request<T.Job>("GET", `/jobs/${id}`),
 
   accounts: () => request<{ items: T.Account[] }>("GET", "/accounts").then((r) => r.items),
@@ -123,20 +180,66 @@ export const api = {
   instances: (p: { account_id?: string; kind?: T.InstanceKind; limit?: number; cursor?: string } = {}) =>
     request<{ items: T.Instance[]; next_cursor: string | null; updated_at: string | null }>("GET", "/instances" + qs(p)),
   refresh: (account_id?: string) => request<T.JobAccepted>("POST", "/instances/refresh", account_id ? { account_id } : {}),
+  updateInstanceMetadata: (id: string, b: T.InstanceMetadataUpdate) =>
+    request<{ instance_id: string; note: string; group: string; tags: string[]; updated_at: string }>("PATCH", `/instances/${id}/metadata`, b),
+  controlInstancePower: (id: string, action: "start" | "stop" | "reboot", stop_mode?: "keep_charging" | "stop_charging", idempotencyKey = randomIdempotencyKey()) =>
+    request<T.JobAccepted>("POST", `/instances/${id}/power`, stop_mode ? { action, stop_mode } : { action }, { headers: { "Idempotency-Key": idempotencyKey } }),
+  setProtectionExemption: (id: string, duration_seconds: number) =>
+    request<{ instance_id: string; expires_at: string }>("PUT", `/instances/${id}/protection-exemption`, { duration_seconds }),
+  clearProtectionExemption: (id: string) => request<void>("DELETE", `/instances/${id}/protection-exemption`),
+  confirmInstanceIntent: (id: string, decision: "keep_stopped" | "resume") =>
+    request<{ instance_id: string; decision: string; job_id?: string | null }>("POST", `/instances/${id}/intent-confirmation`, { decision }),
   agentInstallCommand: (id: string) => request<T.AgentInstallCommand>("POST", `/instances/${id}/agent/install-command`),
   revokeAgentToken: (id: string) => request<void>("DELETE", `/instances/${id}/agent/token`),
+  agentHourlyHistory: (id: string, p: { from: string; to: string; limit?: number }) =>
+    request<T.AgentHourlyHistoryPage>("GET", `/instances/${id}/agent-hourly-history` + qs(p)),
+  agentNetworkHistory: (id: string, p: { from: string; to: string; limit?: number; cursor?: string }) =>
+    request<{ items: T.AgentNetworkSample[]; next_cursor: string | null; from: string; to: string }>("GET", `/instances/${id}/agent-network-history` + qs(p)),
+  cloudNetworkHistory: (id: string, p: { from: string; to: string; direction?: "ingress" | "egress"; limit?: number; cursor?: string }) =>
+    request<{ items: T.CloudNetworkSample[]; next_cursor: string | null; from: string; to: string }>("GET", `/instances/${id}/cloud-network-history` + qs(p)),
 
   quotas: (account_id?: string) => request<{ items: T.QuotaStatus[] }>("GET", "/traffic/quotas" + qs({ account_id })).then((r) => r.items),
   dailyTraffic: (account_id: string) => request<T.DailyTraffic>("GET", "/traffic/daily" + qs({ account_id })),
   trafficObservations: (account_id: string, cursor?: string) => request<{ items: T.TrafficObservation[]; next_cursor: string | null }>("GET", "/traffic/observations" + qs({ account_id, cursor, limit: 100 })),
+  trafficReconciliations: (p: { account_id?: string; scope?: T.QuotaScope; before?: number; limit?: number } = {}) =>
+    request<{ items: T.CDTReconciliation[]; next_before: number | null }>("GET", "/traffic/reconciliations" + qs(p)),
+  trafficPricing: () => request<T.TrafficPricing>("GET", "/traffic/pricing"),
+  updateTrafficPricing: (b: T.TrafficPricing) => request<T.TrafficPricing>("PUT", "/traffic/pricing", b),
   billingSubjects: (account_id?: string) => request<{ items: T.BillingSubject[] }>("GET", "/traffic/billing-subjects" + qs({ account_id })).then((r) => r.items),
   bandwidthPackages: () => request<{ items: T.BandwidthPackage[] }>("GET", "/bandwidth-packages").then((r) => r.items),
   bandwidthPackageHourly: (id: string) => request<T.BandwidthPackageHourly>("GET", `/bandwidth-packages/${id}/hourly`),
 
+  protectionStatus: () => request<T.ProtectionStatus>("GET", "/protection/status"),
+  protectionRules: () => request<{ items: T.QuotaProtectionRule[] }>("GET", "/protection/rules").then((r) => r.items),
+  createProtectionRule: (b: T.QuotaProtectionRuleInput) => request<T.QuotaProtectionRule>("POST", "/protection/rules", b),
+  updateProtectionRule: (id: string, b: T.QuotaProtectionRuleInput) => request<T.QuotaProtectionRule>("PUT", `/protection/rules/${id}`, b),
+  deleteProtectionRule: (id: string, revision: number) => request<void>("DELETE", `/protection/rules/${id}` + qs({ revision })),
+  quotaSimulations: () => request<{ items: T.QuotaSimulation[] }>("GET", "/protection/simulations").then((r) => r.items),
+  setQuotaSimulation: (b: T.QuotaSimulation) => request<T.QuotaSimulation>("PUT", "/protection/simulations", b),
+  clearQuotaSimulation: (p: { account_id: string; scope: "mainland" | "overseas" | "swas"; source_instance_id?: string; revision: number }) =>
+    request<void>("DELETE", "/protection/simulations" + qs(p)),
+  quotaDecisions: (p: { rule_id?: string; before?: number; limit?: number } = {}) =>
+    request<{ items: T.QuotaDecision[]; next_before: number | null }>("GET", "/protection/decisions" + qs(p)),
+
+  powerSchedules: () => request<{ items: T.PowerSchedule[] }>("GET", "/automation/schedules").then((r) => r.items),
+  createPowerSchedule: (b: T.PowerScheduleInput) => request<T.PowerSchedule>("POST", "/automation/schedules", b),
+  updatePowerSchedule: (id: string, b: T.PowerScheduleInput) => request<T.PowerSchedule>("PUT", `/automation/schedules/${id}`, b),
+  deletePowerSchedule: (id: string, revision: number) => request<void>("DELETE", `/automation/schedules/${id}` + qs({ revision })),
+  keepaliveSettings: () => request<T.KeepaliveSettings>("GET", "/automation/keepalive"),
+  updateKeepaliveSettings: (b: T.KeepaliveSettings) => request<T.KeepaliveSettings>("PUT", "/automation/keepalive", b),
+  monthlyResetSettings: () => request<T.MonthlyResetSettings>("GET", "/automation/monthly-reset"),
+  updateMonthlyResetSettings: (b: T.MonthlyResetSettings) => request<T.MonthlyResetSettings>("PUT", "/automation/monthly-reset", b),
+
   telegram: () => request<T.TelegramChannel>("GET", "/notify/telegram"),
   updateTelegram: (b: T.TelegramChannelUpdate) => request<T.TelegramChannel>("PUT", "/notify/telegram", b),
   testTelegram: () => request<T.JobAccepted>("POST", "/notify/telegram/test"),
-  alertRules: () => request<{ items: T.AlertRule[] }>("GET", "/alert-rules").then((r) => r.items),
+  telegramControl: () => request<T.TelegramControlSettings>("GET", "/notify/telegram/control"),
+  updateTelegramControl: (b: T.TelegramControlSettings) => request<T.TelegramControlSettings>("PUT", "/notify/telegram/control", b),
+  quietHours: () => request<T.QuietHours>("GET", "/notify/quiet-hours"),
+  updateQuietHours: (b: { revision: number; enabled: boolean; start: string; end: string; maintenance: T.MaintenanceWindow | null }) =>
+    request<T.QuietHours>("PUT", "/notify/quiet-hours", b),
+  alertRules: (includeReconciliation = true) =>
+    request<{ items: T.AlertRule[] }>("GET", "/alert-rules" + qs({ include_reconciliation: includeReconciliation ? "true" : undefined })).then((r) => r.items),
   updateAlertRule: (key: T.AlertRuleKey, b: T.AlertRuleUpdate) => request<T.AlertRule>("PATCH", `/alert-rules/${key}`, b),
   notifications: (p: { limit?: number; cursor?: string } = {}) =>
     request<{ items: T.Notification[]; next_cursor: string | null }>("GET", "/notifications" + qs(p)),

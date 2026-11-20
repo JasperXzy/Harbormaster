@@ -246,7 +246,7 @@ input[aria-invalid="true"] { border-color: var(--critical); }
   .side { position: fixed; top: auto; bottom: 0; left: 0; right: 0; height: auto; z-index: 20; flex-direction: row; padding: 0 4px env(safe-area-inset-bottom); border-right: 0; border-top: 1px solid var(--border); }
   .side .brand, .side .foot, .nav .sep { display: none; }
   .nav { flex-direction: row; flex: 1; gap: 0; }
-  .nav a { flex: 1; flex-direction: column; gap: 2px; padding: 8px 2px; font-size: var(--fs-xs); border-radius: 0; height: var(--tabbar-h); justify-content: center; position: relative; }
+  .nav a { flex: 1; min-width: 0; white-space: nowrap; flex-direction: column; gap: 2px; padding: 8px 2px; font-size: var(--fs-xs); border-radius: 0; height: var(--tabbar-h); justify-content: center; position: relative; }
   .nav a.active { background: none; color: var(--accent); }
   .nav a:hover { background: none; }
   .nav svg { width: 22px; height: 22px; }
@@ -275,12 +275,13 @@ input[aria-invalid="true"] { border-color: var(--critical); }
   .icards { display: grid; }
   .modal-bg { align-items: flex-end; padding: 0; }
   .modal, .modal.wide { width: 100%; border-radius: var(--r-xl) var(--r-xl) 0 0; max-height: 92vh; padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
-  select, input[type="text"], input[type="password"], input[type="number"] { font-size: 16px; } /* 避免 iOS 聚焦时放大页面 */
+  select, input[type="text"], input[type="password"], input[type="number"], textarea { font-size: 16px; } /* 避免 iOS 聚焦时放大页面 */
 }
 @media (min-width: 781px) { .only-narrow { display: none !important; } }
 /* Preview status remains visible on narrow screens as well as desktop. */
 .preview-note { padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--surface-2); color: var(--text-2); font-size: var(--fs-sm); line-height: 1.6; }
 .unknown-track { background: repeating-linear-gradient(135deg, var(--surface-2), var(--surface-2) 6px, var(--border) 6px, var(--border) 7px); }
+.sim-card { border: 1.5px dashed var(--warning); background: repeating-linear-gradient(135deg, var(--tint-warning) 0 8px, var(--surface) 8px 16px); }
 
 /* 可折叠的卡片：次要内容默认收起 */
 .fold > summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; cursor: pointer; list-style: none; }

@@ -1,8 +1,9 @@
-// 费用：各账号的余额与本月账单、包年包月实例的到期与续费。
+// 费用：各账号的余额、低余额提醒阈值、本月账单、包年包月实例的到期与续费。
+import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { billTypeName, errorText, RENEWAL, SITE } from "../api/labels";
-import type { Account, AccountFinance, Instance } from "../api/types";
-import { Async, Badge, Card, EmptyState, ErrorState, Skeleton } from "../components/ui";
+import type { Account, AccountFinance, AlertRule, Instance } from "../api/types";
+import { Async, Badge, Card, EmptyState, ErrorState, errMsg, Skeleton, Spinner, useToast } from "../components/ui";
 import { useShared } from "../lib/data";
 import { stamp, ymd } from "../lib/format";
 import { Link } from "../lib/router";
@@ -13,6 +14,9 @@ const money = (amount: string, currency: string) => `${SYMBOL[currency] ?? curre
 
 export function Billing() {
   const { accounts, instances } = useShared();
+  const rules = useResource(() => api.alertRules(false), []);
+  const balanceRule = rules.data?.find((r) => r.key === "balance_low");
+
   if (accounts.error) return <div className="card"><ErrorState error={accounts.error} onRetry={accounts.reload} /></div>;
   if (!accounts.data) return <div className="card"><Skeleton lines={5} /></div>;
   if (!accounts.data.length)
@@ -23,25 +27,68 @@ export function Billing() {
     );
   return (
     <>
-      <div className="grid g2">{accounts.data.map((a) => <FinanceCard key={a.id} account={a} />)}</div>
+      <div className="grid g2">
+        {accounts.data.map((a) => (
+          <FinanceCard
+            key={a.id}
+            account={a}
+            balanceRule={balanceRule}
+            onSavedRule={(nr) => rules.mutate((l) => l.map((x) => (x.key === nr.key ? nr : x)))}
+          />
+        ))}
+      </div>
       <Renewals instances={instances.data?.items} accounts={accounts.data} />
     </>
   );
 }
 
-function FinanceCard({ account }: { account: Account }) {
+function FinanceCard({ account, balanceRule, onSavedRule }: { account: Account; balanceRule?: AlertRule; onSavedRule: (r: AlertRule) => void }) {
   const res = useResource(() => api.finance(account.id), [account.id], { refreshMs: 5 * 60_000 });
   return (
     <Card title={account.name} sub={SITE[account.site]} right={res.data?.updated_at ? <span className="sub">更新于 {stamp(res.data.updated_at)}</span> : undefined}>
-      <Async res={res} lines={5}>{(f) => <Finance f={f} />}</Async>
+      <Async res={res} lines={5}>{(f) => <Finance f={f} account={account} balanceRule={balanceRule} onSavedRule={onSavedRule} />}</Async>
     </Card>
   );
 }
 
-function Finance({ f }: { f: AccountFinance }) {
+function Finance({ f, account, balanceRule, onSavedRule }: { f: AccountFinance; account: Account; balanceRule?: AlertRule; onSavedRule: (r: AlertRule) => void }) {
+  const toast = useToast();
   const bal = f.balance, bill = f.bill;
   const b = bal.data as { currency: string; available_amount: string; available_cash_amount: string } | null;
   const items = (bill.data as { items: import("../api/types").BillOverviewItem[] } | null)?.items;
+  const currency = b?.currency ?? (account.site === "international" ? "USD" : "CNY");
+
+  const existing = balanceRule?.params.balance_thresholds?.find((t) => t.account_id === account.id);
+  const [threshold, setThreshold] = useState(existing?.amount ?? "");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setThreshold(existing?.amount ?? "");
+  }, [existing?.amount]);
+
+  const saveThreshold = async () => {
+    if (!balanceRule) return;
+    const trimmed = threshold.trim();
+    if (trimmed && !/^\d+(\.\d{1,4})?$/.test(trimmed)) {
+      toast("请填写有效的提醒金额（例如 50 或 100.00），留空表示取消该账号提醒。", true);
+      return;
+    }
+    const others = (balanceRule.params.balance_thresholds ?? []).filter((t) => t.account_id !== account.id);
+    const next = trimmed ? [...others, { account_id: account.id, currency, amount: trimmed }] : others;
+    setBusy(true);
+    try {
+      const saved = await api.updateAlertRule("balance_low", { enabled: true, params: { balance_thresholds: next } });
+      onSavedRule(saved);
+      toast(trimmed ? `已设置低于 ${money(trimmed, currency)} 时提醒` : "已取消该账号的低余额提醒");
+    } catch (e) {
+      toast(errMsg(e), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const dirty = threshold.trim() !== (existing?.amount ?? "");
+
   return (
     <>
       <div className="stat">
@@ -55,6 +102,23 @@ function Finance({ f }: { f: AccountFinance }) {
           <div className="hint" style={{ marginTop: 6 }}>{bal.status === "failing" ? <span className="field-error">没取到：{errorText(bal.last_error?.code ?? "internal_error")}</span> : "还没有读取"}</div>
         )}
       </div>
+
+      {balanceRule && (
+        <div className="inline sub" style={{ marginTop: 10 }}>
+          <label htmlFor={`bal-th-${account.id}`}>低余额提醒阈值（{currency}）</label>
+          <input
+            id={`bal-th-${account.id}`}
+            type="text"
+            inputMode="decimal"
+            placeholder="未设置"
+            value={threshold}
+            onChange={(e) => setThreshold(e.target.value)}
+            style={{ width: 92, padding: "3px 8px" }}
+          />
+          {dirty && <button className="btn sm" disabled={busy} onClick={saveThreshold}>{busy && <Spinner />} 保存</button>}
+        </div>
+      )}
+
       <h3>本月账单（{f.billing_cycle}）</h3>
       {!items ? (
         <div className="sub">{bill.status === "failing" ? <span className="field-error">没取到：{errorText(bill.last_error?.code ?? "internal_error")}</span> : "还没有读取"}</div>

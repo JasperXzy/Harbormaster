@@ -33,6 +33,7 @@ export function Overview() {
   const packages = useResource(api.bandwidthPackages, [], { refreshMs: 30_000 });
   const notes = useResource(() => api.notifications({ limit: 3 }), []);
   const telegram = useResource(api.telegram, []);
+  const sims = useResource(api.quotaSimulations, [], { refreshMs: 30_000 });
   useEvent("notification.created", () => notes.reload());
 
   const firstError = accounts.error ?? instances.error ?? quotas.error;
@@ -59,6 +60,8 @@ export function Overview() {
   const failing = accs.filter((a) => a.sync_status === "failing");
   const worstCase = insts.filter((i) => i.realtime_protection === "worst_case");
   const unprotected = insts.filter((i) => i.realtime_protection === "unprotected" && i.status === "running" && i.agent.status === "not_installed");
+  const pendingConfirms = insts.filter((i) => i.pending_intent_confirmation);
+  const activeSims = sims.data ?? [];
   const usageUnknown = qs.some((q) => !quotaView(q).usable);
   const officialDown = qs.some((q) => q.official_status === "unavailable");
   const po = pool(qs, accs, "overseas"), pm = pool(qs, accs, "mainland");
@@ -71,8 +74,18 @@ export function Overview() {
 
   return (
     <>
-      {(failing.length > 0 || worstCase.length > 0 || unprotected.length > 0 || usageUnknown || officialDown || telegram.data?.status === "not_configured" || telegram.data?.status === "failing") && (
+      {(activeSims.length > 0 || pendingConfirms.length > 0 || failing.length > 0 || worstCase.length > 0 || unprotected.length > 0 || usageUnknown || officialDown || telegram.data?.status === "not_configured" || telegram.data?.status === "failing") && (
         <div className="grid" style={{ gap: 8 }} aria-label="需要留意">
+          {activeSims.length > 0 && (
+            <Banner level="warning" action={<Link className="btn sm" to="/automation">管理模拟</Link>}>
+              <b>当前有 {activeSims.length} 项模拟用量演练正在生效。</b> 模拟状态下只发送测试通知，不会真实关机。
+            </Banner>
+          )}
+          {pendingConfirms.length > 0 && (
+            <Banner level="warning" action={<Link className="btn sm" to="/automation">去确认</Link>}>
+              <b>{pendingConfirms.map((i) => i.name).join("、")} 在面板外被关机。</b> 请确认是保持停止还是恢复运行。
+            </Banner>
+          )}
           {worstCase.map((i) => (
             <Banner key={i.id} level="critical" action={<Link className="btn sm" to="/instances">查看</Link>}>
               <b>{i.name} 的采集程序掉线了。</b> 掉线期间按它之前的最高速度估算，数字会偏大。
