@@ -325,10 +325,14 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 		go func() { defer workers.Done(); (probes.Runner{Store: s, Log: log}).Run(workerCtx) }()
 		go func() { defer workers.Done(); (notify.Evaluator{Store: s, Log: log}).Run(workerCtx) }()
 		if engine.Box != nil {
-			workers.Add(1)
+			workers.Add(2)
 			go func() {
 				defer workers.Done()
 				(notify.Dispatcher{Channels: notify.Channels{Store: s, Box: engine.Box}, Sender: telegram.Sender{}, Log: log}).Run(workerCtx)
+			}()
+			go func() {
+				defer workers.Done()
+				(notify.BotRunner{Channels: notify.Channels{Store: s, Box: engine.Box}, Bot: telegram.Sender{}, PowerEnabled: c.InstancePowerEnabled, Timezone: c.Timezone, Log: log}).Run(workerCtx)
 			}()
 		}
 		go func() {

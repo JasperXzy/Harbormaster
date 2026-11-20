@@ -16,7 +16,7 @@ func TestReconciliationHistoryAuthenticationAndValidation(t *testing.T) {
 	var list struct {
 		Items []model.AlertRule `json:"items"`
 	}
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 13 {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 15 {
 		t.Fatal(w.Code, w.Body)
 	}
 	for _, r := range list.Items {

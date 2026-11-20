@@ -70,6 +70,16 @@ func (a panelAccess) source(r *http.Request) (netip.Addr, bool) {
 	return ip.Unmap(), true
 }
 
+func (a panelAccess) checkPublicTransport(w http.ResponseWriter, r *http.Request) (string, bool) {
+	ip, proxied := a.source(r)
+	secure := r.TLS != nil || (proxied && r.Header.Get("X-Forwarded-Proto") == "https")
+	if a.origin == "" || !ip.IsValid() || !secure || !strings.EqualFold(r.Host, a.host) {
+		writeError(w, 403, "forbidden")
+		return "", false
+	}
+	return ip.String(), true
+}
+
 func (a panelAccess) checkTransport(w http.ResponseWriter, r *http.Request) (string, bool) {
 	ip, proxied := a.source(r)
 	secure := r.TLS != nil || (proxied && r.Header.Get("X-Forwarded-Proto") == "https")

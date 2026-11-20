@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/model"
@@ -25,6 +26,10 @@ var retryDelays = []time.Duration{10 * time.Second, 30 * time.Second, 2 * time.M
 
 type Sender interface {
 	Send(context.Context, telegram.Destination, string) (telegram.Receipt, error)
+}
+
+type InteractiveSender interface {
+	SendWithButtons(context.Context, telegram.Destination, string, [][]telegram.InlineButton) (telegram.Receipt, error)
 }
 
 type Dispatcher struct {
@@ -104,7 +109,21 @@ func (d Dispatcher) RunOne(ctx context.Context) (bool, error) {
 	}
 	// The lease is one minute; the transport times out after 15 seconds.
 	sendCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	receipt, err := d.Sender.Send(sendCtx, destination, Render(n))
+	var receipt telegram.Receipt
+	if strings.HasPrefix(n.EventKey, "external_stop:") && n.InstanceID != nil {
+		if interactive, ok := d.Sender.(InteractiveSender); ok {
+			receipt, err = interactive.SendWithButtons(sendCtx, destination, Render(n), [][]telegram.InlineButton{
+				{
+					{Text: "🛑 保持停止", CallbackData: "intent:keep:" + *n.InstanceID},
+					{Text: "▶️ 恢复运行", CallbackData: "intent:restore:" + *n.InstanceID},
+				},
+			})
+		} else {
+			receipt, err = d.Sender.Send(sendCtx, destination, Render(n))
+		}
+	} else {
+		receipt, err = d.Sender.Send(sendCtx, destination, Render(n))
+	}
 	cancel()
 	if err == nil {
 		return true, finish(receipt.MessageID, "", nil, false)

@@ -157,6 +157,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, object{"version": "dev-m0", "commit": "unknown", "built_at": nil, "latest_agent_version": "v0.2.0", "data_mode": "demo", "read_only": true, "instance_power_enabled": false, "instance_release_enabled": false})
 	case "/notify/quiet-hours":
 		respond(w, 200, model.QuietHours{Start: "23:00", End: "08:00", Timezone: h.loc.String()})
+	case "/notify/telegram/control":
+		respond(w, 200, model.DefaultTelegramControlSettings())
 	case "/settings/heartbeat":
 		respond(w, 200, model.HeartbeatSettings{IntervalSeconds: 60})
 	case "/settings/branding":
