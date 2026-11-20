@@ -63,10 +63,13 @@ func TestAuditAccountChangesAreAtomicAndExcludeCredentialValues(t *testing.T) {
 		}
 	}
 	raw, _ := json.Marshal(items)
-	for _, secret := range []string{string(firstCipher), string(secondCipher), a.Name, updated.Name, "access_key_secret", "ciphertext", "token_hash"} {
+	for _, secret := range []string{string(firstCipher), string(secondCipher), "access_key_secret", "ciphertext", "token_hash"} {
 		if bytes.Contains(raw, []byte(secret)) {
-			t.Fatal("audit contains private configuration or credential material")
+			t.Fatal("audit contains credential material")
 		}
+	}
+	if items[1].Details.Before["name"] != a.Name || items[1].Details.After["name"] != updated.Name {
+		t.Fatal("missing non-sensitive before/after values", items[1].Details)
 	}
 	before, _ := s.Account(ctx, a.ID)
 	if _, err = s.DB.Exec("CREATE TRIGGER audit_reject BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT,'audit unavailable'); END"); err != nil {
@@ -180,9 +183,10 @@ func TestAuditCoversImplementedRuleAndProbeConfigurationWrites(t *testing.T) {
 			t.Fatal("audit action coverage", action, n)
 		}
 	}
-	raw, _ := json.Marshal(items)
-	if bytes.Contains(raw, []byte(host)) || bytes.Contains(raw, []byte("8.8.8.8")) || bytes.Contains(raw, []byte("private target name")) || bytes.Contains(raw, []byte("private plan name")) {
-		t.Fatal("configuration values entered audit before policy decision")
+	for _, e := range items {
+		if e.Action == "probe_plan_updated" && (e.Details.Before["frequency_seconds"] != float64(300) || e.Details.After["frequency_seconds"] != float64(600)) {
+			t.Fatal("expected non-sensitive before/after values", e.Details)
+		}
 	}
 }
 

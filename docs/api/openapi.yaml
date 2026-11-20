@@ -1,3 +1,4 @@
+# 2026-11-21  M2 metadata, settings and audit values: implement PATCH /settings for business_timezone and configurable retention policy (latency_probe_days, agent_raw_days, agent_hourly_months, audit_log_days, job_history_days). Add local-only Instance metadata (note, group, tags), GET /instances group/tag filters and PATCH /instances/{instance_id}/metadata; never write back to Alibaba Cloud. User-confirmed audit policy: AuditEntry.details adds optional non-sensitive before/after maps for configuration changes while credentials remain boolean markers only, and summary is rendered in Chinese.
 # 2026-11-18  Traffic account selector: reserve account_id=all on quotas/daily for enabled-account display aggregates. Full totals require every included account; known subtotals and coverage counts remain explicit. Daily values retain gaps and mixed sources. Forecasts sum independent account predictions, expose sample-count range, and never treat pooled quotas as transferable or authorize actions.
 # 2026-11-18  Scope isolation: realtime and daily coverage require only configured regions in the requested CDT mainland/overseas group, using the same region classification as cloud normalization. A mainland discovery change cannot invalidate otherwise covered overseas traffic. All execution qualifications remain unchanged.
 # 2026-11-18  Empty-bandwidth-package refinement: an explicit empty public-address and member list may contribute observed zero only after address-aware topology history covers the whole estimation window; a missing list or unmatched address remains incomplete. This never qualifies the observed estimate for real execution.
@@ -2063,6 +2064,16 @@ paths:
           in: query
           schema:
             $ref: "#/components/schemas/InstanceKind"
+        - name: group
+          in: query
+          schema:
+            type: string
+          description: 按本地分组精确筛选。
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: 按本地标签精确筛选。
         - $ref: "#/components/parameters/Limit"
         - $ref: "#/components/parameters/Cursor"
       responses:
@@ -2088,6 +2099,38 @@ paths:
                     description: 最近一次资源扫描完成的时间；从未扫描过为 null。
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /instances/{instance_id}/metadata:
+    patch:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: updateInstanceMetadata
+      summary: 修改实例的本地备注、分组与标签（不回写阿里云）
+      parameters:
+        - $ref: "#/components/parameters/InstanceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstanceMetadataUpdate"
+      responses:
+        "200":
+          description: 修改后的本地元数据
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceMetadata"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
 
   /system-events:
     get:
@@ -3268,14 +3311,16 @@ components:
         target_id: {type: string}
         account_id: {type: string, nullable: true}
         job_id: {type: string, nullable: true, description: Links operation evidence to its persistent task; not proof of cloud success.}
-        summary: {type: string, description: Placeholder action text; frontend owns final wording.}
+        summary: {type: string, description: Human-readable Chinese summary of the audited action.}
         details:
           type: object
           required: [changed_fields, credentials_changed]
-          description: Fixed safe metadata only. No values from credentials or arbitrary configuration/provider payloads. A credential replacement is a boolean marker.
+          description: Non-sensitive metadata and before/after values only. Credentials, tokens, hashes, ciphertexts and raw provider errors never enter audit details; credential replacement is a boolean marker.
           properties:
             changed_fields: {type: array, items: {type: string}}
             credentials_changed: {type: boolean}
+            before: {type: object, additionalProperties: true}
+            after: {type: object, additionalProperties: true}
             revision: {type: integer, format: int64}
             operation: {type: string, enum: [start, stop, reboot]}
             stop_mode: {type: string, enum: [keep_charging, stop_charging]}
@@ -4031,15 +4076,7 @@ components:
           type: string
           description: IANA 时区名，面板按它显示时间、切分"今天"。
         retention:
-          type: object
-          required: [latency_probe_days]
-          description: Read-only process configuration, not a guarantee that cleanup has already completed. Production serve runs bounded cleanup; development fixtures are synthetic. Agent raw/hourly and traceroute retention are separate.
-          properties:
-            latency_probe_days:
-              type: integer
-              minimum: 1
-              maximum: 3650
-              default: 30
+          $ref: "#/components/schemas/RetentionSettings"
         collection:
           type: object
           description: 采集周期，只读，用于在界面上解释数据有多新。
@@ -4058,11 +4095,70 @@ components:
             resource_scan_interval_seconds:
               type: integer
 
+    RetentionSettings:
+      type: object
+      required: [latency_probe_days, agent_raw_days, agent_hourly_months, audit_log_days, job_history_days]
+      description: Configured retention policy; production serve runs bounded background cleanup.
+      properties:
+        latency_probe_days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+          default: 30
+        agent_raw_days:
+          type: integer
+          minimum: 2
+          maximum: 365
+          default: 7
+        agent_hourly_months:
+          type: integer
+          minimum: 1
+          maximum: 60
+          default: 13
+        audit_log_days:
+          type: integer
+          minimum: 7
+          maximum: 3650
+          default: 180
+        job_history_days:
+          type: integer
+          minimum: 7
+          maximum: 3650
+          default: 90
+
+    RetentionSettingsUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        latency_probe_days:
+          type: integer
+          minimum: 1
+          maximum: 3650
+        agent_raw_days:
+          type: integer
+          minimum: 2
+          maximum: 365
+        agent_hourly_months:
+          type: integer
+          minimum: 1
+          maximum: 60
+        audit_log_days:
+          type: integer
+          minimum: 7
+          maximum: 3650
+        job_history_days:
+          type: integer
+          minimum: 7
+          maximum: 3650
+
     SettingsUpdate:
       type: object
+      additionalProperties: false
       properties:
         business_timezone:
           type: string
+        retention:
+          $ref: "#/components/schemas/RetentionSettingsUpdate"
 
     AccountSite:
       type: string
@@ -4808,6 +4904,44 @@ components:
             message:
               type: string
 
+    InstanceMetadata:
+      type: object
+      required: [instance_id, note, group, tags, updated_at]
+      properties:
+        instance_id:
+          type: string
+        note:
+          type: string
+        group:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    InstanceMetadataUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        note:
+          type: string
+          maxLength: 2000
+        group:
+          type: string
+          nullable: true
+          maxLength: 64
+        tags:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            maxLength: 32
+
     Instance:
       type: object
       required:
@@ -4866,6 +5000,18 @@ components:
           format: date-time
           nullable: true
           description: Time the latest distinct intent was enqueued. Replaying an event key does not change this time or overwrite newer intent.
+        note:
+          type: string
+          description: 本地多行备注，不回写阿里云。
+        group:
+          type: string
+          nullable: true
+          description: 本地分组名，不回写阿里云。
+        tags:
+          type: array
+          items:
+            type: string
+          description: 本地文本标签列表，不回写阿里云。
         cloud_network:
           type: object
           nullable: true

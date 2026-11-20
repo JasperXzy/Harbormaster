@@ -133,7 +133,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if p.trafficReconciliations(w, r, path) || p.quotaProtection(w, r, path) || p.estimationSettings(w, r, path) || p.networkProbes(w, r, path) || p.quietHours(w, r, path) || p.heartbeatSettings(w, r, path) || p.passwordPolicy(w, r, path, token) || p.agentHistory(w, r, path) || p.networkHistory(w, r, path) || p.passkeys(w, r, path, token) || p.instancePower(w, r, path) || p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.systemEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.jobHistory(w, r, path) || p.business(w, r, path) {
+	if p.generalSettings(w, r, path) || p.instanceMetadata(w, r, path) || p.trafficReconciliations(w, r, path) || p.quotaProtection(w, r, path) || p.estimationSettings(w, r, path) || p.networkProbes(w, r, path) || p.quietHours(w, r, path) || p.heartbeatSettings(w, r, path) || p.passwordPolicy(w, r, path, token) || p.agentHistory(w, r, path) || p.networkHistory(w, r, path) || p.passkeys(w, r, path, token) || p.instancePower(w, r, path) || p.agentManagement(w, r, path) || p.notificationReads(w, r, path) || p.alertRules(w, r, path) || p.apiKeys(w, r, path) || p.finance(w, r, path) || p.instanceEvents(w, r, path) || p.systemEvents(w, r, path) || p.ramPolicies(w, r, path) || p.downloadBackup(w, r, path) || p.jobHistory(w, r, path) || p.business(w, r, path) {
 		return
 	}
 	if r.Method != "GET" {
@@ -147,27 +147,6 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			builtAt = t.UTC().Format(time.RFC3339)
 		}
 		writeJSON(w, 200, map[string]any{"version": buildinfo.Version, "commit": buildinfo.Commit, "built_at": builtAt, "latest_agent_version": p.releaseVersions.Get(p.agentReleaseDir, p.now()), "data_mode": "live", "read_only": p.engine == nil, "instance_power_enabled": p.powerEnabled, "instance_release_enabled": p.releaseEnabled})
-	case "/settings":
-		zone := p.timezone
-		err := p.s.DB.QueryRowContext(r.Context(), "SELECT value FROM app_meta WHERE key='business_timezone'").Scan(&zone)
-		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			writeError(w, 503, "internal_error")
-			return
-		}
-		eventSeconds := 60
-		scanSeconds := 300
-		cdtSeconds := 300
-		if p.engine != nil {
-			scanSeconds = int(p.engine.Interval.Seconds())
-			cdtSeconds = int(p.engine.TrafficInterval().Seconds())
-			eventSeconds = int(p.engine.SystemEventPollInterval().Seconds())
-		}
-		offline, err := p.s.AgentOfflineAfter(r.Context())
-		if err != nil {
-			businessError(w, err)
-			return
-		}
-		writeJSON(w, 200, map[string]any{"business_timezone": zone, "retention": map[string]int{"latency_probe_days": p.probeRetentionDays}, "collection": map[string]int{"cdt_poll_interval_seconds": cdtSeconds, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": int(offline.Seconds()), "resource_scan_interval_seconds": scanSeconds, "system_event_poll_interval_seconds": eventSeconds}})
 	case "/events":
 		p.events(w, r)
 	case "/accounts", "/instances", "/traffic/quotas", "/traffic/daily", "/traffic/billing-subjects", "/bandwidth-packages", "/regions", "/notify/telegram", "/alert-rules", "/notifications":

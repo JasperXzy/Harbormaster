@@ -88,7 +88,7 @@ func (s *Store) UpdateAlertRule(ctx context.Context, key string, update model.Al
 			return rule, err
 		}
 	}
-	if err = appendAudit(ctx, tx, auditEvent{Action: "alert_rule_updated", TargetType: "alert_rule", TargetID: key, Details: model.AuditDetails{ChangedFields: auditChanges(auditChange{"enabled", previous.Enabled, rule.Enabled}, auditChange{"params", previous.Params, rule.Params})}}, now); err != nil {
+	if err = appendAudit(ctx, tx, auditEvent{Action: "alert_rule_updated", TargetType: "alert_rule", TargetID: key, Details: auditDiff(auditChange{"enabled", previous.Enabled, rule.Enabled}, auditChange{"params", previous.Params, rule.Params})}, now); err != nil {
 		return rule, err
 	}
 	return rule, tx.Commit()

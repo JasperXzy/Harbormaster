@@ -15,7 +15,8 @@ import (
 
 var ErrAuditFilter = errors.New("invalid_audit_filter")
 
-// Values are compared in memory only. Only the fixed field names are persisted.
+// Non-sensitive configuration values passed to auditDiff record before/after.
+// Credentials, tokens, hashes and ciphertexts must never be passed here.
 type auditChange struct {
 	name          string
 	before, after any
@@ -29,6 +30,78 @@ func auditChanges(changes ...auditChange) []string {
 		}
 	}
 	return fields
+}
+
+func auditDiff(changes ...auditChange) model.AuditDetails {
+	fields := []string{}
+	var before, after map[string]any
+	for _, change := range changes {
+		if !reflect.DeepEqual(change.before, change.after) {
+			if before == nil {
+				before = map[string]any{}
+				after = map[string]any{}
+			}
+			fields = append(fields, change.name)
+			before[change.name] = change.before
+			after[change.name] = change.after
+		}
+	}
+	return model.AuditDetails{ChangedFields: fields, Before: before, After: after}
+}
+
+var auditActionSummary = map[string]string{
+	"account_created":                    "创建阿里云账号",
+	"account_updated":                    "修改阿里云账号配置",
+	"account_disabled":                   "停用阿里云账号",
+	"alert_rule_updated":                 "修改告警规则",
+	"quiet_hours_updated":                "修改静默与维护时段",
+	"telegram_channel_updated":           "修改 Telegram 通知渠道",
+	"telegram_control_updated":           "修改 Telegram 远程控制",
+	"branding_updated":                   "修改面板名称与图标",
+	"settings_updated":                   "修改系统与保留策略",
+	"estimation_settings_updated":        "修改实时估算设置",
+	"traffic_pricing_updated":            "修改流量阶梯单价",
+	"instance_metadata_updated":          "修改实例备注、分组与标签",
+	"instance_intent_confirmed":          "确认实例期望状态",
+	"quota_rule_saved":                   "保存额度保护规则",
+	"quota_rule_deleted":                 "删除额度保护规则",
+	"quota_simulation_saved":             "注入模拟用量",
+	"quota_simulation_cleared":           "清除模拟用量",
+	"quota_exemption_saved":              "设置额度保护临时豁免",
+	"quota_exemption_cleared":            "清除额度保护临时豁免",
+	"power_schedule_saved":               "保存定时开关机规则",
+	"power_schedule_deleted":             "删除定时开关机规则",
+	"keepalive_rule_saved":               "保存实例保活规则",
+	"keepalive_rule_deleted":             "删除实例保活规则",
+	"monthly_reset_saved":                "修改月初自动开机规则",
+	"api_key_created":                    "创建 API Key",
+	"api_key_revoked":                    "撤销 API Key",
+	"agent_registration_issued":          "生成采集程序安装码",
+	"agent_registered":                   "采集程序完成注册",
+	"agent_revoked":                      "撤销采集程序凭证",
+	"instance_power_requested":           "提交实例电源操作",
+	"instance_power_started":             "开始处理实例电源任务",
+	"instance_power_dispatch_started":    "向阿里云发送电源指令",
+	"instance_power_dispatch_recorded":   "记录阿里云电源指令响应",
+	"instance_power_finished":            "实例电源任务结束",
+	"instance_release_requested":         "提交实例释放任务",
+	"instance_release_dispatch_started":  "向阿里云发送实例释放指令",
+	"instance_release_dispatch_recorded": "记录阿里云实例释放响应",
+	"instance_release_finished":          "实例释放任务结束",
+	"probe_target_created":               "创建测速目标",
+	"probe_target_updated":               "修改测速目标",
+	"probe_target_deleted":               "删除测速目标",
+	"probe_plan_created":                 "创建测速组合",
+	"probe_plan_updated":                 "修改测速组合",
+	"probe_plan_deleted":                 "删除测速组合",
+	"trace_schedule_updated":             "修改每日线路快照设置",
+}
+
+func auditSummaryText(e model.AuditEntry) string {
+	if s, ok := auditActionSummary[e.Action]; ok {
+		return s
+	}
+	return "系统审计：" + e.Action
 }
 
 type auditEvent struct {
@@ -76,7 +149,7 @@ func readAudit(row rowScanner) (model.AuditEntry, error) {
 	if e.Details.ChangedFields == nil {
 		e.Details.ChangedFields = []string{}
 	}
-	e.Summary = "audit: " + e.Action
+	e.Summary = auditSummaryText(e)
 	return e, nil
 }
 func (s *Store) AuditLog(ctx context.Context, f model.AuditFilter) ([]model.AuditEntry, error) {

@@ -127,12 +127,16 @@ func (s *Store) SaveNetworkTarget(ctx context.Context, id string, in model.Netwo
 		return in, err
 	}
 	action := "probe_target_updated"
-	fields := auditChanges(auditChange{"name", previous.Name, in.Name}, auditChange{"kind", previous.Kind, in.Kind}, auditChange{"host", previous.Host, in.Host}, auditChange{"instance_id", previous.InstanceID, in.InstanceID}, auditChange{"tcp_port", previous.TCPPort, in.TCPPort}, auditChange{"enabled", previous.Enabled, in.Enabled})
+	details := auditDiff(auditChange{"name", previous.Name, in.Name}, auditChange{"kind", previous.Kind, in.Kind}, auditChange{"host", previous.Host, in.Host}, auditChange{"instance_id", previous.InstanceID, in.InstanceID}, auditChange{"tcp_port", previous.TCPPort, in.TCPPort}, auditChange{"enabled", previous.Enabled, in.Enabled})
 	if id == "" {
 		action = "probe_target_created"
-		fields = []string{"name", "kind", "host", "instance_id", "tcp_port", "enabled"}
+		details = model.AuditDetails{
+			ChangedFields: []string{"name", "kind", "host", "instance_id", "tcp_port", "enabled"},
+			After:         map[string]any{"name": in.Name, "kind": in.Kind, "host": in.Host, "instance_id": in.InstanceID, "tcp_port": in.TCPPort, "enabled": in.Enabled},
+		}
 	}
-	if err = appendAudit(ctx, tx, auditEvent{Action: action, TargetType: "probe_target", TargetID: in.ID, Details: model.AuditDetails{ChangedFields: fields, Revision: &in.Revision}}, now); err != nil {
+	details.Revision = &in.Revision
+	if err = appendAudit(ctx, tx, auditEvent{Action: action, TargetType: "probe_target", TargetID: in.ID, Details: details}, now); err != nil {
 		return in, err
 	}
 	return in, tx.Commit()
@@ -311,12 +315,16 @@ func (s *Store) SaveProbePlan(ctx context.Context, id string, in model.ProbePlan
 		return in, err
 	}
 	action := "probe_plan_updated"
-	fields := auditChanges(auditChange{"name", previous.Name, in.Name}, auditChange{"point_kind", previous.PointKind, in.PointKind}, auditChange{"instance_id", previous.InstanceID, in.InstanceID}, auditChange{"target_id", previous.TargetID, in.TargetID}, auditChange{"family", previous.Family, in.Family}, auditChange{"method", previous.Method, in.Method}, auditChange{"frequency_seconds", previous.FrequencySeconds, in.FrequencySeconds}, auditChange{"count", previous.Count, in.Count}, auditChange{"timeout_ms", previous.TimeoutMS, in.TimeoutMS}, auditChange{"interval_ms", previous.IntervalMS, in.IntervalMS}, auditChange{"enabled", previous.Enabled, in.Enabled})
+	details := auditDiff(auditChange{"name", previous.Name, in.Name}, auditChange{"point_kind", previous.PointKind, in.PointKind}, auditChange{"instance_id", previous.InstanceID, in.InstanceID}, auditChange{"target_id", previous.TargetID, in.TargetID}, auditChange{"family", previous.Family, in.Family}, auditChange{"method", previous.Method, in.Method}, auditChange{"frequency_seconds", previous.FrequencySeconds, in.FrequencySeconds}, auditChange{"count", previous.Count, in.Count}, auditChange{"timeout_ms", previous.TimeoutMS, in.TimeoutMS}, auditChange{"interval_ms", previous.IntervalMS, in.IntervalMS}, auditChange{"enabled", previous.Enabled, in.Enabled})
 	if id == "" {
 		action = "probe_plan_created"
-		fields = []string{"name", "point_kind", "instance_id", "target_id", "family", "method", "frequency_seconds", "count", "timeout_ms", "interval_ms", "enabled"}
+		details = model.AuditDetails{
+			ChangedFields: []string{"name", "point_kind", "instance_id", "target_id", "family", "method", "frequency_seconds", "count", "timeout_ms", "interval_ms", "enabled"},
+			After:         map[string]any{"name": in.Name, "point_kind": in.PointKind, "instance_id": in.InstanceID, "target_id": in.TargetID, "family": in.Family, "method": in.Method, "frequency_seconds": in.FrequencySeconds, "count": in.Count, "timeout_ms": in.TimeoutMS, "interval_ms": in.IntervalMS, "enabled": in.Enabled},
+		}
 	}
-	if err = appendAudit(ctx, tx, auditEvent{Action: action, TargetType: "probe_plan", TargetID: in.ID, Details: model.AuditDetails{ChangedFields: fields, Revision: &in.Revision}}, now); err != nil {
+	details.Revision = &in.Revision
+	if err = appendAudit(ctx, tx, auditEvent{Action: action, TargetType: "probe_plan", TargetID: in.ID, Details: details}, now); err != nil {
 		return in, err
 	}
 	return in, tx.Commit()

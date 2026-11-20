@@ -64,7 +64,7 @@ func TestAuditAPIAuthenticatedCachedReadsAndFilterBoundPagination(t *testing.T) 
 		if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &out) != nil || out.Items == nil || w.Header().Get("Cache-Control") != "no-store" {
 			t.Fatal(w.Code, w.Body)
 		}
-		for _, secret := range []string{in["access_key_id"].(string), in["access_key_secret"].(string), in["name"].(string), "second private name", token, "ciphertext", "token_hash"} {
+		for _, secret := range []string{in["access_key_id"].(string), in["access_key_secret"].(string), token, "ciphertext", "token_hash"} {
 			if strings.Contains(w.Body.String(), secret) {
 				t.Fatal("audit leaked private values")
 			}

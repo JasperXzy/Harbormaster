@@ -71,7 +71,9 @@ func (s *Store) SaveEstimationSettings(ctx context.Context, v model.EstimationSe
 	if _, err = tx.ExecContext(ctx, "DELETE FROM traffic_estimate"); err != nil {
 		return v, err
 	}
-	if err = appendAudit(ctx, tx, auditEvent{Action: "estimation_settings_updated", TargetType: "settings", TargetID: "metering", Details: model.AuditDetails{ChangedFields: []string{"lag_window_seconds", "bandwidth_mode_instance_ids"}}}, time.Now().UTC()); err != nil {
+	details := auditDiff(auditChange{"lag_window_seconds", current.LagSeconds, v.LagSeconds}, auditChange{"bandwidth_mode_instance_ids", current.BandwidthIDs, v.BandwidthIDs})
+	details.Revision = &v.Revision
+	if err = appendAudit(ctx, tx, auditEvent{Action: "estimation_settings_updated", TargetType: "settings", TargetID: "metering", Details: details}, time.Now().UTC()); err != nil {
 		return v, err
 	}
 	return v, tx.Commit()

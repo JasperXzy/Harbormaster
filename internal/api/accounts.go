@@ -166,7 +166,6 @@ func (p *productionPanel) instances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i]["id"].(string) < items[j]["id"].(string) })
-	filtered := []map[string]any{}
 	var updated any
 	latest := time.Time{}
 	for _, i := range items {
@@ -176,6 +175,14 @@ func (p *productionPanel) instances(w http.ResponseWriter, r *http.Request) {
 				updated = value
 			}
 		}
+	}
+	items, err = p.overlayAndFilterMetadata(r.Context(), items, q.Get("group"), q.Get("tag"))
+	if err != nil {
+		businessError(w, err)
+		return
+	}
+	filtered := []map[string]any{}
+	for _, i := range items {
 		if i["id"].(string) > cursor {
 			filtered = append(filtered, i)
 		}

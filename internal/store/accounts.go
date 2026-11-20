@@ -186,11 +186,13 @@ func (s *Store) UpdateAccount(ctx context.Context, id string, change func(*model
 	if previous.Enabled && !a.Enabled {
 		action = "account_disabled"
 	}
-	details := model.AuditDetails{ChangedFields: auditChanges(
+	details := auditDiff(
 		auditChange{"name", previous.Name, a.Name}, auditChange{"region_ids", previous.RegionIDs, a.RegionIDs},
 		auditChange{"enabled", previous.Enabled, a.Enabled}, auditChange{"quota_mainland_bytes", previous.QuotaMainland, a.QuotaMainland},
 		auditChange{"quota_overseas_bytes", previous.QuotaOverseas, a.QuotaOverseas}, auditChange{"reset_day", previous.ResetDay, a.ResetDay},
-		auditChange{"alert_thresholds_percent", previous.Thresholds, a.Thresholds}), CredentialsChanged: cipher != nil, Revision: &a.Revision}
+		auditChange{"alert_thresholds_percent", previous.Thresholds, a.Thresholds})
+	details.CredentialsChanged = cipher != nil
+	details.Revision = &a.Revision
 	if err = appendAudit(ctx, tx, auditEvent{Action: action, TargetType: "account", TargetID: id, AccountID: id, Details: details}, now); err != nil {
 		return a, err
 	}

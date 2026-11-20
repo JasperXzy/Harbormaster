@@ -73,7 +73,9 @@ func (s *Store) SaveQuietHours(ctx context.Context, in model.QuietHours, now tim
 	if err = suppressDueNotifications(ctx, tx, current, now, false); err != nil {
 		return current, err
 	}
-	if err = appendAudit(ctx, tx, auditEvent{Action: "quiet_hours_updated", TargetType: "quiet_hours", TargetID: "1", Details: model.AuditDetails{ChangedFields: auditChanges(auditChange{"enabled", previous.Enabled, current.Enabled}, auditChange{"start", previous.Start, current.Start}, auditChange{"end", previous.End, current.End}, auditChange{"maintenance", previous.Maintenance, current.Maintenance}), Revision: &current.Revision}}, now); err != nil {
+	details := auditDiff(auditChange{"enabled", previous.Enabled, current.Enabled}, auditChange{"start", previous.Start, current.Start}, auditChange{"end", previous.End, current.End}, auditChange{"maintenance", previous.Maintenance, current.Maintenance})
+	details.Revision = &current.Revision
+	if err = appendAudit(ctx, tx, auditEvent{Action: "quiet_hours_updated", TargetType: "quiet_hours", TargetID: "1", Details: details}, now); err != nil {
 		return current, err
 	}
 	return current, tx.Commit()

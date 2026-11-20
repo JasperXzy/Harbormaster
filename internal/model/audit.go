@@ -31,18 +31,21 @@ func AuditActorForContext(ctx context.Context) AuditActor {
 	}
 }
 
-// Deliberately typed: arbitrary configuration, credentials and provider error
-// bodies cannot be passed as an audit payload. Before/after policy is pending.
+// Deliberately typed: credentials, tokens, hashes, ciphertexts and raw provider
+// error bodies never enter AuditDetails. Non-sensitive configuration updates
+// record typed before/after field maps per user-confirmed policy.
 type AuditDetails struct {
-	ChangedFields      []string `json:"changed_fields"`
-	CredentialsChanged bool     `json:"credentials_changed"`
-	Revision           *int64   `json:"revision,omitempty"`
-	Operation          string   `json:"operation,omitempty"`
-	StopMode           string   `json:"stop_mode,omitempty"`
-	Status             string   `json:"status,omitempty"`
-	DispatchOutcome    string   `json:"dispatch_outcome,omitempty"`
-	ErrorCode          string   `json:"error_code,omitempty"`
-	ConfirmationBasis  string   `json:"confirmation_basis,omitempty"`
+	ChangedFields      []string       `json:"changed_fields"`
+	CredentialsChanged bool           `json:"credentials_changed"`
+	Before             map[string]any `json:"before,omitempty"`
+	After              map[string]any `json:"after,omitempty"`
+	Revision           *int64         `json:"revision,omitempty"`
+	Operation          string         `json:"operation,omitempty"`
+	StopMode           string         `json:"stop_mode,omitempty"`
+	Status             string         `json:"status,omitempty"`
+	DispatchOutcome    string         `json:"dispatch_outcome,omitempty"`
+	ErrorCode          string         `json:"error_code,omitempty"`
+	ConfirmationBasis  string         `json:"confirmation_basis,omitempty"`
 }
 type AuditEntry struct {
 	ID         string       `json:"id"`
