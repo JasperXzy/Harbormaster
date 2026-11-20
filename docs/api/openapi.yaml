@@ -1,3 +1,4 @@
+# 2026-11-21  M2 automation schedules, keepalive, monthly reset and external-stop confirmation: add daily power schedules (/automation/schedules) taking effect from the next scheduled point with configurable catch-up window (default 15 minutes), keepalive (/automation/keepalive) and monthly 1st quota-reset auto-start (/automation/monthly-reset) enforcing priority (quota_protection > scheduled_stop > keepalive/monthly_reset) and 3-per-10m per-instance budgets, plus external console shutdown detection and confirmation (POST /instances/{instance_id}/intent-confirmation, Instance.pending_intent_confirmation, Instance.supports_stop_charging).
 # 2026-11-21  CDT alerts and unverified quota execution opt-in: formally adopt 1024^3-byte GiB units for CDT usage and forecast alerts, enabling cdt_usage (cycle-deduplicated per crossed tier using max(official, ready_estimation)) and cdt_forecast_exceed (stateful with recovery). Add QuotaProtectionRuleInput.allow_unverified_execution (default false) so rules can explicitly opt in to real shutdown execution when estimation.status=ready or official_bytes crosses threshold.
 # 2026-11-21  M2 hourly history, attribution, pricing and retention: add time-prorated display-only agent hourly rollups (GET /instances/{instance_id}/agent-hourly-history), populate today and current-cycle attribution on /traffic/billing-subjects and /bandwidth-packages plus live /bandwidth-packages/{package_id}/hourly periods, add maintainable tiered CDT pricing (GET/PUT /traffic/pricing) with QuotaStatus.overage_cost, and run bounded background cleanup for rolled-up raw agent samples, hourly aggregates, cloud rate history, audit logs and unreferenced refresh jobs.
 # 2026-11-21  M2 metadata, settings and audit values: implement PATCH /settings for business_timezone and configurable retention policy (latency_probe_days, agent_raw_days, agent_hourly_months, audit_log_days, job_history_days). Add local-only Instance metadata (note, group, tags), GET /instances group/tag filters and PATCH /instances/{instance_id}/metadata; never write back to Alibaba Cloud. User-confirmed audit policy: AuditEntry.details adds optional non-sensitive before/after maps for configuration changes while credentials remain boolean markers only, and summary is rendered in Chinese.
@@ -193,6 +194,244 @@ paths:
                 properties:
                   items: {type: array, items: {$ref: "#/components/schemas/CDTReconciliation"}}
                   next_before: {type: integer, format: int64, nullable: true}
+  /automation/schedules:
+    get:
+      tags: [instances]
+      operationId: listPowerSchedules
+      summary: 每日定时开关机规则列表
+      responses:
+        "200":
+          description: 定时规则列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PowerSchedule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: createPowerSchedule
+      summary: 创建每日定时开关机规则（从下个计划时间点起生效）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PowerScheduleInput"
+      responses:
+        "201":
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PowerSchedule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /automation/schedules/{schedule_id}:
+    parameters:
+      - name: schedule_id
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: updatePowerSchedule
+      summary: 修改每日定时开关机规则
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PowerScheduleInput"
+      responses:
+        "200":
+          description: 已更新
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PowerSchedule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    delete:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: deletePowerSchedule
+      summary: 删除每日定时开关机规则
+      parameters:
+        - name: revision
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: 已删除
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /automation/keepalive:
+    get:
+      tags: [instances]
+      operationId: getKeepaliveSettings
+      summary: 实例意外停止保活配置
+      responses:
+        "200":
+          description: 保活配置
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeepaliveSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: updateKeepaliveSettings
+      summary: 修改实例意外停止保活配置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KeepaliveSettings"
+      responses:
+        "200":
+          description: 已保存
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeepaliveSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /automation/monthly-reset:
+    get:
+      tags: [instances]
+      operationId: getMonthlyResetSettings
+      summary: 每月 1 号额度停机自动开机配置
+      responses:
+        "200":
+          description: 月初自动开机配置
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyResetSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: updateMonthlyResetSettings
+      summary: 修改每月 1 号额度停机自动开机配置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MonthlyResetSettings"
+      responses:
+        "200":
+          description: 已保存
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlyResetSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /instances/{instance_id}/intent-confirmation:
+    parameters:
+      - $ref: "#/components/parameters/InstanceId"
+    post:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: confirmInstanceIntent
+      summary: 确认面板之外被关机实例的期望状态（保持停止 / 恢复运行）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [keep_stopped, restore_running]
+      responses:
+        "200":
+          description: 已确认期望状态
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [instance_id, desired_state, job_id]
+                properties:
+                  instance_id:
+                    type: string
+                  desired_state:
+                    type: string
+                    enum: [running, stopped, quota_stopped]
+                  job_id:
+                    type: string
+                    nullable: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
   /protection/status:
     get:
       tags: [traffic]
@@ -5093,6 +5332,19 @@ components:
           items:
             type: string
           description: 本地文本标签列表，不回写阿里云。
+        supports_stop_charging:
+          type: boolean
+          nullable: true
+          description: 是否支持节省停机（按量付费 / 抢占式 ECS 支持，包年包月和轻量不支持）。
+        pending_intent_confirmation:
+          type: object
+          nullable: true
+          required: [detected_at]
+          properties:
+            detected_at:
+              type: string
+              format: date-time
+          description: 检测到在面板之外被关机且尚未确认期望状态时非空；未确认前不触发保活。
         cloud_network:
           type: object
           nullable: true
@@ -5607,6 +5859,93 @@ components:
       type: string
       enum: [ok, unavailable, never_fetched, cutoff_unknown]
       description: unavailable = CDT 官方接口连续取不到数据，正沿用最近一次官方值。
+
+    PowerScheduleInput:
+      type: object
+      additionalProperties: false
+      required: [revision, name, enabled, account_id, action, stop_mode, time_of_day, days_of_week, catch_up_minutes, target_instance_ids, dry_run, confirmed_self_instance_id]
+      properties:
+        revision: {type: integer, format: int64, minimum: 0}
+        name: {type: string, minLength: 1, maxLength: 80}
+        enabled: {type: boolean}
+        account_id: {type: string}
+        action: {type: string, enum: [start, stop]}
+        stop_mode: {type: string, enum: ["", keep_charging, stop_charging]}
+        time_of_day: {type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$'}
+        days_of_week:
+          type: array
+          minItems: 1
+          maxItems: 7
+          uniqueItems: true
+          items: {type: integer, minimum: 0, maximum: 6}
+          description: 0=周日 … 6=周六（业务时区）。
+        catch_up_minutes: {type: integer, minimum: 0, maximum: 180, default: 15}
+        target_instance_ids:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          uniqueItems: true
+          items: {type: string}
+        dry_run: {type: boolean, default: false}
+        confirmed_self_instance_id: {type: string}
+
+    PowerSchedule:
+      type: object
+      required: [id, revision, name, enabled, account_id, action, stop_mode, time_of_day, days_of_week, catch_up_minutes, target_instance_ids, dry_run, confirmed_self_instance_id, activated_at, last_triggered_at, created_at, updated_at]
+      properties:
+        id: {type: string}
+        revision: {type: integer, format: int64}
+        name: {type: string}
+        enabled: {type: boolean}
+        account_id: {type: string}
+        action: {type: string, enum: [start, stop]}
+        stop_mode: {type: string, enum: ["", keep_charging, stop_charging]}
+        time_of_day: {type: string}
+        days_of_week:
+          type: array
+          items: {type: integer}
+        catch_up_minutes: {type: integer}
+        target_instance_ids:
+          type: array
+          items: {type: string}
+        dry_run: {type: boolean}
+        confirmed_self_instance_id: {type: string}
+        activated_at: {type: string, format: date-time}
+        last_triggered_at: {type: string, format: date-time, nullable: true}
+        created_at: {type: string, format: date-time}
+        updated_at: {type: string, format: date-time}
+
+    KeepaliveSettings:
+      type: object
+      additionalProperties: false
+      required: [revision, enabled, dry_run, spot_auto_recover, target_instance_ids]
+      properties:
+        revision: {type: integer, format: int64, minimum: 0}
+        enabled: {type: boolean}
+        dry_run: {type: boolean}
+        spot_auto_recover: {type: boolean, default: true, description: 抢占式实例意外停止时无需等待人工确认直接尝试拉起。}
+        target_instance_ids:
+          type: array
+          maxItems: 1000
+          uniqueItems: true
+          items: {type: string}
+        updated_at: {type: string, format: date-time, nullable: true}
+
+    MonthlyResetSettings:
+      type: object
+      additionalProperties: false
+      required: [revision, enabled, dry_run, target_instance_ids]
+      properties:
+        revision: {type: integer, format: int64, minimum: 0}
+        enabled: {type: boolean}
+        dry_run: {type: boolean}
+        target_instance_ids:
+          type: array
+          maxItems: 1000
+          uniqueItems: true
+          items: {type: string}
+        last_cycle_start: {type: string, format: date-time, nullable: true}
+        updated_at: {type: string, format: date-time, nullable: true}
 
     QuotaProtectionRuleInput:
       type: object

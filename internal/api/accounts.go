@@ -211,6 +211,10 @@ func (p *productionPanel) instances(w http.ResponseWriter, r *http.Request) {
 		businessError(w, err)
 		return
 	}
+	if err = p.overlayAutomationFields(r.Context(), filtered); err != nil {
+		businessError(w, err)
+		return
+	}
 	if err = p.overlayAgents(r.Context(), filtered); err != nil {
 		businessError(w, err)
 		return

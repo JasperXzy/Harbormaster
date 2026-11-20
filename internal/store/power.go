@@ -137,7 +137,7 @@ func enqueuePowerJobTx(ctx context.Context, tx *sql.Tx, instanceID, action, stop
 	err = tx.QueryRowContext(ctx, "SELECT id FROM job WHERE type='instance_power' AND instance_id=? AND status IN ('queued','running')", instanceID).Scan(&activeID)
 	if err == nil {
 		var automated int
-		if e := tx.QueryRowContext(ctx, "SELECT count(*) FROM quota_power_job WHERE job_id=?", activeID).Scan(&automated); e != nil {
+		if e := tx.QueryRowContext(ctx, "SELECT (SELECT count(*) FROM quota_power_job WHERE job_id=?)+(SELECT count(*) FROM automation_power_job WHERE job_id=?)", activeID, activeID).Scan(&automated); e != nil {
 			return model.Job{}, e
 		}
 		if automaticPrincipal != "" || automated != 0 {
@@ -214,6 +214,9 @@ func enqueuePowerJobTx(ctx context.Context, tx *sql.Tx, instanceID, action, stop
 			return model.Job{}, err
 		}
 		if _, err = tx.ExecContext(ctx, "INSERT INTO instance_intent(instance_id,job_id,updated_at) VALUES(?,?,?) ON CONFLICT(instance_id) DO UPDATE SET job_id=excluded.job_id,updated_at=excluded.updated_at", instanceID, id, timestamp(now)); err != nil {
+			return model.Job{}, err
+		}
+		if _, err = tx.ExecContext(ctx, "UPDATE instance_intent_confirmation SET status=CASE WHEN ?='stop' THEN 'keep_stopped' ELSE 'restore_running' END,resolved_at=?,resolved_by='manual_power' WHERE instance_id=? AND status='pending'", action, timestamp(now), instanceID); err != nil {
 			return model.Job{}, err
 		}
 	}
@@ -348,6 +351,17 @@ func (s *Store) BeginPowerDispatchWithPolicy(ctx context.Context, j model.Job, p
 		return p, map[string]error{"account_disabled": ErrAccountDisabled, "account_changed": ErrAccountChanged, "instance_not_found": ErrNotFound}[code]
 	}
 	if err = authorizeQuotaDispatch(ctx, tx, p, policy, now); err != nil {
+		if errors.Is(err, ErrProtectionGuard) {
+			if _, e := tx.ExecContext(ctx, "UPDATE job SET status='failed',finished_at=?,error_code='automatic_power_guard_blocked',lease_owner=NULL,lease_until=0 WHERE id=?", timestamp(now), j.ID); e != nil {
+				return p, e
+			}
+			if e := tx.Commit(); e != nil {
+				return p, e
+			}
+		}
+		return p, err
+	}
+	if err = authorizeAutomationDispatch(ctx, tx, p, policy, now); err != nil {
 		if errors.Is(err, ErrProtectionGuard) {
 			if _, e := tx.ExecContext(ctx, "UPDATE job SET status='failed',finished_at=?,error_code='automatic_power_guard_blocked',lease_owner=NULL,lease_until=0 WHERE id=?", timestamp(now), j.ID); e != nil {
 				return p, e

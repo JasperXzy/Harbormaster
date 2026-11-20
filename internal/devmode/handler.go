@@ -163,6 +163,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, model.Branding{Name: model.DefaultBrandingName})
 	case "/traffic/pricing":
 		respond(w, 200, model.DefaultTrafficPricing())
+	case "/automation/schedules":
+		respond(w, 200, object{"items": []model.PowerSchedule{}})
+	case "/automation/keepalive":
+		respond(w, 200, model.DefaultKeepaliveSettings())
+	case "/automation/monthly-reset":
+		respond(w, 200, model.DefaultMonthlyResetSettings())
 	case "/settings":
 		respond(w, 200, object{"business_timezone": h.loc.String(), "retention": model.DefaultRetentionSettings(30), "collection": object{"cdt_poll_interval_seconds": 300, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": 300, "system_event_poll_interval_seconds": 60}})
 	case "/regions":
@@ -195,6 +201,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			item["note"] = ""
 			item["group"] = nil
 			item["tags"] = []string{}
+			item["supports_stop_charging"] = item["kind"] == "ecs" && (item["charge_type"] == "pay_as_you_go" || item["charge_type"] == "spot")
+			item["pending_intent_confirmation"] = nil
 			cpu := &model.InstanceCPU{Source: "swas_describe_monitor_data", Usage: model.EmptyCPUMetric("CPU_UTILIZATION", now)}
 			value := 0.5
 			if item["kind"] == "ecs" {

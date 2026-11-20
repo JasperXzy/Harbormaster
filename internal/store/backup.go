@@ -120,6 +120,9 @@ func (s *Store) PrepareRestoredCopy(ctx context.Context, now time.Time) (Restore
 	if _, err = tx.ExecContext(ctx, "UPDATE quota_power_job SET final_notified=1"); err != nil {
 		return result, err
 	}
+	if _, err = tx.ExecContext(ctx, "UPDATE automation_power_job SET final_notified=1"); err != nil {
+		return result, err
+	}
 
 	// An old backup cannot know operations sent after it was captured. Preserve
 	// its action ledger, invalidate source caches, and wait one budget window.

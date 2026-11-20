@@ -24,6 +24,9 @@ func (r Runner) Run(ctx context.Context) {
 			policy.Timezone = loc.String()
 		}
 		err := r.Store.EvaluateQuotaProtection(check, policy, time.Now().UTC())
+		if err == nil {
+			err = r.Store.EvaluateAutomation(check, policy, time.Now().UTC())
+		}
 		cancel()
 		if err != nil && ctx.Err() == nil && r.Log != nil {
 			r.Log.Warn("quota_protection_evaluation_failed")

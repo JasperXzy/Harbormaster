@@ -157,6 +157,11 @@ func recordInstanceEvents(ctx context.Context, tx *sql.Tx, account string, resul
 				if err = emit(state, "status_changed", map[string]any{"status": old.Status}, map[string]any{"status": current.Status}); err != nil {
 					return err
 				}
+				if old.Status == "running" && current.Status == "stopped" {
+					if err = checkExternalShutdownTx(ctx, tx, account, state.ID, state.Name, snapshot.Payload, now); err != nil {
+						return err
+					}
+				}
 			}
 			state.Values.Status = current.Status
 		}
