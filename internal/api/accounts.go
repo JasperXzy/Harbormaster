@@ -123,6 +123,15 @@ func (p *productionPanel) business(w http.ResponseWriter, r *http.Request, path 
 		items, err := p.s.Snapshots(r.Context(), []string{kind}, r.URL.Query().Get("account_id"))
 		if err != nil {
 			businessError(w, err)
+			return true
+		}
+		loc, err := p.businessLocation(r.Context())
+		if err != nil {
+			businessError(w, err)
+			return true
+		}
+		if err = p.s.OverlaySubjectAndPackageTraffic(r.Context(), items, kind, loc, p.now().UTC()); err != nil {
+			businessError(w, err)
 		} else {
 			writeJSON(w, 200, map[string]any{"items": items})
 		}

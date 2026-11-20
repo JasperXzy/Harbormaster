@@ -57,6 +57,7 @@ type QuotaStatus struct {
 	Thresholds        []int               `json:"thresholds_percent"`
 	Forecast          *TrafficForecast    `json:"forecast"`
 	ForecastStatus    string              `json:"forecast_status"`
+	OverageCost       *QuotaOverageCost   `json:"overage_cost"`
 	UpdatedAt         *time.Time          `json:"updated_at"`
 }
 

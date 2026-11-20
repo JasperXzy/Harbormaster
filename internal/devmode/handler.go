@@ -161,6 +161,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, model.HeartbeatSettings{IntervalSeconds: 60})
 	case "/settings/branding":
 		respond(w, 200, model.Branding{Name: model.DefaultBrandingName})
+	case "/traffic/pricing":
+		respond(w, 200, model.DefaultTrafficPricing())
 	case "/settings":
 		respond(w, 200, object{"business_timezone": h.loc.String(), "retention": model.DefaultRetentionSettings(30), "collection": object{"cdt_poll_interval_seconds": 300, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": 300, "system_event_poll_interval_seconds": 60}})
 	case "/regions":

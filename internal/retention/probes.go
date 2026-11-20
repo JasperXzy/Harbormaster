@@ -5,11 +5,17 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/store"
 )
 
 type probeStore interface {
 	PruneProbeHistory(context.Context, time.Time, int, int) (store.ProbePruneResult, error)
+}
+
+type historyPruneStore interface {
+	Settings(context.Context, string, int) (string, model.RetentionSettings, error)
+	PruneDataHistory(context.Context, time.Time, model.RetentionSettings, int) (store.HistoryPruneResult, error)
 }
 
 type Runner struct {
@@ -40,7 +46,25 @@ func (r Runner) Run(ctx context.Context) {
 			return
 		}
 		step, cancel := context.WithTimeout(ctx, 5*time.Second)
-		result, err := r.Store.PruneProbeHistory(step, time.Now().UTC(), days, 500)
+		now := time.Now().UTC()
+		probeDays := days
+		ret := model.DefaultRetentionSettings(days)
+		hs, hasHistory := r.Store.(historyPruneStore)
+		if hasHistory {
+			if _, configured, sErr := hs.Settings(step, "", days); sErr == nil {
+				ret = configured
+				probeDays = configured.LatencyProbeDays
+			}
+		}
+		result, err := r.Store.PruneProbeHistory(step, now, probeDays, 500)
+		var histResult store.HistoryPruneResult
+		if err == nil && hasHistory && step.Err() == nil {
+			var hErr error
+			histResult, hErr = hs.PruneDataHistory(step, now, ret, 500)
+			if hErr != nil {
+				err = hErr
+			}
+		}
 		cancel()
 		if ctx.Err() != nil {
 			return
@@ -52,11 +76,11 @@ func (r Runner) Run(ctx context.Context) {
 				r.Log.Warn("probe_history_cleanup_failed")
 			}
 		} else {
-			if result.More {
+			if result.More || histResult.More {
 				delay = time.Second
 			}
-			if r.Log != nil && (result.Payloads > 0 || result.HistoryRows > 0) {
-				r.Log.Info("probe_history_cleaned", "payloads", result.Payloads, "history_rows", result.HistoryRows, "retention_days", days)
+			if r.Log != nil && (result.Payloads > 0 || result.HistoryRows > 0 || histResult.RawAgentSamples > 0 || histResult.HourlyBuckets > 0 || histResult.AuditEntries > 0 || histResult.Jobs > 0) {
+				r.Log.Info("probe_history_cleaned", "payloads", result.Payloads, "history_rows", result.HistoryRows, "raw_samples", histResult.RawAgentSamples, "hourly_buckets", histResult.HourlyBuckets, "audit_entries", histResult.AuditEntries, "jobs", histResult.Jobs, "retention_days", probeDays)
 			}
 		}
 		timer.Reset(delay)

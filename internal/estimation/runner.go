@@ -19,9 +19,13 @@ func (r Runner) RunDaily(ctx context.Context) {
 	defer ticker.Stop()
 	for {
 		timeout, cancel := context.WithTimeout(ctx, 25*time.Second)
+		now := time.Now().UTC()
 		loc, err := r.Store.BusinessLocation(timeout, r.Timezone)
 		if err == nil {
-			err = r.Store.RefreshDaily(timeout, loc, time.Now().UTC())
+			err = r.Store.RefreshDaily(timeout, loc, now)
+		}
+		if hErr := r.Store.RefreshHourly(timeout, now); hErr != nil && err == nil {
+			err = hErr
 		}
 		cancel()
 		if err != nil && ctx.Err() == nil && r.Log != nil {

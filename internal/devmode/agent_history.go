@@ -12,6 +12,46 @@ import (
 )
 
 func demoAgentHistory(w http.ResponseWriter, r *http.Request, path string, instances []object, now time.Time) bool {
+	if strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/agent-hourly-history") {
+		id := strings.TrimSuffix(strings.TrimPrefix(path, "/instances/"), "/agent-hourly-history")
+		found := false
+		for _, instance := range instances {
+			if instance["id"] == id {
+				found = true
+				break
+			}
+		}
+		if !found {
+			failure(w, 404, "not_found")
+			return true
+		}
+		q := r.URL.Query()
+		from, e1 := time.Parse(time.RFC3339Nano, q.Get("from"))
+		to, e2 := time.Parse(time.RFC3339Nano, q.Get("to"))
+		if e1 != nil || e2 != nil || !to.After(from) || to.Sub(from) > 400*24*time.Hour {
+			failure(w, 422, "validation_failed")
+			return true
+		}
+		items := []model.AgentHourlyBucket{}
+		start := from.UTC().Truncate(time.Hour)
+		for h := start; h.Before(to.UTC()) && len(items) < 168; h = h.Add(time.Hour) {
+			idx := int64(len(items)%8 + 1)
+			rx := idx * 120 * 1024 * 1024
+			tx := idx * 160 * 1024 * 1024
+			items = append(items, model.AgentHourlyBucket{
+				HourStart:     h,
+				RXBytes:       rx,
+				TXBytes:       tx,
+				RXRate:        float64(rx) / 3600,
+				TXRate:        float64(tx) / 3600,
+				CoveredSecond: 3600,
+				SampleCount:   360,
+				Estimated:     false,
+			})
+		}
+		respond(w, 200, object{"items": items, "from": from.UTC(), "to": to.UTC()})
+		return true
+	}
 	const suffix = "/agent-network-history"
 	if !strings.HasPrefix(path, "/instances/") || !strings.HasSuffix(path, suffix) {
 		return false

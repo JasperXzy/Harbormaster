@@ -161,17 +161,28 @@ func (p *productionPanel) traffic(w http.ResponseWriter, r *http.Request, path s
 			businessError(w, err)
 			return true
 		}
-		found := false
+		var pkg map[string]any
 		for _, v := range items {
 			if v["id"] == id {
-				found = true
+				pkg = v
+				break
 			}
 		}
-		if !found {
+		if pkg == nil {
 			writeError(w, 404, "not_found")
 			return true
 		}
-		writeJSON(w, 200, map[string]any{"package_id": id, "period_seconds": 3600, "periods": []any{}, "updated_at": nil})
+		loc, err := p.businessLocation(r.Context())
+		if err != nil {
+			businessError(w, err)
+			return true
+		}
+		periods, updated, err := p.s.BandwidthPackageHourly(r.Context(), pkg, loc, p.now().UTC())
+		if err != nil {
+			businessError(w, err)
+			return true
+		}
+		writeJSON(w, 200, map[string]any{"package_id": id, "period_seconds": 3600, "periods": periods, "updated_at": updated})
 	default:
 		return false
 	}

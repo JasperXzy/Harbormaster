@@ -159,6 +159,10 @@ func ReferenceCycle(now time.Time, loc *time.Location) (time.Time, time.Time) {
 // month's value; it does not assert that the provider confirmed that cycle.
 func (s *Store) Quotas(ctx context.Context, accounts []model.Account, loc *time.Location, now time.Time) ([]model.QuotaStatus, error) {
 	start, end := ReferenceCycle(now, loc)
+	pricing, err := s.TrafficPricing(ctx)
+	if err != nil {
+		return nil, err
+	}
 	items := []model.QuotaStatus{}
 	for _, a := range accounts {
 		latest, err := readObservation(s.DB.QueryRowContext(ctx, "SELECT "+observationColumns+" FROM cdt_observation WHERE account_id=? AND credential_version=? ORDER BY id DESC LIMIT 1", a.ID, a.CredentialVersion))
@@ -217,6 +221,7 @@ func (s *Store) Quotas(ctx context.Context, accounts []model.Account, loc *time.
 			if err = s.forecastQuota(ctx, a, &q, loc, now); err != nil {
 				return nil, err
 			}
+			q.OverageCost = quotaOverageCostForAccount(a, q, pricing, now)
 			items = append(items, q)
 		}
 	}

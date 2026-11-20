@@ -153,6 +153,7 @@ func AggregateQuotaStatuses(accounts []model.Account, rows []model.QuotaStatus, 
 			q.Forecast = f
 			q.ForecastStatus = "ready"
 		}
+		q.OverageCost = aggregateQuotaOverageCost(enabled, rows, scope, start, end)
 		out = append(out, q)
 	}
 	return out, nil

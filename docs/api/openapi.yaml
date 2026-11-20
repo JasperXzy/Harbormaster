@@ -1,3 +1,4 @@
+# 2026-11-21  M2 hourly history, attribution, pricing and retention: add time-prorated display-only agent hourly rollups (GET /instances/{instance_id}/agent-hourly-history), populate today and current-cycle attribution on /traffic/billing-subjects and /bandwidth-packages plus live /bandwidth-packages/{package_id}/hourly periods, add maintainable tiered CDT pricing (GET/PUT /traffic/pricing) with QuotaStatus.overage_cost, and run bounded background cleanup for rolled-up raw agent samples, hourly aggregates, cloud rate history, audit logs and unreferenced refresh jobs.
 # 2026-11-21  M2 metadata, settings and audit values: implement PATCH /settings for business_timezone and configurable retention policy (latency_probe_days, agent_raw_days, agent_hourly_months, audit_log_days, job_history_days). Add local-only Instance metadata (note, group, tags), GET /instances group/tag filters and PATCH /instances/{instance_id}/metadata; never write back to Alibaba Cloud. User-confirmed audit policy: AuditEntry.details adds optional non-sensitive before/after maps for configuration changes while credentials remain boolean markers only, and summary is rendered in Chinese.
 # 2026-11-18  Traffic account selector: reserve account_id=all on quotas/daily for enabled-account display aggregates. Full totals require every included account; known subtotals and coverage counts remain explicit. Daily values retain gaps and mixed sources. Forecasts sum independent account predictions, expose sample-count range, and never treat pooled quotas as transferable or authorize actions.
 # 2026-11-18  Scope isolation: realtime and daily coverage require only configured regions in the requested CDT mainland/overseas group, using the same region classification as cloud normalization. A mainland discovery change cannot invalidate otherwise covered overseas traffic. All execution qualifications remain unchanged.
@@ -1300,6 +1301,42 @@ paths:
         "404": {$ref: "#/components/responses/NotFound"}
         "422": {$ref: "#/components/responses/ValidationFailed"}
 
+  /instances/{instance_id}/agent-hourly-history:
+    get:
+      tags: [instances]
+      operationId: listInstanceAgentHourlyHistory
+      summary: 实例采集程序的小时聚合流量历史（最长 13 个月）
+      description: |
+        Time-prorated UTC hourly buckets derived from cumulative agent samples. Boundary-crossing intervals are prorated and marked estimated=true.
+        Display and trend analysis only; never used for CDT cutoff alignment or automatic shutdown.
+      parameters:
+        - $ref: "#/components/parameters/InstanceId"
+        - name: from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: 小时聚合流量序列
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentHourlyHistoryPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
   /instances/{instance_id}/agent-network-history:
     parameters:
       - {name: instance_id, in: path, required: true, schema: {type: string}}
@@ -2583,6 +2620,49 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /traffic/pricing:
+    get:
+      tags: [traffic]
+      operationId: getTrafficPricing
+      summary: CDT 超额流量阶梯单价配置
+      responses:
+        "200":
+          description: 阶梯单价配置
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficPricing"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [traffic]
+      operationId: updateTrafficPricing
+      summary: 修改 CDT 超额流量阶梯单价配置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrafficPricing"
+      responses:
+        "200":
+          description: 修改后的阶梯单价配置
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficPricing"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
 
   /traffic/quotas:
     get:
@@ -5756,6 +5836,12 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/TrafficForecast"
+        overage_cost:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/QuotaOverageCost"
+          description: 按可维护阶梯单价计算的当前与预测超额费用（仅供展示）。
         updated_at:
           type: string
           format: date-time
@@ -5995,6 +6081,26 @@ components:
           format: int64
           nullable: true
           description: 今日按计量规则算出的计费流量；不按流量计费为 null。
+        cycle_rx_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: 本计费周期已采集入方向字节数。
+        cycle_tx_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: 本计费周期已采集出方向字节数。
+        cycle_metered_bytes:
+          type: integer
+          format: int64
+          nullable: true
+          description: 本计费周期按计费规则计算的归因字节数。
+        cycle_share_percent:
+          type: number
+          format: double
+          nullable: true
+          description: 占同账号同 CDT 范围本周期已知计费流量的百分比（0–100）。
         updated_at:
           type: string
           format: date-time
@@ -6105,6 +6211,18 @@ components:
           type: integer
           format: int64
           nullable: true
+        cycle_rx_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        cycle_tx_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        cycle_metered_bytes:
+          type: integer
+          format: int64
+          nullable: true
         dominant_direction:
           type: string
           allOf:
@@ -6115,6 +6233,121 @@ components:
           type: string
           format: date-time
           nullable: true
+
+    AgentHourlyBucket:
+      type: object
+      required: [hour_start, rx_bytes, tx_bytes, rx_bytes_per_second, tx_bytes_per_second, covered_seconds, sample_count, estimated]
+      properties:
+        hour_start:
+          type: string
+          format: date-time
+        rx_bytes:
+          type: integer
+          format: int64
+        tx_bytes:
+          type: integer
+          format: int64
+        rx_bytes_per_second:
+          type: number
+          format: double
+        tx_bytes_per_second:
+          type: number
+          format: double
+        covered_seconds:
+          type: integer
+        sample_count:
+          type: integer
+        estimated:
+          type: boolean
+
+    AgentHourlyHistoryPage:
+      type: object
+      required: [items, from, to]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentHourlyBucket"
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+
+    PriceTier:
+      type: object
+      additionalProperties: false
+      required: [up_to_gib, unit_price]
+      properties:
+        up_to_gib:
+          type: integer
+          format: int64
+          nullable: true
+          description: 该阶梯覆盖的超额流量上限（GiB，从超额部分 0 起算）；最后一档为 null 表示无上限。
+        unit_price:
+          type: string
+          description: 每 GiB（1024^3 字节）单价十进制字符串。
+
+    SitePricingProfile:
+      type: object
+      additionalProperties: false
+      required: [currency, mainland_tiers, overseas_tiers]
+      properties:
+        currency:
+          type: string
+          enum: [CNY, USD]
+        mainland_tiers:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PriceTier"
+        overseas_tiers:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PriceTier"
+
+    TrafficPricing:
+      type: object
+      additionalProperties: false
+      required: [revision, china, international]
+      properties:
+        revision:
+          type: integer
+          format: int64
+          minimum: 0
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+        china:
+          $ref: "#/components/schemas/SitePricingProfile"
+        international:
+          $ref: "#/components/schemas/SitePricingProfile"
+
+    QuotaOverageCost:
+      type: object
+      required: [currency, current_overage_bytes, estimated_cost, forecast_overage_bytes, forecast_cost, unverified]
+      properties:
+        currency:
+          type: string
+        current_overage_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        estimated_cost:
+          type: string
+          nullable: true
+        forecast_overage_bytes:
+          type: integer
+          format: int64
+          nullable: true
+        forecast_cost:
+          type: string
+          nullable: true
+        unverified:
+          type: boolean
 
     BandwidthPackageHourly:
       type: object
