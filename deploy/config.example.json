@@ -13,6 +13,8 @@
   "worker_count": 2,
   "instance_power_enabled": false,
   "instance_release_enabled": false,
+  "eip_manage_enabled": false,
+  "instance_create_enabled": false,
   "server_instance_id": "",
   "server_not_managed": false,
   "probe_history_retention_days": 30,

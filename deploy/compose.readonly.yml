@@ -6,4 +6,6 @@ services:
       HM_DEV: "false"
       HM_INSTANCE_POWER_ENABLED: "false"
       HM_INSTANCE_RELEASE_ENABLED: "false"
+      HM_EIP_MANAGE_ENABLED: "false"
+      HM_INSTANCE_CREATE_ENABLED: "false"
       HM_IPDB_AUTO_UPDATE: "false"
