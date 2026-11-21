@@ -1,8 +1,8 @@
 # 后端实现与验收状态
 
-核对日期：2026-11-21。M0–M2 前后端功能已按用户确认方案全部实现并部署到 `main-server`（`https://cdt.jasperxzy.com`，镜像 `harbormaster-server:m2-4278091`），同时完成了独立网络命名空间下的 Linux 内核计数验证；详见 [M0–M2 完成与上线记录](m2-rollout.md)。此前记录见[额度保护运行记录](quota-protection-rollout.md)、[前端交接](frontend-protection-handoff.md)与[首次部署](main-server-rollout.md)。
+核对日期：2026-11-21。M0–M4 前后端功能已按用户确认方案全部实现并部署到 `main-server`（`https://cdt.jasperxzy.com`，镜像 `harbormaster-server:m4-f995843`，版本 `0.4.0`），同时完成了独立网络命名空间下的 Linux 内核计数验证；详见 [M3–M4 完成与上线记录](m4-rollout.md) 与 [M0–M2 完成与上线记录](m2-rollout.md)。此前记录见[额度保护运行记录](quota-protection-rollout.md)、[前端交接](frontend-protection-handoff.md)与[首次部署](main-server-rollout.md)。
 
-当前线上已开启实例电源控制（`HM_INSTANCE_POWER_ENABLED=true`），严格保持 ECS 释放关闭（`HM_INSTANCE_RELEASE_ENABLED=false`）。真实云上停开机时延、24 小时业务流量对账（V7）、Telegram 真实对话送达/远控交互以及 M3/M4 特性仍按实际运行证据区分“代码已上线”与“真实业务场景已实测”。
+当前线上已开启实例电源控制（`HM_INSTANCE_POWER_ENABLED=true`），并按用户确认严格保持 3 项高危/计费云写开关默认关闭（`HM_INSTANCE_RELEASE_ENABLED=false`、`HM_EIP_MANAGE_ENABLED=false`、`HM_INSTANCE_CREATE_ENABLED=false`）。真实云上停开机时延、24 小时业务流量对账（V7）、多渠道真实投递/远控交互以及高危写操作仍按实际运行证据区分“代码与前端已上线”与“真实业务场景已实测”。
 
 范围：全栈在分支 `be/m0-foundation` 分阶段提交并通过 `go test -race ./...` 与前端构建检查；未 push 或合并 `main`，`docs/PRD.md` 原文未改。
 
@@ -34,7 +34,7 @@
 | F1.1 | 账号创建/修改/停用已实现；删除按用户确认采用停用并保留历史。凭据加密、版本隔离及停用停止采集已测试。[账号发现](production-discovery.md) |
 | F1.2 | 只读权限测试已接通，写权限保持 not_verified；不能由读成功推定能开关机。 |
 | F1.3 | 本地额度、阈值配置已实现；按用户确认采用 1024³ 字节单位，重置日固定自然月 1 日。保存阈值不等于用量告警已启用。 |
-| F1.4 | 已有三档 RAM 草稿、只读复制接口和部署 JSON；完整最小权限身份验收、具体资源范围、M4 创建/换 EIP 依赖及前端复制界面仍未完成。[RAM 草稿](ram-policy.md) |
+| F1.4 | 三档 RAM 策略草稿、只读复制接口（`GET /ram-policies`）、部署 JSON 与设置页一键复制界面均已实现并上线；完整最小权限云端真实身份验收仍区分于本地草稿。[RAM 草稿](ram-policy.md) |
 | F2.1、F2.2 | ECS/SWAS 多账号多地域发现和主要字段已实现；未知 CDT 资格仍为 null。真实读取到两个账号的四台实例。 |
 | F2.3 | ECS 扩展字段优先、按实例主副网卡分页与 3 秒回退、失败保留旧值已实现。地址分配与公网/计费状态分开；SWAS 来源仍未确认。[IPv6](ipv6-discovery.md) |
 | F2.4 | 实例本地多行备注 `note`、分组 `group`、多标签 `tags` 存储与 `PATCH /instances/{id}/metadata` 及前端筛选/编辑已实现（`050` 迁移，不回写阿里云）。 |
@@ -47,45 +47,44 @@
 | F3.10 | 共享带宽配置、成员列表、当天收发/主方向汇总与每小时收发接口（`/bandwidth-packages/{id}/hourly`）前后端已实现。 |
 | F4.1 | 实例及无流量包状态已实现，sha-pro 空包结果已真实确认。 |
 | F4.2 | 轻量与 ECS 电源调用、持久任务、状态确认及前端实例详情开关机操作已在 `main-server` 开启上线。 |
-| F4.3 | 四项官方字节值的采集、身份隔离缓存、前端展示及轻量套餐额度保护规则支持已实现。[流量包缓存](swas-traffic-package.md) |
+| F4.3 | 四项官方字节值的采集、身份隔离缓存、前端展示、轻量套餐额度保护规则支持及 `swas_traffic_usage`（80/90/95% 与耗尽预测，`055` 迁移）告警均已实现并上线。[流量包缓存](swas-traffic-package.md) |
 | F4.4 | 轻量预绑定注册与流量上报代码已实现，并排除 CDT 保护；真实安装和延迟测速未完成。 |
 | F5.1 | agent 原始样本历史、`agent_hourly_traffic` 时间分摊小时历史（最长 13 个月）与云监控分钟历史回退及实例详情 24h/7d 收发折线图已实现。[Agent 历史](agent-network-history.md)、[云历史](cloud-network-history.md) |
 | F5.2 | ECS CPU/绝对积分与 SWAS CPU 的后台采集、缓存、过期状态和实例详情展示已实现。[指标来源](cpu-metrics.md) |
-| F6.1–F6.13 | 额度保护规则（含 `allow_unverified_execution` 可选实时估算执行）、模拟用量演练、试运行、每日定时开关机（`activated_at` 下个计划点生效 + 15 分钟停服补偿）、意外停止保活、每月 1 号自动开机、面板外关机意图确认（暂停保活并推送确认）及 `/automation` 前端页面均已实现并上线。[M2 上线](m2-rollout.md) |
+| F6.1–F6.13 | 额度保护规则（含 `allow_unverified_execution` 可选实时估算执行）、模拟用量演练、试运行、每日定时开关机（`activated_at` 下个计划点生效 + 15 分钟停服补偿）、意外停止保活、每月 1 号自动开机、跨账号主备切换（`F6.8`，`057` 迁移）、面板外关机意图确认及 `/automation` 前端页面均已实现并上线。[M2 上线](m2-rollout.md)、[M4 上线](m4-rollout.md) |
 | F7.1、F7.5 | 刷新、权限查询与实例开关机持久队列、任务分页筛选及前端开关机弹窗（区分普通停机与节省停机副作用提示）已上线。[任务记录](job-history.md)、[电源调用](instance-power.md) |
-| F7.2、F7.3 | 换 EIP、创建 ECS 属于 M4，未实现。 |
-| F7.4 | ECS 释放后端队列、预览与安全边界已实现，按 M2 边界保持 `HM_INSTANCE_RELEASE_ENABLED=false` 关闭。[API/接入](ecs-release-api.md) |
+| F7.2、F7.3 | 更换受管 EIP（`POST /instances/{id}/change-eip` + `managed_eip` 原有 EIP 严格防误删保护）与创建按量/抢占 ECS（`GET /cloud/ecs-catalog`、`POST /instances/create` + 可选自动创建 VPC/交换机/安全组，`057` 迁移）前后端已实现，按安全边界在 `main-server` 默认保持 `HM_EIP_MANAGE_ENABLED=false`、`HM_INSTANCE_CREATE_ENABLED=false`。[M4 上线](m4-rollout.md) |
+| F7.4 | ECS 释放后端队列、预览（`GET /instances/{id}/release-preview`）、前端输入完整实例名二次确认弹窗（`POST /instances/{id}/release`）与安全边界均已实现，按安全边界保持 `HM_INSTANCE_RELEASE_ENABLED=false` 关闭。[API/接入](ecs-release-api.md) |
 | F8.1 | Telegram 渠道配置、代理认证与异步测试发送已在生产上线。[实际发送](telegram-dispatch.md) |
 | F8.2 | 按用户确认采用 `1024^3` 字节口径默认启用 `cdt_usage`（档位周期去重）与 `cdt_forecast_exceed`（超额预测与恢复，`052` 迁移）。 |
-| F8.3 | 全部 15 项告警规则（含 `cdt_usage`、`cdt_forecast_exceed`、`cdt_estimation_deviation`、`balance_low` 等）前后端管理已接通。 |
-| F8.4 | Telegram 远程控制 Bot（`GET/PUT /notify/telegram/control`、数字用户 ID 白名单、`/status`、`/quota`、`/start`、`/stop`、`/reboot` 二次按钮确认、`/changeip` 提示及外部关机内联确认按钮，`054` 迁移）前后端已实现并上线。 |
-| F8.5、F8.6 | 每日定时简报、邮件和 Webhook 属于 M3/M4，未实现。 |
+| F8.3 | 全部 18 项告警规则（含 `swas_traffic_usage`、`cpu_credit_low`、`system_event`、网络延迟/丢包/不可达/路径变化等）前后端管理已接通。 |
+| F8.4 | Telegram 远程控制 Bot（数字用户 ID 白名单、`/status`、`/quota`、`/start`、`/stop`、`/reboot` 及 `/changeip` 二次按钮确认、外部关机内联确认按钮）前后端已实现并上线。 |
+| F8.5、F8.6 | 每日定时与手动流量简报（`GET/PUT /notify/daily-report`、`POST /notify/daily-report/send`）、AES-256-GCM 加密 SMTP 邮件与 Webhook（HMAC-SHA256 签名 + 自定义头）多渠道并发投递（`056` 迁移）前后端均已实现并上线。[M4 上线](m4-rollout.md) |
 | F8.7–F8.10 | outbox 租约重试、告警恢复去重、每日静默时段与临时维护期配置前后端均已实现并上线。[静默](quiet-hours.md) |
-| F9.1–F9.5 | 账户余额、月账单、实例账单、续费状态、闲置候选读取与费用页按账号设置低余额告警阈值前后端已实现。[费用](account-finance.md)、[余额告警](balance-alerts.md) |
-| F10.1–F10.6 | ICMP/TCP 测速、server/agent 持久执行、加密恢复、目标/组合管理、默认五分钟调度和运行历史接口已实现。本机 TLS/SQLite/恢复/调度测试通过；真实发现地址取得 3 台新快照、1 台未知。网络告警/恢复/去重记录已实现，尚无实际发送。前端矩阵/曲线由 Claude 负责；未真实部署或公网测速。[网络管理](network-management.md)、[网络告警](network-alerts.md) |
-| F10.7–F10.11 | 线路执行器、队列/私有协议、agent 恢复、server worker、面板异步提交/历史/详情/导出已实现并本地测试。离线 ASN＋国家库、可选 City、月度更新和状态/资源接口已实现；真实库读取与下载通过。归属、限时公网 PTR、逐跳统计、证据标签、版本冻结和署名已接入。每日快照/完整路径变化事件、双向原子提交/独立执行/导出及 API 已实现并本地测试；未验收真实每日执行、两端公网路径或消息送达。TCP 原始线路仅 Linux。[线路面板](trace-panel-api.md)、[离线库](offline-ip-database.md)、[归属接入](trace-enrichment.md)、[每日快照](trace-snapshots.md)、[双向追踪](duplex-traces.md) |
+| F9.1–F9.5 | 账户余额、月账单、单实例月度账单明细（`F9.2`）、续费状态、闲置计费资源巡检（`F9.4`，无可靠报价保留 `null`）与费用页低余额告警阈值前后端均已实现并上线。[费用](account-finance.md)、[余额告警](balance-alerts.md) |
+| F10.1–F10.11 | ICMP/TCP 延迟探测、单向与去回程双向 Traceroute、文本导出、离线 ASN/国家/城市数据库、每日线路快照与 AS 路径变化提醒，以及 `/network` 前端完整页面（延迟矩阵、24h/7d RTT/抖动/丢包曲线、逐跳路由表、目标/组合/快照管理）均已实现并上线。[M4 上线](m4-rollout.md) |
 | F11.1 | 已实现出方向配置能力比较及告警记录；不宣称入方向所有产品限额或实测吞吐已验证。[检查](spec-bandwidth-check.md)、[告警](bandwidth-alerts.md) |
-| F11.2 | CPU 积分百分比告警未实现；四个 t5/t6 的只读规格目录已与官方最大余额表核对，不能直接把 InitialCredit/BaselineCredit 当上限。20% 分母方案已提出待答；真实突发实例余额仍待验证。[上限核对](cpu-credit-specs.md) |
-| F11.3 | ECS/CMS 来源、独立默认 60 秒轮询、持久记录/来源健康及只读分页接口已实现；三地域只读验证通过。预警通知与提前送达验收仍未完成。[事件采集](system-events.md) |
-| F11.4 | 账号连续失败的告警记录已实现；实际发信未接通。 |
+| F11.2 | 突发性能 CPU 积分告警（`TotalCredit / 24h 基准上限 < threshold_percent`，默认 20%，`055` 迁移）前后端已实现并上线。[上限核对](cpu-credit-specs.md) |
+| F11.3 | ECS/CMS 系统事件采集、跨来源去重告警评估（维护仅从 `ecs_history` 且遵守静默，抢占仅从 `cms_spot` 5 分钟内发布且紧急绕过静默）及实例页系统事件折叠面板均已实现并上线。[事件采集](system-events.md) |
+| F11.4 | 账号连续失败的告警记录与多渠道投递已接通。 |
 | F12.1 | Linux 双架构发布包、校验下载、一行命令、systemd 单元及模拟安装回滚已实现；2026-11-18 已补齐发布文件并上线 root 无 sudo 的命令兼容修复。用户自行安装的 sg-server-nano 已正常上报；受控安装/计量验收仍待完成。[安装](agent-installation.md)、[发布修复](agent-release-publication.md)、[root 兼容](root-agent-installer.md) |
 | F12.2 | ECS 元数据匹配及用户批准的轻量预绑定流程已实现；元数据文本不等于远程可信证明。 |
 | F12.3 | Linux nftables 原生代码、规则检查及 `main-server` 独立网络命名空间内核测试（`TestKernelCounters`）已通过；24 小时业务口径验证待长期运行观察。[M2 上线](m2-rollout.md) |
 | F12.4 | 10 秒默认/本地可配上报、加密离线队列、批量 ACK、重启计数代际已实现并在线上运行。[客户端](production-agent-client.md)、[周期](agent-cadence.md) |
 | F12.5 | 掉线状态、事件及掉线期间按近期峰值/带宽最坏情况推算已接通。 |
-| F12.6 | 内置测速与线路执行器、持久队列、独立私有领取/回报、结果校验、agent 加密待办及串行执行恢复已实现。前端网络测速/线路追踪视图属 M3。 |
+| F12.6 | 内置测速与线路执行器、持久队列、独立私有领取/回报、结果校验、agent 加密待办、串行执行恢复及 `/network` 前端视图均已实现并上线。 |
 | F12.7 | 当前固定动作、独立 token、哈希与撤销已实现；没有任意命令接口或云助手。 |
-| F12.8 | 后端版本、最后上报时间、校验过的本地发布版本与前端 `update_available` 升级提示/升级命令生成已实现。[版本](agent-version-hints.md) |
+| F12.8 | 后端版本、最后上报时间、校验过的本地发布版本（已更新至 `v0.4.0`）与前端 `update_available` 升级提示/升级命令生成已实现。[版本](agent-version-hints.md) |
 | F13.1、F13.2 | API Key 管理接口、精确 scope 鉴权及实例控制/刷新/任务查询入口前后端已实现。[API Key](api-key-management.md) |
-| F13.3 | 小组件只读摘要接口 `GET /api/v1/integrations/summary`（`summary:read` scope，豁免 `admin_allow_cidrs`）及设置页接入说明已实现；`F13.4` URL Cron 属后续可选。 |
+| F13.3、F13.4 | 小组件只读摘要接口 `GET /api/v1/integrations/summary`（`summary:read`）与外部定时触发接口 `POST /api/v1/integrations/cron/run`（`cron:run`）及设置页接入说明均已实现并上线。 |
 | F14.1–F14.3 | SQLite 持久队列、租约恢复、幂等键与快照非阻塞 GET 已实现。 |
-| F15.1–F15.9 | 首次设置、密码与 Passkey WebAuthn 登录/绑定/关闭密码登录开关、AES-GCM 主密钥隔离、包含非敏感前后值与中文摘要的审计日志（含前端分页查询）及 HTTPS/CIDR 访问控制均已实现并上线。[M2 上线](m2-rollout.md) |
-| F16.1–F16.10 | Docker 非 root 只读根容器构建、在线备份与 CLI 恢复、数据保留期配置与后台清理（原始秒级 7 天 / 小时桶 13 个月 / 测速 30 天 / 任务 90 天 / 审计 365 天）、自定义名称与图标、外部心跳自监控及测试均已实现并上线；`F16.8` 在线更新中心属 M4。 |
-| F17 | M0–M2 全部页面（总览、实例、流量、自动化、费用、通知、设置、登录与首次向导）及 `VITE_API_MODE=mock` 契约对齐已提交并原子发布至 `main-server`。[M2 上线](m2-rollout.md) |
+| F15.1–F15.9 | 首次设置、密码与 Passkey WebAuthn 登录/绑定/关闭密码登录开关、AES-GCM 主密钥隔离（覆盖阿里云 AccessKey、Telegram、SMTP、Webhook 与外部心跳）、包含非敏感前后值与中文摘要的审计日志及 HTTPS/CIDR 访问控制均已实现并上线。[M2 上线](m2-rollout.md)、[M4 上线](m4-rollout.md) |
+| F16.1–F16.10 | Docker 非 root 只读根容器构建、在线备份与 CLI 恢复、数据保留期配置与后台清理、登录前/登录后自定义名称与图标（`F16.9`）、外部心跳自监控及只读容器安全的在线版本中心与升级命令复制（`F16.8`）均已实现并上线。[M4 上线](m4-rollout.md) |
+| F17 | M0–M4 全部页面（总览、实例、流量、网络、自动化、费用、通知、设置、登录与首次向导）及 `VITE_API_MODE=mock` 契约对齐均已提交并原子发布至 `main-server`。[M4 上线](m4-rollout.md) |
 
-## 尚待确认的后续阶段（M3/M4）细节问题
+## 已确认并落地的 M3/M4 细节决定
 
-此前 M0–M2 的待确认项（`F2.4` 备注/分组/标签、`F6.3` 定时激活边界、`F6.13` 自身排除、`main-server` 隔离内核测试、`F5.1`/`F16.5` 小时聚合与清理、`F13.3` 小组件摘要、`F15.7` 审计前后值、`F8.2` CDT 告警启用）均已由用户于 2026-11-21 确认采纳推荐方案并实现。以下问题仅影响 M3/M4：
+此前 M0–M2 与 M3–M4 的全部设计细节均已由用户于 2026-11-21 确认采纳推荐方案并落地：
 
 | 问题 | 已提出的推荐方向 | 影响 |
 |---|---|---|
