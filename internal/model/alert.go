@@ -29,6 +29,7 @@ type AlertParams struct {
 	BalanceThresholds   *[]BalanceThreshold `json:"balance_thresholds,omitempty"`
 	BeforeDays          *int                `json:"before_days,omitempty"`
 	ThresholdsPercent   *[]int              `json:"thresholds_percent,omitempty"`
+	ThresholdPercent    *int                `json:"threshold_percent,omitempty"`
 	ConsecutiveFailures *int                `json:"consecutive_failures,omitempty"`
 	OfflineAfterSeconds *int                `json:"offline_after_seconds,omitempty"`
 }
@@ -62,11 +63,14 @@ func (r AlertRule) Validate() map[string]string {
 	if r.Key != "balance_low" && r.Params.BalanceThresholds != nil {
 		fields["params.balance_thresholds"] = "not_applicable"
 	}
-	if r.Key != "cdt_usage" && r.Params.ThresholdsPercent != nil {
+	if r.Key != "cdt_usage" && r.Key != "swas_traffic_usage" && r.Params.ThresholdsPercent != nil {
 		fields["params.thresholds_percent"] = "not_applicable"
 	}
+	if r.Key != "cpu_credit_low" && r.Params.ThresholdPercent != nil {
+		fields["params.threshold_percent"] = "not_applicable"
+	}
 	switch r.Key {
-	case "cdt_usage":
+	case "cdt_usage", "swas_traffic_usage":
 		if r.Params.ThresholdsPercent == nil || len(*r.Params.ThresholdsPercent) == 0 || len(*r.Params.ThresholdsPercent) > 10 {
 			fields["params.thresholds_percent"] = "required_or_out_of_range"
 		} else {
@@ -182,7 +186,19 @@ func (r AlertRule) Validate() map[string]string {
 		if r.Params.OfflineAfterSeconds != nil {
 			fields["params.offline_after_seconds"] = "not_applicable"
 		}
-	case "spec_bandwidth_insufficient", "instance_public_ip_changed", "network_route_change", "idle_resource_detected":
+	case "spec_bandwidth_insufficient", "instance_public_ip_changed", "network_route_change", "idle_resource_detected", "system_event":
+		if r.Params.ConsecutiveFailures != nil {
+			fields["params.consecutive_failures"] = "not_applicable"
+		}
+		if r.Params.OfflineAfterSeconds != nil {
+			fields["params.offline_after_seconds"] = "not_applicable"
+		}
+	case "cpu_credit_low":
+		if r.Params.ThresholdPercent == nil {
+			fields["params.threshold_percent"] = "required"
+		} else if *r.Params.ThresholdPercent < 1 || *r.Params.ThresholdPercent > 100 {
+			fields["params.threshold_percent"] = "out_of_range"
+		}
 		if r.Params.ConsecutiveFailures != nil {
 			fields["params.consecutive_failures"] = "not_applicable"
 		}

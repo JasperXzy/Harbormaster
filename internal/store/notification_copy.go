@@ -240,6 +240,26 @@ func alertCopy(ctx context.Context, q queryRower, o alertObservation, kind, seve
 			body = reason + "。"
 		}
 		return symbol + " " + account() + " 有闲置的" + what + "：" + name, body + "如果确实不用了，可以考虑释放。"
+	case "cpu_credit_low":
+		if recovered {
+			return symbol + " " + instance() + " 的 CPU 积分已恢复", ""
+		}
+		pctStr := strconv.FormatFloat(f.value, 'f', 1, 64) + "%"
+		body := "当前积分占 24 小时累积上限的 " + pctStr
+		if f.limit != "" {
+			body += "（" + f.limit + "）"
+		}
+		body += "，低于阈值 " + copyNumber(f.threshold) + "%。"
+		return symbol + " " + instance() + " 的 CPU 积分偏低", body
+	case "swas_traffic_usage":
+		if recovered {
+			return symbol + " 轻量服务器 " + instance() + " 的套餐流量预计不再超额", ""
+		}
+		body := ""
+		if f.hasUsed {
+			body = "当前已用 " + copyGB(f.usedBytes) + " / " + copyGB(f.quotaBytes) + "，按当前速度预计早于重置日用尽。"
+		}
+		return symbol + " 轻量服务器 " + instance() + " 的套餐流量预计在重置前用尽", body
 	}
 	// Rules without a frontend template keep a neutral, truthful sentence.
 	if recovered {

@@ -35,6 +35,10 @@ func retainCPU(ctx context.Context, tx *sql.Tx, accountID string, snapshot model
 	if cpu.CreditBalance != nil && previous.CPU.CreditBalance != nil {
 		retainMetric(cpu.CreditBalance, *previous.CPU.CreditBalance)
 	}
+	if cpu.CreditMax24h == nil && previous.CPU.CreditMax24h != nil {
+		v := *previous.CPU.CreditMax24h
+		cpu.CreditMax24h = &v
+	}
 	return nil
 }
 func retainMetric(current *model.CPUMetric, previous model.CPUMetric) {

@@ -1881,6 +1881,69 @@ paths:
         "422": {$ref: "#/components/responses/ValidationFailed"}
         "415": {$ref: "#/components/responses/UnsupportedMediaType"}
 
+  /public/branding:
+    get:
+      security: []
+      tags: [system]
+      operationId: getPublicBranding
+      summary: 登录页 / 首次安装页读取自定义面板名称与图标状态
+      responses:
+        "200":
+          description: 公开品牌状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicBranding"
+
+  /public/branding/logo:
+    get:
+      security: []
+      tags: [system]
+      operationId: getPublicBrandingLogo
+      summary: 登录页 / 首次安装页读取自定义 Logo 图片
+      responses:
+        "200":
+          description: PNG 图片
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /system/version-center:
+    get:
+      tags: [system]
+      operationId: getVersionCenter
+      summary: 版本中心与升级指引
+      responses:
+        "200":
+          description: 版本中心状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionCenter"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /system/version-center/check:
+    post:
+      tags: [system]
+      operationId: checkLatestVersion
+      summary: 在线检查 GitHub Release 最新版本
+      responses:
+        "200":
+          description: 最新检查结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VersionCenter"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /system/info:
     get:
       tags: [system]
@@ -2672,6 +2735,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WidgetSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /integrations/cron/run:
+    post:
+      security:
+        - integrationBearer: []
+      tags: [system]
+      operationId: runUrlCron
+      summary: URL Cron 兼容触发接口（仅接受 cron:run API Key，不接受管理员会话密码）
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                account_id:
+                  type: string
+      responses:
+        "202":
+          description: 已触发定时巡检与刷新队列
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CronRunResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -5261,6 +5352,10 @@ components:
           allOf:
             - $ref: "#/components/schemas/CPUMetric"
           description: ECS absolute credits; null for SWAS, whose CPU endpoint does not expose this metric.
+        credit_max_24h:
+          type: number
+          nullable: true
+          description: 突发规格 24 小时常规累积积分上限（BaselineCredit × 60 × 24 / 100），非突发规格不返回。
 
     CPUMetric:
       type: object
@@ -6942,9 +7037,54 @@ components:
               forecast_cycle_end_bytes: {type: integer, format: int64, nullable: true}
               updated_at: {type: string, format: date-time, nullable: true}
 
+    PublicBranding:
+      type: object
+      required: [name, has_logo, updated_at]
+      properties:
+        name: {type: string}
+        has_logo: {type: boolean}
+        updated_at: {type: string, format: date-time, nullable: true}
+
+    CronRunResponse:
+      type: object
+      required: [job_id, scheduled, triggered_at]
+      properties:
+        job_id: {type: string, nullable: true}
+        scheduled: {type: boolean}
+        triggered_at: {type: string, format: date-time}
+
+    VersionCenter:
+      type: object
+      required: [server_version, server_commit, server_build_time, bundled_agent_version, deployment_mode, checked_at, latest_version, release_url, release_notes, update_available, last_error, upgrade_commands]
+      properties:
+        server_version: {type: string}
+        server_commit: {type: string}
+        server_build_time: {type: string}
+        bundled_agent_version: {type: string, nullable: true}
+        deployment_mode: {type: string}
+        checked_at: {type: string, format: date-time, nullable: true}
+        latest_version: {type: string, nullable: true}
+        release_url: {type: string, nullable: true}
+        release_notes: {type: string, nullable: true}
+        update_available: {type: boolean, nullable: true}
+        last_error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code: {type: string}
+            message: {type: string}
+        upgrade_commands:
+          type: object
+          required: [docker_compose, binary_hint, agent_hint]
+          properties:
+            docker_compose: {type: string}
+            binary_hint: {type: string}
+            agent_hint: {type: string}
+
     AlertRuleKey:
       type: string
-      enum: [cdt_usage, cdt_forecast_exceed, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable, network_route_change, idle_resource_detected, quota_protection, cdt_estimation_deviation]
+      enum: [cdt_usage, cdt_forecast_exceed, swas_traffic_usage, cpu_credit_low, system_event, account_api_failure, agent_offline, cdt_official_unavailable, instance_expiring, spec_bandwidth_insufficient, instance_public_ip_changed, balance_low, network_latency, network_loss, network_unreachable, network_route_change, idle_resource_detected, quota_protection, cdt_estimation_deviation]
       description: 内置规则；仅返回当前已实现且有可用来源的规则。
 
     Severity:
@@ -7008,9 +7148,14 @@ components:
           description: instance_expiring only. Default 7; compare freshly collected expiry against now plus this many 24-hour days. Missing expiry is unknown. Stopped subscription instances remain applicable.
         thresholds_percent:
           type: array
-          description: cdt_usage 的默认档位（账号可以单独覆盖）。
+          description: cdt_usage 与 swas_traffic_usage 的默认档位。
           items:
             type: integer
+        threshold_percent:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: cpu_credit_low 低于 24 小时累积上限的百分比阈值（默认 20）。
         consecutive_failures:
           type: integer
           minimum: 1

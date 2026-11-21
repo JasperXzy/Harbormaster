@@ -203,6 +203,11 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 		return err
 	}
 	observations = append(observations, cdtObs...)
+	m4Obs, err := m4AlertObservationsTx(ctx, tx, rules, now)
+	if err != nil {
+		return err
+	}
+	observations = append(observations, m4Obs...)
 	seen := map[string]bool{}
 	for _, o := range observations {
 		seen[o.rule+"/"+o.target] = true

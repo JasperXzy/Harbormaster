@@ -95,6 +95,8 @@ var auditActionSummary = map[string]string{
 	"probe_plan_updated":                 "修改测速组合",
 	"probe_plan_deleted":                 "删除测速组合",
 	"trace_schedule_updated":             "修改每日线路快照设置",
+	"cron_triggered":                     "通过 URL Cron 触发刷新与巡检",
+	"version_checked":                    "在线检查最新版本",
 }
 
 func auditSummaryText(e model.AuditEntry) string {

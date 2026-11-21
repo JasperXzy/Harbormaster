@@ -71,6 +71,61 @@ func (p *productionPanel) integrations(w http.ResponseWriter, r *http.Request, p
 		writeJSON(w, 200, summary)
 		return
 	}
+	if path == "/integrations/cron/run" {
+		// PRD F13.4: URL Cron endpoint accepts ONLY cron:run API keys (never session/password)
+		// and uses public transport check so external cron services can reach it safely.
+		if _, ok := p.access.checkPublicTransport(w, r); !ok {
+			return
+		}
+		if r.Method != http.MethodPost {
+			writeError(w, 405, "method_not_allowed")
+			return
+		}
+		tok, ok := extractBearer(w, r)
+		if !ok {
+			return
+		}
+		now := p.now().UTC()
+		key, err := p.s.AuthenticateAPIKey(r.Context(), tok, "cron:run", now)
+		if err != nil {
+			apiKeyScopeError(w, err, "cron:run")
+			return
+		}
+		accountID := strings.TrimSpace(r.URL.Query().Get("account_id"))
+		if r.ContentLength != 0 {
+			var in struct {
+				AccountID *string `json:"account_id"`
+			}
+			if !readBody(w, r, &in) {
+				return
+			}
+			if in.AccountID != nil {
+				accountID = strings.TrimSpace(*in.AccountID)
+			}
+		}
+		ctx := model.WithJobTrigger(model.WithAPIKeyPrincipal(r.Context(), key.ID), "api")
+		j, err := p.s.EnqueueCronRun(ctx, key.ID, accountID, now)
+		switch {
+		case err == nil:
+			if p.engine != nil {
+				_ = p.engine.Schedule(ctx)
+			}
+			if loc, lErr := p.businessLocation(ctx); lErr == nil {
+				_ = p.s.RefreshEstimates(ctx, loc, now)
+			}
+			_ = p.s.EvaluateAlerts(ctx, now)
+			var jobID any
+			if j != nil {
+				jobID = j.ID
+			}
+			writeJSON(w, 202, map[string]any{"job_id": jobID, "scheduled": true, "triggered_at": now})
+		case errors.Is(err, store.ErrRefreshParameters):
+			fieldError(w, "account_id", "invalid_format")
+		default:
+			apiKeyScopeError(w, err, "cron:run")
+		}
+		return
+	}
 	if _, ok := p.access.checkTransport(w, r); !ok {
 		return
 	}

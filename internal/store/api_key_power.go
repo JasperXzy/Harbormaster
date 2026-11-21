@@ -7,7 +7,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/model"
 )
 
-func requireControlAPIKey(ctx context.Context, q queryRower, id string) error {
+func requireAPIKeyScope(ctx context.Context, q queryRower, id, want string) error {
 	key, err := readAPIKey(q.QueryRowContext(ctx, "SELECT "+keyColumns+" FROM api_key WHERE id=? AND revoked_at IS NULL", id))
 	if errors.Is(err, ErrNotFound) {
 		return ErrUnauthorized
@@ -16,11 +16,15 @@ func requireControlAPIKey(ctx context.Context, q queryRower, id string) error {
 		return err
 	}
 	for _, scope := range key.Scopes {
-		if scope == "instance:control" {
+		if scope == want {
 			return nil
 		}
 	}
 	return ErrAPIKeyScope
+}
+
+func requireControlAPIKey(ctx context.Context, q queryRower, id string) error {
+	return requireAPIKeyScope(ctx, q, id, "instance:control")
 }
 
 func (s *Store) APIKeyPowerJob(ctx context.Context, keyID, id string) (model.Job, error) {

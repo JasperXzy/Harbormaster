@@ -44,6 +44,7 @@ type productionPanel struct {
 	publicURL          string
 	agentReleaseDir    string
 	releaseVersions    agentrelease.VersionCache
+	releaseFeedURL     string
 }
 
 func NewProductionPanel(s *store.Store, c config.Config, engine *collect.Engine, databases ...*ipinfo.Manager) http.Handler {
@@ -73,6 +74,9 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.publicPasskeys(w, r, path, source) {
+		return
+	}
+	if p.publicBranding(w, r, path) {
 		return
 	}
 	if path == "/setup/status" && r.Method == "GET" {
@@ -106,6 +110,9 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.branding(w, r, path) {
+		return
+	}
+	if p.versionCenter(w, r, path) {
 		return
 	}
 	if p.releasePreview(w, r, path) || p.instanceRelease(w, r, path) {

@@ -19,6 +19,7 @@ type InstanceCPU struct {
 	Namespace     *string    `json:"namespace"`
 	Usage         CPUMetric  `json:"usage"`
 	CreditBalance *CPUMetric `json:"credit_balance"`
+	CreditMax24h  *float64   `json:"credit_max_24h,omitempty"`
 }
 
 func EmptyCPUMetric(name string, now time.Time) CPUMetric {

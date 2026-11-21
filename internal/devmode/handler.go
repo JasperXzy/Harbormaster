@@ -76,6 +76,14 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, map[string]bool{"password_enabled": true, "passkey_enabled": false})
 		return
 	}
+	if path == "/public/branding" && r.Method == "GET" {
+		respond(w, 200, model.PublicBranding{Name: model.DefaultBrandingName, HasLogo: false})
+		return
+	}
+	if path == "/public/branding/logo" && r.Method == "GET" {
+		failure(w, 404, "not_found")
+		return
+	}
 	if path == "/session" && r.Method == "POST" {
 		h.signIn(w, r)
 		return
@@ -155,6 +163,20 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch path {
 	case "/system/info":
 		respond(w, 200, object{"version": "dev-m0", "commit": "unknown", "built_at": nil, "latest_agent_version": "v0.2.0", "data_mode": "demo", "read_only": true, "instance_power_enabled": false, "instance_release_enabled": false})
+	case "/system/version-center":
+		agentVer := "v0.2.0"
+		respond(w, 200, model.VersionCenter{
+			ServerVersion:       "dev-m0",
+			ServerCommit:        "unknown",
+			ServerBuildTime:     "unknown",
+			BundledAgentVersion: &agentVer,
+			DeploymentMode:      "demo",
+			UpgradeCommands: model.UpgradeCommands{
+				DockerCompose: "docker pull ghcr.io/jasperxzy/harbormaster:latest && docker compose up -d hm-server",
+				BinaryHint:    "systemctl restart harbormaster-server",
+				AgentHint:     "在实例页生成新安装命令并执行升级",
+			},
+		})
 	case "/notify/quiet-hours":
 		respond(w, 200, model.QuietHours{Start: "23:00", End: "08:00", Timezone: h.loc.String()})
 	case "/notify/telegram/control":

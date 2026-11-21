@@ -106,6 +106,13 @@ func attachNetworkCapacity(snapshots []model.Snapshot, types collection, now tim
 		row := byType[text(i, "spec")]
 		capacity["rx_kbps"] = positiveNumber(row["InstanceBandwidthRx"])
 		capacity["tx_kbps"] = positiveNumber(row["InstanceBandwidthTx"])
+		if cpu, ok := i["cpu"].(*model.InstanceCPU); ok && cpu != nil {
+			if bc, ok := positiveNumber(row["BaselineCredit"]).(int64); ok && bc > 0 {
+				// 24h accumulated credit ceiling = BaselineCredit * 60 * 24 / 100.
+				max24h := float64(bc*1440) / 100.0
+				cpu.CreditMax24h = &max24h
+			}
+		}
 		// Unknown graph edges must never turn a member EIP's old limit into
 		// an effective public ceiling. Multiple exits have no singular ceiling.
 		switch i["billing_subject_kind"] {

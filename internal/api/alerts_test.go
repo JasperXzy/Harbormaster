@@ -15,7 +15,7 @@ func TestAlertRuleAPIUsesAvailableSourcesAndSharedOfflineTimeout(t *testing.T) {
 	var list struct {
 		Items []model.AlertRule `json:"items"`
 	}
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 14 {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &list) != nil || len(list.Items) != 17 {
 		t.Fatal(w.Code, w.Body)
 	}
 	hasUsage, hasForecast := false, false

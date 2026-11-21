@@ -115,3 +115,40 @@ func (p *productionPanel) branding(w http.ResponseWriter, r *http.Request, path 
 	brandingResponse(w, state, err)
 	return true
 }
+
+func (p *productionPanel) publicBranding(w http.ResponseWriter, r *http.Request, path string) bool {
+	if path == "/public/branding" {
+		if r.Method != http.MethodGet {
+			writeError(w, 405, "method_not_allowed")
+			return true
+		}
+		state, err := p.s.Branding(r.Context())
+		if err != nil {
+			businessError(w, err)
+			return true
+		}
+		writeJSON(w, 200, model.PublicBranding{
+			Name:      state.Name,
+			HasLogo:   state.Logo != nil,
+			UpdatedAt: state.UpdatedAt,
+		})
+		return true
+	}
+	if path == "/public/branding/logo" {
+		if r.Method != http.MethodGet {
+			writeError(w, 405, "method_not_allowed")
+			return true
+		}
+		raw, err := p.s.BrandingLogo(r.Context())
+		if err != nil {
+			businessError(w, err)
+		} else {
+			w.Header().Set("Content-Type", "image/png")
+			w.Header().Set("Content-Length", strconv.Itoa(len(raw)))
+			w.WriteHeader(200)
+			_, _ = w.Write(raw)
+		}
+		return true
+	}
+	return false
+}
