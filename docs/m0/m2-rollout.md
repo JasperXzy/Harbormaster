@@ -82,3 +82,13 @@ PASS
 - **热更新与在线核验（`2026-11-20T19:06Z`）**：
   - 后端镜像更新为 `harbormaster-server:m2-d2abde5`（版本 `0.2.1`），通过 `deploy/check-container.sh` 自检并平滑重建 `harbormaster-hm-server-1`（`running / healthy`）；前端原子更新 `index-CHa5Hang.js` 与 `index.html`。
   - 在线重跑 `permission_check` 后确认：`JasperXzy` 恢复 `sync_status="ok"`、`consecutive_failures=0`、`last_error=null`，6 项只读权限（含 `ecs_read`、`cms_read`、`bss_read`）全部 `passed`，`Ali_ShangHai` 快照 `renewal.last_error=null` 且保留到期时间 `2026-11-20T16:00:00Z`。
+
+## 7. `v0.2.2`（`a3291ee`）账号级国内/海外 CDT 流量记录开关
+
+- **功能内容（提交 `a3291ee`）**：
+  - `internal/model/account.go` & `docs/api/openapi.yaml`：`Account`、`AccountCreate`、`AccountUpdate` 新增 `track_mainland` 与 `track_overseas` 布尔开关（通过 `ScopeToggle` 保证存量 JSON 与零值默认均为 `true`，无需数据库表结构迁移）。
+  - `internal/store/*`、`internal/collect/engine.go`、`internal/cloud/aliyun/inventory.go`：关闭某范围后，自动在 `cdt_observation` 落库、`RefreshEstimates`（含清理残留 `traffic_estimate` 与活跃 `alert_state`）、`Quotas`、`AggregateQuotaStatuses`、`DailyTraffic`、`AggregateDailyTraffic`、CDT 告警、额度保护及小组件/Telegram `/quota` 全链路跳过该范围；两项均关闭时跳过该账号的周期性 `ListCdtInternetTraffic` 调度。
+  - `web/src/components/AccountForm.tsx`、`Settings.tsx`、`Overview.tsx`、`Traffic.tsx`、`lib/usage.ts`：账号添加/编辑弹窗新增「要记录的 CDT 流量范围」勾选胶囊，关闭时置灰对应免费额度输入框，总览剩余池汇总自动排除未开启该范围的账号。
+- **热更新与在线配置（`2026-11-21T04:41Z`）**：
+  - 后端平滑更新至 `harbormaster-server:m2-a3291ee`（版本 `0.2.2`，通过 `deploy/check-container.sh` 自检，`running / healthy`），前端原子发布 `index-BuJCOSvb.js` 与 `index.html`。
+  - 已在线将 `WinneMjw` 账号设为 `track_mainland=false, track_overseas=true` 并清除其残留国内估算记录。
