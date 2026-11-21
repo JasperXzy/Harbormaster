@@ -187,6 +187,9 @@ func (s *Store) EvaluateAutomation(ctx context.Context, policy model.ProtectionP
 	if err := s.evaluateKeepalive(ctx, policy, loc, now); err != nil {
 		return err
 	}
+	if err := s.evaluateFailovers(ctx, policy, loc, now); err != nil {
+		return err
+	}
 	return s.finishAutomationNotifications(ctx, now)
 }
 
@@ -460,6 +463,11 @@ func authorizeAutomationDispatch(ctx context.Context, tx *sql.Tx, p PowerOperati
 	var ruleRev int64
 	err := tx.QueryRowContext(ctx, "SELECT kind,rule_id,rule_revision FROM automation_power_job WHERE job_id=?", p.Job.ID).Scan(&kind, &ruleID, &ruleRev)
 	if errors.Is(err, sql.ErrNoRows) {
+		loc := copyLocation(ctx, tx)
+		handled, fErr := authorizeFailoverDispatchTx(ctx, tx, p, policy, loc, now)
+		if handled {
+			return fErr
+		}
 		return nil
 	}
 	if err != nil {
@@ -601,6 +609,9 @@ func (s *Store) finishAutomationNotifications(ctx context.Context, now time.Time
 		if _, err = tx.ExecContext(ctx, "UPDATE automation_power_job SET final_notified=1 WHERE job_id=?", v.job); err != nil {
 			return err
 		}
+	}
+	if err = finishFailoverNotificationsTx(ctx, tx, now); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

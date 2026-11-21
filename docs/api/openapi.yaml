@@ -387,6 +387,232 @@ paths:
         "422":
           $ref: "#/components/responses/ValidationFailed"
 
+  /automation/failovers:
+    get:
+      tags: [instances]
+      operationId: listFailoverRules
+      summary: 主备切换规则列表
+      responses:
+        "200":
+          description: 主备切换规则列表
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FailoverRule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: createFailoverRule
+      summary: 新建主备切换规则
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FailoverRuleInput"
+      responses:
+        "201":
+          description: 已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailoverRule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /automation/failovers/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: updateFailoverRule
+      summary: 修改主备切换规则
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FailoverRuleInput"
+      responses:
+        "200":
+          description: 已更新
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FailoverRule"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+    delete:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: deleteFailoverRule
+      summary: 删除主备切换规则
+      parameters:
+        - name: revision
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+      responses:
+        "204":
+          description: 已删除
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /instances/{instance_id}/change-eip:
+    parameters:
+      - $ref: "#/components/parameters/InstanceId"
+    post:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: rotateInstanceEIP
+      summary: 申请新弹性公网 IP 并替换当前受管 EIP
+      description: |
+        需生产开启 HM_EIP_MANAGE_ENABLED=true。严格保护：若实例当前绑定了非本面板创建的原有 EIP 或固定公网 IP，自动返回 409 unmanaged_eip_protected / eip_rotate_unsupported，绝不解绑或释放原有 EIP。
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_-]{16,64}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EIPRotateInput"
+      responses:
+        "202":
+          $ref: "#/components/responses/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          description: eip_manage_disabled or internal_error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /cloud/ecs-catalog:
+    get:
+      tags: [instances]
+      operationId: getECSCatalog
+      summary: 查询指定账号与地域的可用区、镜像、规格与 VPC/交换机选项
+      parameters:
+        - name: account_id
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: region_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ECS 创建目录数据
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ECSCatalog"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "502":
+          description: 阿里云接口查询失败
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /instances/create:
+    post:
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      tags: [instances]
+      operationId: createECSInstance
+      summary: 创建按量或抢占式 ECS 实例
+      description: 需生产开启 HM_INSTANCE_CREATE_ENABLED=true。不支持包年包月。
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9_-]{16,64}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ECSCreateInput"
+      responses:
+        "202":
+          $ref: "#/components/responses/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "503":
+          description: instance_create_disabled or internal_error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /instances/{instance_id}/intent-confirmation:
     parameters:
       - $ref: "#/components/parameters/InstanceId"
@@ -4667,6 +4893,12 @@ components:
         instance_release_enabled:
           type: boolean
           description: Whether this production serve process accepts release jobs and starts the separate worker. False by default and in demo; independent of power capability and not proof of cloud write permission.
+        eip_manage_enabled:
+          type: boolean
+          description: Whether this production serve process accepts EIP rotation jobs. False by default and in demo.
+        instance_create_enabled:
+          type: boolean
+          description: Whether this production serve process accepts ECS instance creation jobs. False by default and in demo.
         version:
           type: string
         commit:
@@ -7534,3 +7766,147 @@ components:
           $ref: "#/components/schemas/Agent"
         realtime_protection:
           $ref: "#/components/schemas/RealtimeProtection"
+
+    FailoverRuleInput:
+      type: object
+      additionalProperties: false
+      required: [name, enabled, dry_run, primary_instance_id, standby_instance_id]
+      properties:
+        revision:
+          type: integer
+          format: int64
+          minimum: 0
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        enabled:
+          type: boolean
+        dry_run:
+          type: boolean
+        primary_instance_id:
+          type: string
+        standby_instance_id:
+          type: string
+
+    FailoverRule:
+      type: object
+      required: [id, revision, name, enabled, dry_run, primary_instance_id, standby_instance_id, last_triggered_at, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        revision:
+          type: integer
+          format: int64
+        name:
+          type: string
+        enabled:
+          type: boolean
+        dry_run:
+          type: boolean
+        primary_instance_id:
+          type: string
+        standby_instance_id:
+          type: string
+        last_triggered_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    EIPRotateInput:
+      type: object
+      additionalProperties: false
+      properties:
+        bandwidth_mbps:
+          type: integer
+          minimum: 1
+          maximum: 2000
+          default: 100
+        internet_charge_type:
+          type: string
+          enum: [PayByTraffic, PayByBandwidth]
+          default: PayByTraffic
+        bandwidth_package_id:
+          type: string
+          maxLength: 128
+
+    ECSCatalog:
+      type: object
+      required: [account_id, region_id, zones, images, instance_types, vpcs, vswitches]
+      properties:
+        account_id:
+          type: string
+        region_id:
+          type: string
+        zones:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: {type: string}
+              name: {type: string}
+        images:
+          type: array
+          items:
+            type: object
+            required: [id, name]
+            properties:
+              id: {type: string}
+              name: {type: string}
+        instance_types:
+          type: array
+          items:
+            type: object
+            required: [id, cpu, memory_gib]
+            properties:
+              id: {type: string}
+              cpu: {type: integer}
+              memory_gib: {type: number}
+        vpcs:
+          type: array
+          items:
+            type: object
+            required: [id, name, cidr_block]
+            properties:
+              id: {type: string}
+              name: {type: string}
+              cidr_block: {type: string}
+        vswitches:
+          type: array
+          items:
+            type: object
+            required: [id, vpc_id, zone_id, name, cidr_block]
+            properties:
+              id: {type: string}
+              vpc_id: {type: string}
+              zone_id: {type: string}
+              name: {type: string}
+              cidr_block: {type: string}
+
+    ECSCreateInput:
+      type: object
+      additionalProperties: false
+      required: [account_id, region_id, zone_id, instance_name, instance_type, image_id, instance_charge_type, internet_charge_type, bandwidth_out_mbps, system_disk_gib, auto_create_network, confirm]
+      properties:
+        account_id: {type: string}
+        region_id: {type: string}
+        zone_id: {type: string}
+        instance_name: {type: string, minLength: 2, maxLength: 64}
+        instance_type: {type: string}
+        image_id: {type: string}
+        instance_charge_type: {type: string, enum: [PostPaid, Spot]}
+        internet_charge_type: {type: string, enum: [PayByTraffic, PayByBandwidth]}
+        bandwidth_out_mbps: {type: integer, minimum: 0, maximum: 200}
+        system_disk_gib: {type: integer, minimum: 20, maximum: 500}
+        auto_create_network: {type: boolean}
+        vpc_id: {type: string}
+        vswitch_id: {type: string}
+        security_group_id: {type: string}
+        confirm: {type: boolean}

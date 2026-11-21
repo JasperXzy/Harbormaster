@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/model"
+	"github.com/JasperXzy/harbormaster/internal/store"
 	"github.com/JasperXzy/harbormaster/internal/telegram"
 )
 
@@ -22,12 +24,13 @@ type BotTransport interface {
 }
 
 type BotRunner struct {
-	Channels     Channels
-	Bot          BotTransport
-	PowerEnabled bool
-	Timezone     string
-	Log          *slog.Logger
-	Now          func() time.Time
+	Channels         Channels
+	Bot              BotTransport
+	PowerEnabled     bool
+	EIPManageEnabled bool
+	Timezone         string
+	Log              *slog.Logger
+	Now              func() time.Time
 }
 
 func (b BotRunner) now() time.Time {
@@ -130,7 +133,7 @@ func (b BotRunner) handleCommand(ctx context.Context, dest telegram.Destination,
 	s := b.Channels.Store
 	switch cmd {
 	case "/help":
-		_, _ = b.Bot.ReplyToChat(ctx, dest, chatID, "⚪ Harbormaster 远程控制命令\n/status — 查看实例与采集状态\n/quota — 查看各账号流量与额度\n/start <实例名> — 开机（需二次确认）\n/stop <实例名> — 关机（需二次确认）\n/reboot <实例名> — 重启（需二次确认）", nil)
+		_, _ = b.Bot.ReplyToChat(ctx, dest, chatID, "⚪ Harbormaster 远程控制命令\n/status — 查看实例与采集状态\n/quota — 查看各账号流量与额度\n/start <实例名> — 开机（需二次确认）\n/stop <实例名> — 关机（需二次确认）\n/reboot <实例名> — 重启（需二次确认）\n/changeip <实例名> — 更换弹性公网 IP（需二次确认）", nil)
 	case "/status":
 		sum, err := s.WidgetSummary(ctx, b.PowerEnabled, b.Timezone, now)
 		if err != nil {
@@ -173,7 +176,39 @@ func (b BotRunner) handleCommand(ctx context.Context, dest telegram.Destination,
 		}
 		_, _ = b.Bot.ReplyToChat(ctx, dest, chatID, strings.Join(lines, "\n"), nil)
 	case "/changeip":
-		_, _ = b.Bot.ReplyToChat(ctx, dest, chatID, "⚪ 更换公网 IP 属于 M4 扩展功能，当前版本暂未启用。", nil)
+		if len(args) == 0 {
+			_, _ = b.Bot.ReplyToChat(ctx, dest, chatID, "用法：/changeip <实例名称或ID>", nil)
+			return
+		}
+		if !b.EIPManageEnabled {
+			_, _ = b.Bot.ReplyToChat(ctx, dest, chatID, "🟡 当前服务未开启弹性公网 IP 管理开关（HM_EIP_MANAGE_ENABLED=false），无法远程更换公网 IP。", nil)
+			return
+		}
+		matches, err := s.ResolveInstanceByQuery(ctx, args[0])
+		if err != nil || len(matches) == 0 {
+			_, _ = b.Bot.ReplyToChat(ctx, dest, chatID, "🟡 找不到匹配的实例："+args[0], nil)
+			return
+		}
+		if len(matches) > 1 {
+			names := []string{}
+			for _, m := range matches {
+				names = append(names, m.Name+" ("+m.ID+")")
+			}
+			_, _ = b.Bot.ReplyToChat(ctx, dest, chatID, "🟡 匹配到多台实例，请输入完整名称或 ID：\n"+strings.Join(names, "\n"), nil)
+			return
+		}
+		target := matches[0]
+		if target.Kind != "ecs" {
+			_, _ = b.Bot.ReplyToChat(ctx, dest, chatID, "🟡 仅阿里云 ECS 实例支持更换弹性公网 IP，轻量应用服务器不支持。", nil)
+			return
+		}
+		tok, err := s.CreateTelegramActionToken(ctx, uid, chatID, target.ID, "changeip", "", now)
+		if err != nil {
+			return
+		}
+		_, _ = b.Bot.ReplyToChat(ctx, dest, chatID, fmt.Sprintf("🟠 确认要为 %s 申请新弹性公网 IP 并替换当前受管 EIP 吗？（5 分钟内有效，非面板创建的原有 EIP 将被自动拒绝保护）", target.Name), [][]telegram.InlineButton{
+			{{Text: "🔄 确认更换 IP", CallbackData: "act:" + tok}, {Text: "取消", CallbackData: "cancel:" + tok}},
+		})
 	case "/start", "/stop", "/reboot":
 		if cmd == "/start" && len(args) == 0 {
 			b.handleCommand(ctx, dest, chatID, uid, "/help", nil, now)
@@ -262,11 +297,32 @@ func (b BotRunner) handleCallback(ctx context.Context, dest telegram.Destination
 			_ = b.Bot.AnswerCallback(ctx, dest, cb.ID, "确认码已失效或已使用")
 			return
 		}
+		sum := sha256.Sum256([]byte("tg-act|" + item.Token))
+		if item.Action == "changeip" {
+			if !b.EIPManageEnabled {
+				_ = b.Bot.AnswerCallback(ctx, dest, cb.ID, "EIP 管理开关未启用")
+				return
+			}
+			j, eErr := s.EnqueueEIPRotateJob(ctx, item.InstanceID, model.EIPRotateInput{BandwidthMbps: 100, InternetChargeType: "PayByTraffic"}, hex.EncodeToString(sum[:]), now)
+			if eErr != nil {
+				_ = b.Bot.AnswerCallback(ctx, dest, cb.ID, "提交失败")
+				msg := eErr.Error()
+				if errors.Is(eErr, store.ErrUnmanagedEIPProtected) {
+					msg = "当前绑定的 EIP 不是由本面板创建的，出于安全保护拒绝解绑与释放"
+				} else if errors.Is(eErr, store.ErrEIPRotateUnsupported) {
+					msg = "该实例带有固定公网 IP 或不支持弹性公网 IP 轮换"
+				}
+				_, _ = b.Bot.ReplyToChat(ctx, dest, chatID, "🔴 更换公网 IP 提交失败："+msg, nil)
+				return
+			}
+			_ = b.Bot.AnswerCallback(ctx, dest, cb.ID, "已提交更换")
+			_, _ = b.Bot.ReplyToChat(ctx, dest, chatID, fmt.Sprintf("🟢 已提交更换弹性公网 IP 任务（%s），后台正在执行。", j.ID), nil)
+			return
+		}
 		if !b.PowerEnabled {
 			_ = b.Bot.AnswerCallback(ctx, dest, cb.ID, "电源开关未启用")
 			return
 		}
-		sum := sha256.Sum256([]byte("tg-act|" + item.Token))
 		j, err := s.EnqueuePowerJob(ctx, item.InstanceID, item.Action, item.StopMode, hex.EncodeToString(sum[:]), now)
 		if err != nil {
 			_ = b.Bot.AnswerCallback(ctx, dest, cb.ID, "入队失败")

@@ -90,6 +90,9 @@ func (s *Store) PrepareRestoredCopy(ctx context.Context, now time.Time) (Restore
 	if err != nil {
 		return result, err
 	}
+	if _, err = tx.ExecContext(ctx, "UPDATE notification_channel_delivery SET delivery_status='failed',last_error_code='backup_restored',lease_owner=NULL,lease_until=0 WHERE delivery_status='pending'"); err != nil {
+		return result, err
+	}
 	if _, err = tx.ExecContext(ctx, "UPDATE trace_enrichment SET state='failed',updated_at=?,error_code='backup_restored',result_json=NULL,lease_owner=NULL,lease_until=0 WHERE state IN ('queued','running')", timestamp(now)); err != nil {
 		return result, err
 	}
@@ -123,6 +126,15 @@ func (s *Store) PrepareRestoredCopy(ctx context.Context, now time.Time) (Restore
 		return result, err
 	}
 	if _, err = tx.ExecContext(ctx, "UPDATE automation_power_job SET final_notified=1"); err != nil {
+		return result, err
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE failover_power_job SET final_notified=1"); err != nil {
+		return result, err
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE instance_eip_job SET step='failed' WHERE step NOT IN ('succeeded','failed')"); err != nil {
+		return result, err
+	}
+	if _, err = tx.ExecContext(ctx, "UPDATE instance_create_job SET step='failed' WHERE step NOT IN ('succeeded','failed')"); err != nil {
 		return result, err
 	}
 
@@ -263,23 +275,32 @@ func (s *Store) ReencryptCopy(ctx context.Context, from, to *security.Box) error
 			return err
 		}
 	}
-	var sealed []byte
-	err = tx.QueryRowContext(ctx, "SELECT ciphertext FROM telegram_channel WHERE id=1").Scan(&sealed)
-	if err == nil {
-		plain, openErr := from.Decrypt(sealed, model.TelegramCredentialOwner)
-		if openErr != nil {
-			return ErrMasterKey
-		}
-		rewrapped, sealErr := to.Encrypt(plain, model.TelegramCredentialOwner)
-		clear(plain)
-		if sealErr != nil {
-			return sealErr
-		}
-		if _, err = tx.ExecContext(ctx, "UPDATE telegram_channel SET ciphertext=? WHERE id=1", rewrapped); err != nil {
+	for _, ch := range []struct {
+		table string
+		owner string
+	}{
+		{"telegram_channel", model.TelegramCredentialOwner},
+		{"email_channel", model.EmailCredentialOwner},
+		{"webhook_channel", model.WebhookCredentialOwner},
+	} {
+		var sealed []byte
+		err = tx.QueryRowContext(ctx, "SELECT ciphertext FROM "+ch.table+" WHERE id=1").Scan(&sealed)
+		if err == nil {
+			plain, openErr := from.Decrypt(sealed, ch.owner)
+			if openErr != nil {
+				return ErrMasterKey
+			}
+			rewrapped, sealErr := to.Encrypt(plain, ch.owner)
+			clear(plain)
+			if sealErr != nil {
+				return sealErr
+			}
+			if _, err = tx.ExecContext(ctx, "UPDATE "+ch.table+" SET ciphertext=? WHERE id=1", rewrapped); err != nil {
+				return err
+			}
+		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		return err
 	}
 	if _, err = tx.ExecContext(ctx, "DELETE FROM session"); err != nil {
 		return err

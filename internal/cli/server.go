@@ -26,6 +26,7 @@ import (
 	"github.com/JasperXzy/harbormaster/internal/ipinfo"
 	"github.com/JasperXzy/harbormaster/internal/logging"
 	"github.com/JasperXzy/harbormaster/internal/m0"
+	"github.com/JasperXzy/harbormaster/internal/m4ops"
 	"github.com/JasperXzy/harbormaster/internal/model"
 	"github.com/JasperXzy/harbormaster/internal/notify"
 	"github.com/JasperXzy/harbormaster/internal/probes"
@@ -292,6 +293,8 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 	heartbeatRunner := newHeartbeatRunner(c, s, engine, listener, log)
 	c.InstancePowerEnabled = powerEngine != nil
 	c.InstanceReleaseEnabled = releaseEngine != nil
+	c.EIPManageEnabled = !c.Dev && c.EIPManageEnabled && engine != nil && engine.Box != nil
+	c.InstanceCreateEnabled = !c.Dev && c.InstanceCreateEnabled && engine != nil && engine.Box != nil
 	var panel http.Handler
 	var ipdb *ipinfo.Manager
 	if c.Dev {
@@ -332,7 +335,7 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 			}()
 			go func() {
 				defer workers.Done()
-				(notify.BotRunner{Channels: notify.Channels{Store: s, Box: engine.Box}, Bot: telegram.Sender{}, PowerEnabled: c.InstancePowerEnabled, Timezone: c.Timezone, Log: log}).Run(workerCtx)
+				(notify.BotRunner{Channels: notify.Channels{Store: s, Box: engine.Box}, Bot: telegram.Sender{}, PowerEnabled: c.InstancePowerEnabled, EIPManageEnabled: c.EIPManageEnabled, Timezone: c.Timezone, Log: log}).Run(workerCtx)
 			}()
 		}
 		go func() {
@@ -364,12 +367,26 @@ func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect
 			workers.Add(1)
 			go func() { defer workers.Done(); releaseEngine.Run(workerCtx) }()
 		}
+		if c.EIPManageEnabled || c.InstanceCreateEnabled {
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				(m4ops.Runner{
+					Store:                 s,
+					Box:                   engine.Box,
+					Cloud:                 aliyun.NewM4Client(nil, 200*time.Millisecond),
+					EIPManageEnabled:      c.EIPManageEnabled,
+					InstanceCreateEnabled: c.InstanceCreateEnabled,
+					Log:                   log,
+				}).Run(workerCtx)
+			}()
+		}
 		defer func() { cancel(); workers.Wait() }()
 	}
 	h := &http.Server{Handler: api.NewHandler(s, panel, frontend), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10, BaseContext: func(net.Listener) context.Context { return ctx }}
 	done := make(chan error, 1)
 	go func() { done <- h.Serve(listener) }()
-	log.Info("server_started", "listen", listener.Addr().String(), "development", c.Dev, "frontend", c.Frontend, "cloud_writes", powerEngine != nil || releaseEngine != nil)
+	log.Info("server_started", "listen", listener.Addr().String(), "development", c.Dev, "frontend", c.Frontend, "cloud_writes", powerEngine != nil || releaseEngine != nil || c.EIPManageEnabled || c.InstanceCreateEnabled)
 	select {
 	case err = <-done:
 		if !errors.Is(err, http.ErrServerClosed) {

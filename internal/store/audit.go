@@ -101,6 +101,12 @@ var auditActionSummary = map[string]string{
 	"webhook_channel_updated":            "修改 Webhook 通知渠道",
 	"daily_report_updated":               "修改每日流量简报设置",
 	"daily_report_sent":                  "手动发送每日流量简报",
+	"failover_rule_saved":                "保存主备切换规则",
+	"failover_rule_deleted":              "删除主备切换规则",
+	"instance_eip_rotate_requested":      "提交更换弹性公网 IP 任务",
+	"instance_eip_rotate_finished":       "更换弹性公网 IP 任务结束",
+	"instance_create_requested":          "提交创建 ECS 实例任务",
+	"instance_create_finished":           "创建 ECS 实例任务结束",
 }
 
 func auditSummaryText(e model.AuditEntry) string {

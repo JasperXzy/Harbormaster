@@ -133,6 +133,52 @@ func (p *productionPanel) automation(w http.ResponseWriter, r *http.Request, pat
 		} else {
 			writeJSON(w, 200, saved)
 		}
+	case path == "/automation/failovers" && r.Method == "GET":
+		items, err := p.s.FailoverRules(r.Context())
+		if err != nil {
+			automationError(w, err)
+		} else {
+			writeJSON(w, 200, map[string]any{"items": items})
+		}
+	case path == "/automation/failovers" && r.Method == "POST" || strings.HasPrefix(path, "/automation/failovers/") && r.Method == "PUT":
+		id := ""
+		if path != "/automation/failovers" {
+			id = strings.TrimPrefix(path, "/automation/failovers/")
+			if id == "" || strings.Contains(id, "/") {
+				writeError(w, 404, "not_found")
+				return true
+			}
+		}
+		var in model.FailoverRuleInput
+		if !readBody(w, r, &in) {
+			return true
+		}
+		if fields := in.Validate(); len(fields) > 0 {
+			writeJSON(w, 422, map[string]any{"error": map[string]any{"code": "validation_failed", "message": "validation_failed", "fields": fields}})
+			return true
+		}
+		saved, err := p.s.SaveFailoverRule(r.Context(), id, in, p.now().UTC())
+		if err != nil {
+			automationError(w, err)
+		} else {
+			status := 200
+			if id == "" {
+				status = 201
+			}
+			writeJSON(w, status, saved)
+		}
+	case strings.HasPrefix(path, "/automation/failovers/") && r.Method == "DELETE":
+		id := strings.TrimPrefix(path, "/automation/failovers/")
+		rev, err := strconv.ParseInt(r.URL.Query().Get("revision"), 10, 64)
+		if err != nil || rev < 1 {
+			fieldError(w, "revision", "invalid_format")
+			return true
+		}
+		if err = p.s.DeleteFailoverRule(r.Context(), id, rev, p.now().UTC()); err != nil {
+			automationError(w, err)
+		} else {
+			w.WriteHeader(204)
+		}
 	default:
 		writeError(w, 405, "method_not_allowed")
 	}

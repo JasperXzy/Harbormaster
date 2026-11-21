@@ -129,6 +129,22 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/change-eip") {
+		if r.Method != "POST" {
+			failure(w, 405, "method_not_allowed")
+		} else {
+			failure(w, 503, "eip_manage_disabled")
+		}
+		return
+	}
+	if path == "/instances/create" {
+		if r.Method != "POST" {
+			failure(w, 405, "method_not_allowed")
+		} else {
+			failure(w, 503, "instance_create_disabled")
+		}
+		return
+	}
 	if h.systemEvents(w, r, path) {
 		return
 	}
@@ -162,7 +178,7 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch path {
 	case "/system/info":
-		respond(w, 200, object{"version": "dev-m0", "commit": "unknown", "built_at": nil, "latest_agent_version": "v0.2.0", "data_mode": "demo", "read_only": true, "instance_power_enabled": false, "instance_release_enabled": false})
+		respond(w, 200, object{"version": "dev-m0", "commit": "unknown", "built_at": nil, "latest_agent_version": "v0.2.0", "data_mode": "demo", "read_only": true, "instance_power_enabled": false, "instance_release_enabled": false, "eip_manage_enabled": false, "instance_create_enabled": false})
 	case "/system/version-center":
 		agentVer := "v0.2.0"
 		respond(w, 200, model.VersionCenter{
@@ -199,6 +215,18 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, model.DefaultKeepaliveSettings())
 	case "/automation/monthly-reset":
 		respond(w, 200, model.DefaultMonthlyResetSettings())
+	case "/automation/failovers":
+		respond(w, 200, object{"items": []model.FailoverRule{}})
+	case "/cloud/ecs-catalog":
+		respond(w, 200, model.ECSCatalog{
+			AccountID:     r.URL.Query().Get("account_id"),
+			RegionID:      r.URL.Query().Get("region_id"),
+			Zones:         []model.ECSCatalogZone{{ID: "ap-southeast-1a", Name: "新加坡 可用区 A"}},
+			Images:        []model.ECSCatalogImage{{ID: "debian_12_x64", Name: "Debian 12.8 64位"}},
+			InstanceTypes: []model.ECSCatalogInstanceType{{ID: "ecs.e-c1m1.large", CPU: 2, MemoryGiB: 2}},
+			VPCs:          []model.ECSCatalogVPC{{ID: "vpc-demo", Name: "default-vpc", CidrBlock: "172.16.0.0/12"}},
+			VSwitches:     []model.ECSCatalogVSwitch{{ID: "vsw-demo", VPCID: "vpc-demo", ZoneID: "ap-southeast-1a", Name: "default-vsw", CidrBlock: "172.16.0.0/24"}},
+		})
 	case "/settings":
 		respond(w, 200, object{"business_timezone": h.loc.String(), "retention": model.DefaultRetentionSettings(30), "collection": object{"cdt_poll_interval_seconds": 300, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": 300, "system_event_poll_interval_seconds": 60}})
 	case "/regions":

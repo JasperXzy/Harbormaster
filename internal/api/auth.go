@@ -19,6 +19,7 @@ import (
 
 	"github.com/JasperXzy/harbormaster/internal/agentrelease"
 	"github.com/JasperXzy/harbormaster/internal/buildinfo"
+	"github.com/JasperXzy/harbormaster/internal/cloud/aliyun"
 	"github.com/JasperXzy/harbormaster/internal/collect"
 	"github.com/JasperXzy/harbormaster/internal/config"
 	"github.com/JasperXzy/harbormaster/internal/ipinfo"
@@ -28,29 +29,35 @@ import (
 )
 
 type productionPanel struct {
-	protectionPolicy   model.ProtectionPolicy
-	probeRetentionDays int
-	ipdb               *ipinfo.Manager
-	powerEnabled       bool
-	releaseEnabled     bool
-	s                  *store.Store
-	access             panelAccess
-	timezone           string
-	ttl                time.Duration
-	hashing            sync.Mutex
-	backups            sync.Mutex
-	now                func() time.Time
-	engine             *collect.Engine
-	publicURL          string
-	agentReleaseDir    string
-	releaseVersions    agentrelease.VersionCache
-	releaseFeedURL     string
+	protectionPolicy      model.ProtectionPolicy
+	probeRetentionDays    int
+	ipdb                  *ipinfo.Manager
+	powerEnabled          bool
+	releaseEnabled        bool
+	eipManageEnabled      bool
+	instanceCreateEnabled bool
+	m4Cloud               aliyun.M4Cloud
+	s                     *store.Store
+	access                panelAccess
+	timezone              string
+	ttl                   time.Duration
+	hashing               sync.Mutex
+	backups               sync.Mutex
+	now                   func() time.Time
+	engine                *collect.Engine
+	publicURL             string
+	agentReleaseDir       string
+	releaseVersions       agentrelease.VersionCache
+	releaseFeedURL        string
 }
 
 func NewProductionPanel(s *store.Store, c config.Config, engine *collect.Engine, databases ...*ipinfo.Manager) http.Handler {
 	p := &productionPanel{powerEnabled: !c.Dev && c.InstancePowerEnabled && engine != nil && engine.Box != nil, s: s, access: newPanelAccess(c), timezone: c.Timezone, ttl: time.Duration(c.SessionTTLSeconds) * time.Second, now: time.Now, engine: engine, publicURL: c.PublicURL, agentReleaseDir: c.AgentReleaseDir}
 	p.protectionPolicy = model.ProtectionPolicy{PowerEnabled: p.powerEnabled, SelfKnown: c.ServerNotManaged || c.ServerInstanceID != "", SelfInstanceID: c.ServerInstanceID, Timezone: c.Timezone}
 	p.releaseEnabled = !c.Dev && c.InstanceReleaseEnabled && engine != nil && engine.Box != nil
+	p.eipManageEnabled = !c.Dev && c.EIPManageEnabled && engine != nil && engine.Box != nil
+	p.instanceCreateEnabled = !c.Dev && c.InstanceCreateEnabled && engine != nil && engine.Box != nil
+	p.m4Cloud = aliyun.NewM4Client(nil, 200*time.Millisecond)
 	p.probeRetentionDays = c.ProbeHistoryRetentionDays
 	if p.probeRetentionDays == 0 {
 		p.probeRetentionDays = 30
@@ -115,7 +122,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if p.versionCenter(w, r, path) {
 		return
 	}
-	if p.releasePreview(w, r, path) || p.instanceRelease(w, r, path) {
+	if p.releasePreview(w, r, path) || p.instanceRelease(w, r, path) || p.m4Ops(w, r, path) {
 		return
 	}
 	if p.idleResources(w, r, path) {
@@ -153,7 +160,7 @@ func (p *productionPanel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if t, err := time.Parse(time.RFC3339, buildinfo.BuildTime); err == nil {
 			builtAt = t.UTC().Format(time.RFC3339)
 		}
-		writeJSON(w, 200, map[string]any{"version": buildinfo.Version, "commit": buildinfo.Commit, "built_at": builtAt, "latest_agent_version": p.releaseVersions.Get(p.agentReleaseDir, p.now()), "data_mode": "live", "read_only": p.engine == nil, "instance_power_enabled": p.powerEnabled, "instance_release_enabled": p.releaseEnabled})
+		writeJSON(w, 200, map[string]any{"version": buildinfo.Version, "commit": buildinfo.Commit, "built_at": builtAt, "latest_agent_version": p.releaseVersions.Get(p.agentReleaseDir, p.now()), "data_mode": "live", "read_only": p.engine == nil, "instance_power_enabled": p.powerEnabled, "instance_release_enabled": p.releaseEnabled, "eip_manage_enabled": p.eipManageEnabled, "instance_create_enabled": p.instanceCreateEnabled})
 	case "/events":
 		p.events(w, r)
 	case "/accounts", "/instances", "/traffic/quotas", "/traffic/daily", "/traffic/billing-subjects", "/bandwidth-packages", "/regions", "/notify/telegram", "/alert-rules", "/notifications":
