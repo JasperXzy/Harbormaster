@@ -1,4 +1,10 @@
 PRAGMA defer_foreign_keys=ON;
+CREATE INDEX IF NOT EXISTS idx_job_change_job_id ON job_change(job_id);
+CREATE INDEX IF NOT EXISTS idx_cdt_observation_job_id ON cdt_observation(job_id);
+CREATE INDEX IF NOT EXISTS idx_notification_job_id ON notification(job_id);
+CREATE INDEX IF NOT EXISTS idx_instance_intent_job_id ON instance_intent(job_id);
+CREATE INDEX IF NOT EXISTS idx_probe_plan_run_fk_job_id ON probe_plan_run(job_id);
+CREATE INDEX IF NOT EXISTS idx_instance_release_request_job_id ON instance_release_request(job_id);
 CREATE TEMP TABLE m4_migration_jobs AS SELECT * FROM job;
 DROP TABLE job;
 CREATE TABLE job (
@@ -104,6 +110,7 @@ CREATE TABLE notification_channel_delivery (
  PRIMARY KEY(notification_id, channel)
 );
 CREATE INDEX idx_notif_chan_claimable ON notification_channel_delivery(delivery_status, available_at, lease_until);
+CREATE INDEX idx_notif_chan_job_id ON notification_channel_delivery(job_id);
 
 CREATE TABLE daily_report_settings (
  id INTEGER PRIMARY KEY CHECK(id=1),
