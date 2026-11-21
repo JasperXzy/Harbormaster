@@ -4598,6 +4598,8 @@ components:
         - access_key_id_masked
         - region_ids
         - enabled
+        - track_mainland
+        - track_overseas
         - quota_mainland_bytes
         - quota_overseas_bytes
         - reset_day
@@ -4626,6 +4628,12 @@ components:
             type: string
         enabled:
           type: boolean
+        track_mainland:
+          type: boolean
+          description: 是否记录并计算该账号中国内地 CDT 流量与额度（默认 true）。
+        track_overseas:
+          type: boolean
+          description: 是否记录并计算该账号非中国内地（海外）CDT 流量与额度（默认 true）。
         quota_mainland_bytes:
           type: integer
           format: int64
@@ -4685,6 +4693,10 @@ components:
           type: array
           items:
             type: string
+        track_mainland:
+          type: boolean
+        track_overseas:
+          type: boolean
         quota_mainland_bytes:
           type: integer
           format: int64
@@ -4714,6 +4726,10 @@ components:
           items:
             type: string
         enabled:
+          type: boolean
+        track_mainland:
+          type: boolean
+        track_overseas:
           type: boolean
         quota_mainland_bytes:
           type: integer

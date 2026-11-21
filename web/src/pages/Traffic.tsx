@@ -152,7 +152,11 @@ function DailyCell({ day, scope }: { day: DailyTraffic["days"][number]; scope: Q
 function DailySection({ accountId, quotas }: { accountId: string; quotas: QuotaStatus[] }) {
   const daily = useResource(() => api.dailyTraffic(accountId), [accountId], { refreshMs: 30_000 });
   const [view, setView] = useState<View>("chart");
-  const [scope, setScope] = useState<QuotaScope>("overseas");
+  const [scope, setScope] = useState<QuotaScope>(() => (quotas.length === 1 ? quotas[0].scope : "overseas"));
+  const activeScope: QuotaScope = quotas.length === 1 && quotas[0].scope !== scope ? quotas[0].scope : scope;
+  const scopeOpts: [QuotaScope, string][] = (["overseas", "mainland"] as const)
+    .filter((s) => !quotas.length || quotas.some((q) => q.scope === s))
+    .map((s) => [s, s === "overseas" ? "海外" : "国内"]);
   return <div className="grid g2">
     <Card title="每天用了多少" sub="按计费对象汇总，保留缺口" right={<SegToggle label="显示方式" value={view} onChange={setView} options={VIEW} />}>
       <Async res={daily} lines={6}>{(d) => <>
@@ -164,8 +168,8 @@ function DailySection({ accountId, quotas }: { accountId: string; quotas: QuotaS
         <p className="note">按 {d.data_timezone} 划分日期。官方日数据优先；没有时使用采集估算。部分覆盖的值只表示已采集小计，不是全天总量；空缺不按 0 处理。跨边界样本按上界分配，可能重复计入相邻时段。{d.updated_at && `最近汇总：${stamp(d.updated_at)}。`}</p>
       </>}</Async>
     </Card>
-    <Card title="累计与预测" sub="近 7 天中的完整日样本，今天不参加日均" right={<SegToggle label="范围" value={scope} onChange={setScope} options={[["overseas", "海外"], ["mainland", "国内"]]} />}>
-      <Async res={daily} lines={6}>{(d) => { const q = quotas.find((x) => x.scope === scope); return !d.days.length || !q ? <EmptyState title="还没有足够的数据画图" /> : <Cumulative d={d} q={q} scope={scope} />; }}</Async>
+    <Card title="累计与预测" sub="近 7 天中的完整日样本，今天不参加日均" right={scopeOpts.length > 1 ? <SegToggle label="范围" value={activeScope} onChange={setScope} options={scopeOpts} /> : undefined}>
+      <Async res={daily} lines={6}>{(d) => { const q = quotas.find((x) => x.scope === activeScope); return !d.days.length || !q ? <EmptyState title="还没有足够的数据画图" /> : <Cumulative d={d} q={q} scope={activeScope} />; }}</Async>
     </Card>
   </div>;
 }

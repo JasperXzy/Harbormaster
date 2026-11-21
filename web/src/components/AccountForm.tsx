@@ -46,6 +46,8 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
   const [akSecret, setAkSecret] = useState("");
   const [regions, setRegions] = useState<string[]>(account?.region_ids ?? []);
   const [all, setAll] = useState<Region[]>();
+  const [trackOverseas, setTrackOverseas] = useState(account?.track_overseas ?? true);
+  const [trackMainland, setTrackMainland] = useState(account?.track_mainland ?? true);
   const [mainland, setMainland] = useState(String((account?.quota_mainland_bytes ?? 20 * GB) / GB));
   const [overseas, setOverseas] = useState(String((account?.quota_overseas_bytes ?? 200 * GB) / GB));
   const [thresholds, setThresholds] = useState((account?.alert_thresholds_percent ?? [80, 90, 95]).join(", "));
@@ -82,6 +84,7 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
     if (Object.keys(local).length) return;
     const common = {
       name: name.trim(), region_ids: regions,
+      track_mainland: trackMainland, track_overseas: trackOverseas,
       quota_mainland_bytes: Math.round(Number(mainland) * GB), quota_overseas_bytes: Math.round(Number(overseas) * GB),
       reset_day: 1 as const, alert_thresholds_percent: [...th].sort((a, b) => a - b),
     };
@@ -155,6 +158,20 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
         {fe("region_ids")}
         <div className="field-help">只勾选你有机器的地域，扫描会更快。</div>
       </div>
+      <div>
+        <span className="lbl" style={{ display: "block", fontSize: "var(--fs-md)", color: "var(--text-2)", marginBottom: 4 }}>要记录的 CDT 流量范围</span>
+        <div className="checks">
+          <label className={`check ${trackOverseas ? "on" : ""}`}>
+            <input type="checkbox" checked={trackOverseas} onChange={(e) => setTrackOverseas(e.target.checked)} />
+            海外流量（非中国内地）
+          </label>
+          <label className={`check ${trackMainland ? "on" : ""}`}>
+            <input type="checkbox" checked={trackMainland} onChange={(e) => setTrackMainland(e.target.checked)} />
+            国内流量（中国内地）
+          </label>
+        </div>
+        <div className="field-help">如果某范围没有走 CDT 计费的机器（例如只有轻量固定带宽），取消勾选即可不记录该范围流量，也不会提示覆盖不完整。</div>
+      </div>
       <details open={edit}>
         <summary className="sub" style={{ cursor: "pointer" }}>免费额度与告警（一般不用改）</summary>
         <div className="stack" style={{ marginTop: 12 }}>
@@ -162,12 +179,12 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
           <div className="grid g2" style={{ gap: 12 }}>
             <div>
               <label className="lbl" htmlFor="acc-qo">海外免费额度（GB / 月）</label>
-              <input id="acc-qo" type="number" min="0" value={overseas} onChange={(e) => setOverseas(e.target.value)} aria-invalid={!!fields.quota_overseas_bytes} />
+              <input id="acc-qo" type="number" min="0" value={overseas} disabled={!trackOverseas} onChange={(e) => setOverseas(e.target.value)} aria-invalid={!!fields.quota_overseas_bytes} />
               {fe("quota_overseas_bytes")}
             </div>
             <div>
               <label className="lbl" htmlFor="acc-qm">国内免费额度（GB / 月）</label>
-              <input id="acc-qm" type="number" min="0" value={mainland} onChange={(e) => setMainland(e.target.value)} aria-invalid={!!fields.quota_mainland_bytes} />
+              <input id="acc-qm" type="number" min="0" value={mainland} disabled={!trackMainland} onChange={(e) => setMainland(e.target.value)} aria-invalid={!!fields.quota_mainland_bytes} />
               {fe("quota_mainland_bytes")}
             </div>
           </div>

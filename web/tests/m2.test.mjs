@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { computeOverageCost, parseTiers, tiersToText } from "../src/lib/pricing.ts";
 import { ALERT_RULE, DECISION_OUTCOME, JOB_TRIGGER, STOP_MODE } from "../src/api/labels.ts";
 import { GB } from "../src/lib/format.ts";
+import { quotaPool } from "../src/lib/usage.ts";
 
 const pricing = {
   revision: 1,
@@ -54,4 +55,20 @@ test("M2 labels cover all alert rules, automation triggers, stop modes, and guar
   assert.equal(JOB_TRIGGER.schedule, "自动策略 / 定时");
   assert.equal(JOB_TRIGGER.telegram, "Telegram");
   assert.ok(DECISION_OUTCOME.source_unqualified);
+});
+
+test("quotaPool excludes accounts that disable tracking for a scope", () => {
+  const now = new Date().toISOString();
+  const accounts = [
+    { id: "a1", name: "JasperXzy", enabled: true, track_mainland: true, track_overseas: true, quota_mainland_bytes: 20 * GB, quota_overseas_bytes: 200 * GB },
+    { id: "a2", name: "WinneMjw", enabled: true, track_mainland: false, track_overseas: true, quota_mainland_bytes: 20 * GB, quota_overseas_bytes: 200 * GB },
+  ];
+  const quotas = [
+    { account_id: "a1", scope: "mainland", quota_bytes: 20 * GB, estimation: { status: "ready", mode: "unverified", calculated_at: now, estimated_bytes: 2 * GB, increment_bytes: 0, worst_case_bytes: 0, known_increment_bytes: 0, lag_window_seconds: 3600, qualified_for_execution: false, reasons: [] } },
+  ];
+  const pool = quotaPool(quotas, accounts, "mainland");
+  assert.equal(pool.disabledAll, false);
+  assert.equal(pool.quota, 20 * GB);
+  assert.equal(pool.left, 18 * GB);
+  assert.equal(pool.best, "JasperXzy");
 });

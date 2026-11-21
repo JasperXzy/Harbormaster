@@ -32,7 +32,7 @@ func cdtUsageAndForecastAlertsTx(ctx context.Context, tx *sql.Tx, rules map[stri
 
 	observations := []alertObservation{}
 	for _, a := range accounts {
-		for _, scope := range []string{"mainland", "overseas"} {
+		for _, scope := range a.TrackedScopes() {
 			quota := a.QuotaMainland
 			column := "mainland_bytes"
 			if scope == "overseas" {

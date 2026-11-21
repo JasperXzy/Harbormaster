@@ -59,6 +59,12 @@ func (s *Store) RefreshEstimates(ctx context.Context, loc *time.Location, now ti
 				return e
 			}
 			for _, scope := range []string{"mainland", "overseas"} {
+				if !current.TracksScope(scope) {
+					if _, e = tx.ExecContext(ctx, "DELETE FROM traffic_estimate WHERE account_id=? AND scope=?", a.ID, scope); e != nil {
+						return e
+					}
+					continue
+				}
 				if e = reconcileCDT(ctx, tx, current, scope, settings, loc, now); e != nil {
 					return e
 				}

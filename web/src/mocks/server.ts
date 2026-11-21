@@ -333,6 +333,7 @@ export async function handle(method: string, fullPath: string, body: unknown, _h
     if (c.access_key_id === "wrong") return fail(422, "access_key_invalid");
     const account: T.Account = {
       id: "acc_" + Math.random().toString(36).slice(2, 8), name: c.name, site: c.site, access_key_id_masked: c.access_key_id.slice(0, 6) + "…" + c.access_key_id.slice(-3), region_ids: c.region_ids, enabled: true,
+      track_mainland: c.track_mainland ?? true, track_overseas: c.track_overseas ?? true,
       quota_mainland_bytes: c.quota_mainland_bytes ?? 20 * GB, quota_overseas_bytes: c.quota_overseas_bytes ?? 200 * GB, reset_day: c.reset_day ?? 1, alert_thresholds_percent: c.alert_thresholds_percent ?? [80, 90, 95],
       sync_status: "never_synced", last_sync_at: null, last_error: null, consecutive_failures: 0, permission_check: null, instance_count: 0, updated_at: iso(),
     };
@@ -523,7 +524,13 @@ export async function handle(method: string, fullPath: string, body: unknown, _h
 
   /* 流量与计费单价 */
   const byAccount = <X extends { account_id: string }>(xs: X[]) => xs.filter((x) => !q.get("account_id") || x.account_id === q.get("account_id"));
-  if (is("GET", "/traffic/quotas")) return ok({ items: q.get("account_id") === "all" ? mockQuotaTotals(db) : byAccount(db.quotas) });
+  if (is("GET", "/traffic/quotas")) {
+    const tracked = db.quotas.filter((qt) => {
+      const acc = db.accounts.find((a) => a.id === qt.account_id);
+      return acc ? (qt.scope === "mainland" ? acc.track_mainland !== false : acc.track_overseas !== false) : true;
+    });
+    return ok({ items: q.get("account_id") === "all" ? mockQuotaTotals(db) : byAccount(tracked) });
+  }
   if (is("GET", "/traffic/pricing")) return ok(db.pricing);
   if (is("PUT", "/traffic/pricing")) {
     const next = b as unknown as T.TrafficPricing;

@@ -748,7 +748,14 @@ function Accounts() {
                   <div className="field-error" style={{ margin: 0 }}>{errorText(a.last_error.code)}已连续失败 {a.consecutive_failures} 次{a.last_sync_at ? `，数据停在 ${stamp(a.last_sync_at)}` : ""}。</div>
                 )}
                 <div className="sub">
-                  免费额度 海外 {gb(a.quota_overseas_bytes, 0)} + 国内 {gb(a.quota_mainland_bytes, 0)} · 用到 {a.alert_thresholds_percent.join(" / ")}% 时通知 · 扫描 {a.region_ids.map(regionName).join("、")}
+                  {a.track_overseas !== false && a.track_mainland !== false
+                    ? <>免费额度 海外 {gb(a.quota_overseas_bytes, 0)} + 国内 {gb(a.quota_mainland_bytes, 0)} · 用到 {a.alert_thresholds_percent.join(" / ")}% 时通知</>
+                    : a.track_overseas !== false
+                      ? <>免费额度 海外 {gb(a.quota_overseas_bytes, 0)}（不记录国内） · 用到 {a.alert_thresholds_percent.join(" / ")}% 时通知</>
+                      : a.track_mainland !== false
+                        ? <>免费额度 国内 {gb(a.quota_mainland_bytes, 0)}（不记录海外） · 用到 {a.alert_thresholds_percent.join(" / ")}% 时通知</>
+                        : <>不记录 CDT 流量</>}{" "}
+                  · 扫描 {a.region_ids.map(regionName).join("、")}
                 </div>
                 <PermissionList check={a.permission_check} pending={checking.has(a.id)} />
               </div>

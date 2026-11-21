@@ -15,11 +15,14 @@ func protectionSource(ctx context.Context, tx *sql.Tx, r model.ProtectionRule, a
 	if r.Scope == "swas" {
 		return swasProtectionSource(ctx, tx, r, a, settings, loc, now)
 	}
-	v, err := calculateEstimate(ctx, tx, a, r.Scope, settings, loc, now)
 	quota := a.QuotaMainland
 	if r.Scope == "overseas" {
 		quota = a.QuotaOverseas
 	}
+	if !a.TracksScope(r.Scope) {
+		return model.TrafficEstimation{Mode: "unverified", Status: "unavailable", To: now, CalculatedAt: now, LagSeconds: settings.LagSeconds, Reasons: []string{"scope_disabled"}}, nil, quota, nil
+	}
+	v, err := calculateEstimate(ctx, tx, a, r.Scope, settings, loc, now)
 	if err != nil {
 		return v, nil, quota, err
 	}

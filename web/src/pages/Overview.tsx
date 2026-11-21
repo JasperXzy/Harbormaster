@@ -62,14 +62,18 @@ export function Overview() {
   const unprotected = insts.filter((i) => i.realtime_protection === "unprotected" && i.status === "running" && i.agent.status === "not_installed");
   const pendingConfirms = insts.filter((i) => i.pending_intent_confirmation);
   const activeSims = sims.data ?? [];
-  const usageUnknown = qs.some((q) => !quotaView(q).usable);
-  const officialDown = qs.some((q) => q.official_status === "unavailable");
+  const trackedQuotas = qs.filter((q) => {
+    const a = accs.find((x) => x.id === q.account_id);
+    return a && a.enabled && (q.scope === "mainland" ? a.track_mainland !== false : a.track_overseas !== false);
+  });
+  const usageUnknown = trackedQuotas.some((q) => !quotaView(q).usable);
+  const officialDown = trackedQuotas.some((q) => q.official_status === "unavailable");
   const po = pool(qs, accs, "overseas"), pm = pool(qs, accs, "mainland");
   const tiles: [string, string, string, string][] = [
     ["阿里云账号", String(accs.length), "个", failing.length ? `${failing.length} 个连接失败` : "全部连接正常"],
     ["实例", String(insts.length), "台", `运行中 ${running} · 其他 ${insts.length - running}`],
-    [po.unverified ? "海外估算剩余" : "海外免费流量还剩", gb(po.left).replace(" GB", ""), po.left === null ? "" : "GB", po.left === null ? "有账号的用量还没确认，先不合计" : po.over ? `已超出 ${gb(po.over)}` : `共 ${gb(po.quota, 0)}${po.best ? ` · 剩得最多：${po.best}` : ""}`],
-    [pm.unverified ? "国内估算剩余" : "国内免费流量还剩", gb(pm.left).replace(" GB", ""), pm.left === null ? "" : "GB", pm.left === null ? "有账号的用量还没确认，先不合计" : pm.over ? `已超出 ${gb(pm.over)}` : `共 ${gb(pm.quota, 0)}${pm.best ? ` · 剩得最多：${pm.best}` : ""}`],
+    [po.unverified ? "海外估算剩余" : "海外免费流量还剩", gb(po.left).replace(" GB", ""), po.left === null ? "" : "GB", po.disabledAll ? "未开启海外流量记录" : po.left === null ? "有账号的用量还没确认，先不合计" : po.over ? `已超出 ${gb(po.over)}` : `共 ${gb(po.quota, 0)}${po.best ? ` · 剩得最多：${po.best}` : ""}`],
+    [pm.unverified ? "国内估算剩余" : "国内免费流量还剩", gb(pm.left).replace(" GB", ""), pm.left === null ? "" : "GB", pm.disabledAll ? "未开启国内流量记录" : pm.left === null ? "有账号的用量还没确认，先不合计" : pm.over ? `已超出 ${gb(pm.over)}` : `共 ${gb(pm.quota, 0)}${pm.best ? ` · 剩得最多：${pm.best}` : ""}`],
   ];
 
   return (
@@ -182,7 +186,7 @@ function AccountCard({ account, quotas, instances }: { account: Account; quotas:
           <QuotaUnknownNote quotas={quotas} />
         </>
       ) : (
-        <EmptyState title="还没有流量数据">{account.sync_status === "never_synced" ? "正在第一次读取这个账号，通常一两分钟内完成。" : "这个账号暂时没有可显示的额度数据。"}</EmptyState>
+        <EmptyState title="还没有流量数据">{account.track_mainland === false && account.track_overseas === false ? "已关闭该账号的国内与海外 CDT 流量记录。" : account.sync_status === "never_synced" ? "正在第一次读取这个账号，通常一两分钟内完成。" : "这个账号暂时没有可显示的额度数据。"}</EmptyState>
       )}
     </Card>
   );

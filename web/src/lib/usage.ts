@@ -35,6 +35,7 @@ const ESTIMATION_REASON: Record<string, string> = {
   samples_not_past_basis: "正在等待基准之后的采集数据",
   metering_rule_unknown: "部分出口的计量规则尚不明确",
   scope_unknown: "部分出口的国内／海外范围尚不明确",
+  scope_disabled: "该范围已设为不记录流量",
 };
 export function quotaMissingReasons(q: QuotaStatus) {
   const labels = quotaView(q).reasons.map((r) => ESTIMATION_REASON[r]).filter(Boolean);
@@ -42,15 +43,16 @@ export function quotaMissingReasons(q: QuotaStatus) {
 }
 
 export function quotaPool(quotas: QuotaStatus[], accounts: Account[], scope: QuotaScope) {
-  const enabled = accounts.filter((a) => a.enabled);
+  const enabled = accounts.filter((a) => a.enabled && (scope === "mainland" ? a.track_mainland !== false : a.track_overseas !== false));
+  if (!enabled.length) return { quota: 0, left: null, over: null, best: undefined, unverified: false, disabledAll: true };
   const rows = enabled.map((a) => quotas.find((q) => q.account_id === a.id && q.scope === scope));
   const quota = enabled.reduce((sum, a) => sum + (scope === "mainland" ? a.quota_mainland_bytes : a.quota_overseas_bytes), 0);
   const unverified = rows.some((q) => q && quotaView(q).unverified);
-  if (rows.some((q) => !q || !quotaView(q).usable)) return { quota, left: null, over: null, best: undefined, unverified };
+  if (rows.some((q) => !q || !quotaView(q).usable)) return { quota, left: null, over: null, best: undefined, unverified, disabledAll: false };
   const known = rows.map((q) => ({ q: q!, used: quotaView(q!).value! }));
   const used = known.reduce((sum, r) => sum + r.used, 0);
   const best = [...known].sort((a, b) => (b.q.quota_bytes - b.used) - (a.q.quota_bytes - a.used))[0];
-  return { quota, left: Math.max(0, quota - used), over: Math.max(0, used - quota), best: enabled.find((a) => a.id === best?.q.account_id)?.name, unverified };
+  return { quota, left: Math.max(0, quota - used), over: Math.max(0, used - quota), best: enabled.find((a) => a.id === best?.q.account_id)?.name, unverified, disabledAll: false };
 }
 
 export function cumulativeBytes(days: DailyTraffic["days"], scope: QuotaScope): (number | null)[] {

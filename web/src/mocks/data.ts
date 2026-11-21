@@ -164,7 +164,7 @@ export function buildDb(scene: Scene, now = Date.now()): Db {
     items: PERMS.map((key) => ({ key, result: over[key] ?? "passed" })),
   });
   const acct = (id: string, name: string, masked: string, regions: string[], n: number, p: T.PermissionCheck): T.Account => ({
-    id, name, site: "china", access_key_id_masked: masked, region_ids: regions, enabled: true,
+    id, name, site: "china", access_key_id_masked: masked, region_ids: regions, enabled: true, track_mainland: true, track_overseas: true,
     quota_mainland_bytes: 20 * GB, quota_overseas_bytes: 200 * GB, reset_day: 1, alert_thresholds_percent: [80, 90, 95],
     sync_status: "ok", last_sync_at: iso(scanAt), last_error: null, consecutive_failures: 0, permission_check: p, instance_count: n, updated_at: iso(scanAt),
   });

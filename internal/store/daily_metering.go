@@ -276,6 +276,10 @@ func calculateDaily(ctx context.Context, tx *sql.Tx, a model.Account, date strin
 	end := day.AddDate(0, 0, 1)
 	v := model.DailyTrafficDay{Date: date, Scopes: map[string]model.DailyScope{}}
 	for _, scope := range []string{"mainland", "overseas"} {
+		if !a.TracksScope(scope) {
+			v.Scopes[scope] = model.DailyScope{From: day.UTC(), Until: earlierTime(end, now).UTC(), Source: "unavailable", Status: "unavailable", Reasons: []string{"scope_disabled"}}
+			continue
+		}
 		x, err := calculateDailyScope(ctx, tx, a, scope, day, end, now, loc)
 		if err != nil {
 			return v, err

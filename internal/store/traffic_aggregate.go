@@ -38,7 +38,16 @@ func AggregateQuotaStatuses(accounts []model.Account, rows []model.QuotaStatus, 
 	}
 	start, end := ReferenceCycle(now, loc)
 	for _, scope := range []string{"mainland", "overseas"} {
-		m := &model.TrafficAggregation{AccountCount: len(enabled)}
+		scoped := []model.Account{}
+		for _, a := range enabled {
+			if a.TracksScope(scope) {
+				scoped = append(scoped, a)
+			}
+		}
+		if len(scoped) == 0 {
+			continue
+		}
+		m := &model.TrafficAggregation{AccountCount: len(scoped)}
 		q := model.QuotaStatus{Aggregation: m, AccountID: AggregateAccountID, Scope: scope, CycleStart: start, CycleEnd: end, Thresholds: []int{}, OfficialStatus: "unavailable", OfficialQuality: "inferred", ForecastStatus: "insufficient_data"}
 		e := &model.TrafficEstimation{Mode: "unverified", Status: "incomplete", To: now, CalculatedAt: now, Reasons: []string{"account_aggregation", "independent_account_windows"}}
 		var fetched, updated, calculated, to time.Time
@@ -46,7 +55,7 @@ func AggregateQuotaStatuses(accounts []model.Account, rows []model.QuotaStatus, 
 		worstKnown := true
 		incrementKnown := true
 		fs := []*model.TrafficForecast{}
-		for _, a := range enabled {
+		for _, a := range scoped {
 			quota := a.QuotaMainland
 			if scope == "overseas" {
 				quota = a.QuotaOverseas
@@ -153,7 +162,7 @@ func AggregateQuotaStatuses(accounts []model.Account, rows []model.QuotaStatus, 
 			q.Forecast = f
 			q.ForecastStatus = "ready"
 		}
-		q.OverageCost = aggregateQuotaOverageCost(enabled, rows, scope, start, end)
+		q.OverageCost = aggregateQuotaOverageCost(scoped, rows, scope, start, end)
 		out = append(out, q)
 	}
 	return out, nil
@@ -257,15 +266,27 @@ func AggregateDailyTraffic(accounts []model.Account, rows []model.DailyTraffic, 
 	if allUpdated && !updated.IsZero() {
 		v.UpdatedAt = &updated
 	}
-	anyData, allComplete := false, true
+	anyData, allComplete, hasTrackedScope := false, true, false
 	for day := start.In(loc); !day.After(now); day = day.AddDate(0, 0, 1) {
 		date := day.Format("2006-01-02")
 		d := model.DailyTrafficDay{Date: date, Scopes: map[string]model.DailyScope{}}
 		for _, scope := range []string{"mainland", "overseas"} {
+			scoped := []model.Account{}
+			for _, a := range enabled {
+				if a.TracksScope(scope) {
+					scoped = append(scoped, a)
+				}
+			}
 			x := model.DailyScope{From: day.UTC(), Until: earlierTime(day.AddDate(0, 0, 1), now).UTC(), Source: "unavailable", Status: "unavailable", Reasons: []string{"account_aggregation"}}
+			if len(scoped) == 0 {
+				x.Reasons = append(x.Reasons, "scope_disabled")
+				d.Scopes[scope] = x
+				continue
+			}
+			hasTrackedScope = true
 			complete := true
 			source := ""
-			for _, a := range enabled {
+			for _, a := range scoped {
 				var s model.DailyScope
 				found := false
 				for _, r := range byID[a.ID].Days {
@@ -322,17 +343,26 @@ func AggregateDailyTraffic(accounts []model.Account, rows []model.DailyTraffic, 
 		}
 		v.Days = append(v.Days, d)
 	}
-	if allComplete {
+	if hasTrackedScope && allComplete {
 		v.SourceStatus = "available"
 	} else if anyData {
 		v.SourceStatus = "partial"
 	}
 	for _, scope := range []string{"mainland", "overseas"} {
+		scoped := []model.Account{}
+		for _, a := range enabled {
+			if a.TracksScope(scope) {
+				scoped = append(scoped, a)
+			}
+		}
+		if len(scoped) == 0 {
+			continue
+		}
 		for day := start.In(loc); !day.After(now); day = day.AddDate(0, 0, 1) {
 			date := day.Format("2006-01-02")
 			p := model.UsagePoint{Date: date}
 			count := 0
-			for _, a := range enabled {
+			for _, a := range scoped {
 				for _, x := range byID[a.ID].OfficialPoints[scope] {
 					if x.Date == date {
 						count++
@@ -344,7 +374,7 @@ func AggregateDailyTraffic(accounts []model.Account, rows []model.DailyTraffic, 
 					}
 				}
 			}
-			if count == len(enabled) {
+			if count == len(scoped) {
 				v.OfficialPoints[scope] = append(v.OfficialPoints[scope], p)
 			}
 		}

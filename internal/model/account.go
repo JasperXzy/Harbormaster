@@ -3,12 +3,40 @@ package model
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"regexp"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 )
+
+// ScopeToggle defaults to enabled (true) at its Go zero value and when omitted
+// in stored JSON, while marshaling and unmarshaling as a plain JSON boolean.
+type ScopeToggle struct {
+	disabled bool
+}
+
+func Toggle(enabled bool) ScopeToggle { return ScopeToggle{disabled: !enabled} }
+func (t ScopeToggle) Enabled() bool   { return !t.disabled }
+func (t ScopeToggle) MarshalJSON() ([]byte, error) {
+	if t.disabled {
+		return []byte("false"), nil
+	}
+	return []byte("true"), nil
+}
+func (t *ScopeToggle) UnmarshalJSON(b []byte) error {
+	var v *bool
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	if v == nil {
+		t.disabled = false
+		return nil
+	}
+	t.disabled = !*v
+	return nil
+}
 
 type APIError struct {
 	Code    string `json:"code"`
@@ -32,6 +60,8 @@ type Account struct {
 	AccessKeyIDMasked   string           `json:"access_key_id_masked"`
 	RegionIDs           []string         `json:"region_ids"`
 	Enabled             bool             `json:"enabled"`
+	TrackMainland       ScopeToggle      `json:"track_mainland"`
+	TrackOverseas       ScopeToggle      `json:"track_overseas"`
 	QuotaMainland       int64            `json:"quota_mainland_bytes"`
 	QuotaOverseas       int64            `json:"quota_overseas_bytes"`
 	ResetDay            int              `json:"reset_day"`
@@ -47,6 +77,27 @@ type Account struct {
 	CredentialVersion   int64            `json:"-"`
 }
 
+func (a Account) TracksScope(scope string) bool {
+	switch scope {
+	case "mainland":
+		return a.TrackMainland.Enabled()
+	case "overseas":
+		return a.TrackOverseas.Enabled()
+	default:
+		return false
+	}
+}
+func (a Account) TrackedScopes() []string {
+	out := make([]string, 0, 2)
+	if a.TrackMainland.Enabled() {
+		out = append(out, "mainland")
+	}
+	if a.TrackOverseas.Enabled() {
+		out = append(out, "overseas")
+	}
+	return out
+}
+
 // Credential is never an API response or job payload. Both fields are encrypted.
 type Credential struct {
 	AccessKeyID     string `json:"access_key_id"`
@@ -57,6 +108,8 @@ type AccountCreate struct {
 	Site string `json:"site"`
 	Credential
 	RegionIDs     []string `json:"region_ids"`
+	TrackMainland *bool    `json:"track_mainland"`
+	TrackOverseas *bool    `json:"track_overseas"`
 	QuotaMainland *int64   `json:"quota_mainland_bytes"`
 	QuotaOverseas *int64   `json:"quota_overseas_bytes"`
 	ResetDay      *int     `json:"reset_day"`
@@ -68,6 +121,8 @@ type AccountUpdate struct {
 	AccessKeySecret *string   `json:"access_key_secret"`
 	RegionIDs       *[]string `json:"region_ids"`
 	Enabled         *bool     `json:"enabled"`
+	TrackMainland   *bool     `json:"track_mainland"`
+	TrackOverseas   *bool     `json:"track_overseas"`
 	QuotaMainland   *int64    `json:"quota_mainland_bytes"`
 	QuotaOverseas   *int64    `json:"quota_overseas_bytes"`
 	ResetDay        *int      `json:"reset_day"`
@@ -134,6 +189,12 @@ func (u AccountUpdate) Apply(a *Account) {
 	}
 	if u.Enabled != nil {
 		a.Enabled = *u.Enabled
+	}
+	if u.TrackMainland != nil {
+		a.TrackMainland = Toggle(*u.TrackMainland)
+	}
+	if u.TrackOverseas != nil {
+		a.TrackOverseas = Toggle(*u.TrackOverseas)
 	}
 	if u.QuotaMainland != nil {
 		a.QuotaMainland = *u.QuotaMainland

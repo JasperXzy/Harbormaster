@@ -179,6 +179,22 @@ func TestAccountAPIUsesEncryptedTasksAndSnapshotReads(t *testing.T) {
 	if w.Code != 200 {
 		t.Fatal("reenable failed")
 	}
+	w = panelRequest(p, "PATCH", "/accounts/"+created.Account.ID, map[string]any{"track_mainland": false}, cookie, csrf)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"track_mainland":false`) || !strings.Contains(w.Body.String(), `"track_overseas":true`) {
+		t.Fatal("track_mainland disable failed", w.Code, w.Body.String())
+	}
+	w = panelRequest(p, "GET", "/traffic/quotas?account_id="+created.Account.ID, nil, cookie, "")
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &quotas) != nil || len(quotas.Items) != 1 || quotas.Items[0].Scope != "overseas" {
+		t.Fatal("disabled mainland scope still returned in account quotas", w.Body.String())
+	}
+	w = panelRequest(p, "GET", "/traffic/quotas?account_id=all", nil, cookie, "")
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &quotas) != nil || len(quotas.Items) != 1 || quotas.Items[0].Scope != "overseas" {
+		t.Fatal("disabled mainland scope still returned in aggregate quotas", w.Body.String())
+	}
+	w = panelRequest(p, "PATCH", "/accounts/"+created.Account.ID, map[string]any{"track_mainland": true}, cookie, csrf)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"track_mainland":true`) {
+		t.Fatal("track_mainland reenable failed", w.Code, w.Body.String())
+	}
 	w = panelRequest(p, "POST", "/instances/refresh", map[string]any{"account_id": created.Account.ID}, cookie, csrf)
 	if w.Code != 202 {
 		t.Fatal("refresh not asynchronous")

@@ -12,6 +12,24 @@ import (
 )
 
 func saveObservation(ctx context.Context, tx *sql.Tx, j model.Job, a model.Account, o model.CDTObservation) error {
+	if len(a.TrackedScopes()) == 0 {
+		return nil
+	}
+	if !a.TracksScope("mainland") {
+		o.Mainland = nil
+	}
+	if !a.TracksScope("overseas") {
+		o.Overseas = nil
+	}
+	if len(o.Details) > 0 && (!a.TracksScope("mainland") || !a.TracksScope("overseas")) {
+		filtered := make([]model.CDTRegion, 0, len(o.Details))
+		for _, d := range o.Details {
+			if a.TracksScope(model.CDTRegionScope(d.Region)) {
+				filtered = append(filtered, d)
+			}
+		}
+		o.Details = filtered
+	}
 	var code any
 	if o.Error != nil {
 		code = o.Error.Code
@@ -62,7 +80,7 @@ func (s *Store) ScheduleCDT(ctx context.Context, interval time.Duration, now tim
 		return err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, `SELECT account_id FROM account_settings a WHERE enabled=1 AND next_cdt_at<=?
+	rows, err := tx.QueryContext(ctx, `SELECT account_id,config_json FROM account_settings a WHERE enabled=1 AND next_cdt_at<=?
  AND NOT EXISTS(SELECT 1 FROM cdt_observation o WHERE o.account_id=a.account_id AND o.credential_version=a.credential_version AND o.fetched_at>?)
  ORDER BY account_id`, now.Unix(), timestamp(now.Add(-interval)))
 	if err != nil {
@@ -70,10 +88,14 @@ func (s *Store) ScheduleCDT(ctx context.Context, interval time.Duration, now tim
 	}
 	ids := []string{}
 	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
+		var id, cfgRaw string
+		if err = rows.Scan(&id, &cfgRaw); err != nil {
 			rows.Close()
 			return err
+		}
+		var a model.Account
+		if json.Unmarshal([]byte(cfgRaw), &a) == nil && len(a.TrackedScopes()) == 0 {
+			continue
 		}
 		ids = append(ids, id)
 	}
@@ -128,6 +150,10 @@ func readObservation(row rowScanner) (model.CDTObservation, error) {
 	return o, nil
 }
 func (s *Store) Observations(ctx context.Context, account string, before int64, limit int) ([]model.CDTObservation, bool, error) {
+	acc, accErr := loadAccount(ctx, s.DB, account)
+	if accErr != nil && !errors.Is(accErr, ErrNotFound) {
+		return nil, false, accErr
+	}
 	rows, err := s.DB.QueryContext(ctx, "SELECT "+observationColumns+" FROM cdt_observation WHERE account_id=? AND (?=0 OR id<?) ORDER BY id DESC LIMIT ?", account, before, before, limit+1)
 	if err != nil {
 		return nil, false, err
@@ -138,6 +164,14 @@ func (s *Store) Observations(ctx context.Context, account string, before int64, 
 		o, err := readObservation(rows)
 		if err != nil {
 			return nil, false, err
+		}
+		if accErr == nil {
+			if !acc.TracksScope("mainland") {
+				o.Mainland = nil
+			}
+			if !acc.TracksScope("overseas") {
+				o.Overseas = nil
+			}
 		}
 		items = append(items, o)
 	}
@@ -165,12 +199,16 @@ func (s *Store) Quotas(ctx context.Context, accounts []model.Account, loc *time.
 	}
 	items := []model.QuotaStatus{}
 	for _, a := range accounts {
+		scopes := a.TrackedScopes()
+		if len(scopes) == 0 {
+			continue
+		}
 		latest, err := readObservation(s.DB.QueryRowContext(ctx, "SELECT "+observationColumns+" FROM cdt_observation WHERE account_id=? AND credential_version=? ORDER BY id DESC LIMIT 1", a.ID, a.CredentialVersion))
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return nil, err
 		}
 		hasLatest := err == nil
-		for _, scope := range []string{"mainland", "overseas"} {
+		for _, scope := range scopes {
 			quota := a.QuotaMainland
 			column := "mainland_bytes"
 			if scope == "overseas" {

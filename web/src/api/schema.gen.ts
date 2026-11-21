@@ -2776,6 +2776,10 @@ export interface components {
             /** @description 要扫描的地域。 */
             region_ids: string[];
             enabled: boolean;
+            /** @description 是否记录并计算该账号中国内地 CDT 流量与额度（默认 true）。 */
+            track_mainland: boolean;
+            /** @description 是否记录并计算该账号非中国内地（海外）CDT 流量与额度（默认 true）。 */
+            track_overseas: boolean;
             /** Format: int64 */
             quota_mainland_bytes: number;
             /** Format: int64 */
@@ -2806,6 +2810,8 @@ export interface components {
             access_key_id: string;
             access_key_secret: string;
             region_ids: string[];
+            track_mainland?: boolean;
+            track_overseas?: boolean;
             /** Format: int64 */
             quota_mainland_bytes?: number;
             /** Format: int64 */
@@ -2821,6 +2827,8 @@ export interface components {
             access_key_secret?: string;
             region_ids?: string[];
             enabled?: boolean;
+            track_mainland?: boolean;
+            track_overseas?: boolean;
             /** Format: int64 */
             quota_mainland_bytes?: number;
             /** Format: int64 */

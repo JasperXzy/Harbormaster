@@ -228,14 +228,25 @@ func (s *Store) DailyTraffic(ctx context.Context, a model.Account, loc *time.Loc
 		return v, err
 	}
 	v.UpdatedAt = updated
-	anyData, allComplete := false, true
+	anyData, allComplete := false, len(a.TrackedScopes()) > 0
 	for day := start.In(loc); !day.After(midnight); day = day.AddDate(0, 0, 1) {
 		date := day.Format("2006-01-02")
 		d, ok := rows[date]
 		if !ok {
 			d = missingDaily(date, loc, now)
 		}
-		for _, x := range d.Scopes {
+		if !a.TracksScope("mainland") {
+			d.Mainland = nil
+			d.Scopes["mainland"] = model.DailyScope{From: day.UTC(), Until: earlierTime(day.AddDate(0, 0, 1), now).UTC(), Source: "unavailable", Status: "unavailable", Reasons: []string{"scope_disabled"}}
+		}
+		if !a.TracksScope("overseas") {
+			d.Overseas = nil
+			d.Scopes["overseas"] = model.DailyScope{From: day.UTC(), Until: earlierTime(day.AddDate(0, 0, 1), now).UTC(), Source: "unavailable", Status: "unavailable", Reasons: []string{"scope_disabled"}}
+		}
+		for scope, x := range d.Scopes {
+			if !a.TracksScope(scope) {
+				continue
+			}
 			anyData = anyData || x.HasData
 			allComplete = allComplete && x.Status == "complete"
 		}
@@ -245,6 +256,9 @@ func (s *Store) DailyTraffic(ctx context.Context, a model.Account, loc *time.Loc
 		v.SourceStatus = "available"
 	} else if anyData {
 		v.SourceStatus = "partial"
+	}
+	if len(a.TrackedScopes()) == 0 {
+		return v, nil
 	}
 	// One capture-time point per date, not a difference of cumulative readings.
 	r, err := s.DB.QueryContext(ctx, "SELECT "+observationColumns+" FROM cdt_observation WHERE account_id=? AND credential_version=? AND fetched_at>=? AND fetched_at<? AND error_code IS NULL ORDER BY fetched_at,id", a.ID, a.CredentialVersion, timestamp(start), timestamp(end))
@@ -259,7 +273,7 @@ func (s *Store) DailyTraffic(ctx context.Context, a model.Account, loc *time.Loc
 		}
 		date := o.FetchedAt.In(loc).Format("2006-01-02")
 		for scope, value := range map[string]*int64{"mainland": o.Mainland, "overseas": o.Overseas} {
-			if value == nil {
+			if value == nil || !a.TracksScope(scope) {
 				continue
 			}
 			p := model.UsagePoint{At: o.FetchedAt, Date: date, Bytes: *value}

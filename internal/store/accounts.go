@@ -110,7 +110,7 @@ func (s *Store) CreateAccount(ctx context.Context, a model.Account, cipher []byt
 	if err != nil {
 		return j, err
 	}
-	if err = appendAudit(ctx, tx, auditEvent{Action: "account_created", TargetType: "account", TargetID: a.ID, AccountID: a.ID, Details: model.AuditDetails{ChangedFields: []string{"name", "site", "region_ids", "enabled", "quota_mainland_bytes", "quota_overseas_bytes", "reset_day", "alert_thresholds_percent"}, CredentialsChanged: true, Revision: new(int64(1))}}, a.UpdatedAt); err != nil {
+	if err = appendAudit(ctx, tx, auditEvent{Action: "account_created", TargetType: "account", TargetID: a.ID, AccountID: a.ID, Details: model.AuditDetails{ChangedFields: []string{"name", "site", "region_ids", "enabled", "track_mainland", "track_overseas", "quota_mainland_bytes", "quota_overseas_bytes", "reset_day", "alert_thresholds_percent"}, CredentialsChanged: true, Revision: new(int64(1))}}, a.UpdatedAt); err != nil {
 		return j, err
 	}
 	return j, tx.Commit()
@@ -170,6 +170,16 @@ func (s *Store) UpdateAccount(ctx context.Context, id string, change func(*model
 			return a, err
 		}
 	}
+	for _, scope := range []string{"mainland", "overseas"} {
+		if !a.TracksScope(scope) {
+			if _, err = tx.ExecContext(ctx, "DELETE FROM traffic_estimate WHERE account_id=? AND scope=?", id, scope); err != nil {
+				return a, err
+			}
+			if _, err = tx.ExecContext(ctx, "UPDATE alert_state SET active=0,changed_at=? WHERE account_id=? AND target_id=? AND active=1", timestamp(now), id, id+":"+scope); err != nil {
+				return a, err
+			}
+		}
+	}
 	if a.Enabled {
 		if _, err = tx.ExecContext(ctx, "UPDATE account_settings SET next_cdt_at=0,next_system_event_at=0 WHERE account_id=?", id); err != nil {
 			return a, err
@@ -188,7 +198,9 @@ func (s *Store) UpdateAccount(ctx context.Context, id string, change func(*model
 	}
 	details := auditDiff(
 		auditChange{"name", previous.Name, a.Name}, auditChange{"region_ids", previous.RegionIDs, a.RegionIDs},
-		auditChange{"enabled", previous.Enabled, a.Enabled}, auditChange{"quota_mainland_bytes", previous.QuotaMainland, a.QuotaMainland},
+		auditChange{"enabled", previous.Enabled, a.Enabled},
+		auditChange{"track_mainland", previous.TrackMainland, a.TrackMainland}, auditChange{"track_overseas", previous.TrackOverseas, a.TrackOverseas},
+		auditChange{"quota_mainland_bytes", previous.QuotaMainland, a.QuotaMainland},
 		auditChange{"quota_overseas_bytes", previous.QuotaOverseas, a.QuotaOverseas}, auditChange{"reset_day", previous.ResetDay, a.ResetDay},
 		auditChange{"alert_thresholds_percent", previous.Thresholds, a.Thresholds})
 	details.CredentialsChanged = cipher != nil
