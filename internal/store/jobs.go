@@ -61,7 +61,7 @@ func readJob(row rowScanner) (model.Job, error) {
 	return j, nil
 }
 func enqueueJob(ctx context.Context, tx *sql.Tx, kind, scope string, ids []string, now time.Time) (model.Job, error) {
-	if kind != "refresh" && kind != "permission_check" && kind != "telegram_test" && kind != "heartbeat_test" {
+	if kind != "refresh" && kind != "permission_check" && kind != "telegram_test" && kind != "email_test" && kind != "webhook_test" && kind != "heartbeat_test" {
 		return model.Job{}, errors.New("unsupported_job_type")
 	}
 	j, err := readJob(tx.QueryRowContext(ctx, "SELECT "+jobColumns+" FROM job WHERE type=? AND scope=? AND status IN ('queued','running')", kind, scope))

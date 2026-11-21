@@ -33,10 +33,12 @@ type InteractiveSender interface {
 }
 
 type Dispatcher struct {
-	Channels Channels
-	Sender   Sender
-	Log      *slog.Logger
-	Now      func() time.Time
+	Channels      Channels
+	Sender        Sender
+	EmailSender   EmailSender
+	WebhookSender WebhookSender
+	Log           *slog.Logger
+	Now           func() time.Time
 }
 
 func (d Dispatcher) now() time.Time {
@@ -69,6 +71,14 @@ func (d Dispatcher) Run(ctx context.Context) {
 
 // RunOne sends at most one notification. It reports whether a lease was taken.
 func (d Dispatcher) RunOne(ctx context.Context) (bool, error) {
+	worked, err := d.runTelegramOne(ctx)
+	if worked || err != nil {
+		return worked, err
+	}
+	return d.runExtraChannelOne(ctx)
+}
+
+func (d Dispatcher) runTelegramOne(ctx context.Context) (bool, error) {
 	if ctx.Err() != nil {
 		return false, ctx.Err()
 	}

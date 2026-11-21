@@ -3420,6 +3420,165 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /notify/email:
+    get:
+      tags: [notify]
+      operationId: getEmailChannel
+      summary: 邮件（SMTP）通知渠道配置
+      responses:
+        "200":
+          description: SMTP 渠道状态（密码永不返回）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailChannel"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [notify]
+      operationId: updateEmailChannel
+      summary: 保存邮件（SMTP）通知渠道配置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailChannelUpdate"
+      responses:
+        "200":
+          description: 已保存的 SMTP 渠道状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmailChannel"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /notify/email/test:
+    post:
+      tags: [notify]
+      operationId: testEmailChannel
+      summary: 发送测试邮件
+      responses:
+        "202":
+          $ref: "#/components/responses/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /notify/webhook:
+    get:
+      tags: [notify]
+      operationId: getWebhookChannel
+      summary: Webhook 通知渠道配置
+      responses:
+        "200":
+          description: Webhook 渠道状态（签名密钥与自定义请求头值永不返回）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookChannel"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [notify]
+      operationId: updateWebhookChannel
+      summary: 保存 Webhook 通知渠道配置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WebhookChannelUpdate"
+      responses:
+        "200":
+          description: 已保存的 Webhook 渠道状态
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookChannel"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /notify/webhook/test:
+    post:
+      tags: [notify]
+      operationId: testWebhookChannel
+      summary: 发送测试 Webhook 请求
+      responses:
+        "202":
+          $ref: "#/components/responses/JobAccepted"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /notify/daily-report:
+    get:
+      tags: [notify]
+      operationId: getDailyReport
+      summary: 每日流量简报配置
+      responses:
+        "200":
+          description: 日报配置
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyReportSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [notify]
+      operationId: updateDailyReport
+      summary: 保存每日流量简报配置
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DailyReportSettingsUpdate"
+      responses:
+        "200":
+          description: 已保存的日报配置
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyReportSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+
+  /notify/daily-report/send:
+    post:
+      tags: [notify]
+      operationId: sendDailyReportNow
+      summary: 立即生成并投递一份当前流量简报
+      responses:
+        "202":
+          description: 已进入通知发件箱
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [notification_id]
+                properties:
+                  notification_id:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /notify/telegram/control:
     get:
       tags: [notify]
@@ -4272,7 +4431,7 @@ components:
     JobType:
       type: string
       description: network_probe 包含固定测速及线路追踪任务。
-      enum: [refresh, permission_check, telegram_test, instance_power, instance_release, heartbeat_test, network_probe]
+      enum: [refresh, permission_check, telegram_test, email_test, webhook_test, instance_power, instance_release, instance_eip_rotate, instance_create, heartbeat_test, network_probe]
 
     JobStatus:
       type: string
@@ -7036,6 +7195,96 @@ components:
               overage_cost: {type: string, nullable: true}
               forecast_cycle_end_bytes: {type: integer, format: int64, nullable: true}
               updated_at: {type: string, format: date-time, nullable: true}
+
+    EmailChannel:
+      type: object
+      required: [enabled, status, host, port, tls_mode, username, password_set, from_address, to_addresses, subject_prefix, last_success_at, last_error, revision]
+      properties:
+        enabled: {type: boolean}
+        status: {type: string, enum: [ok, failing, not_tested, not_configured]}
+        host: {type: string}
+        port: {type: integer}
+        tls_mode: {type: string, enum: [starttls, implicit_tls, none]}
+        username: {type: string}
+        password_set: {type: boolean}
+        from_address: {type: string}
+        to_addresses:
+          type: array
+          items: {type: string}
+        subject_prefix: {type: string}
+        last_success_at: {type: string, format: date-time, nullable: true}
+        last_error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code: {type: string}
+            message: {type: string}
+        revision: {type: integer, format: int64}
+
+    EmailChannelUpdate:
+      type: object
+      required: [enabled, host, port, tls_mode, from_address, to_addresses]
+      properties:
+        enabled: {type: boolean}
+        host: {type: string}
+        port: {type: integer}
+        tls_mode: {type: string, enum: [starttls, implicit_tls, none]}
+        username: {type: string}
+        password: {type: string}
+        from_address: {type: string}
+        to_addresses:
+          type: array
+          items: {type: string}
+        subject_prefix: {type: string}
+
+    WebhookChannel:
+      type: object
+      required: [enabled, status, url, secret_set, header_name, header_value_set, last_success_at, last_error, revision]
+      properties:
+        enabled: {type: boolean}
+        status: {type: string, enum: [ok, failing, not_tested, not_configured]}
+        url: {type: string}
+        secret_set: {type: boolean}
+        header_name: {type: string}
+        header_value_set: {type: boolean}
+        last_success_at: {type: string, format: date-time, nullable: true}
+        last_error:
+          type: object
+          nullable: true
+          required: [code, message]
+          properties:
+            code: {type: string}
+            message: {type: string}
+        revision: {type: integer, format: int64}
+
+    WebhookChannelUpdate:
+      type: object
+      required: [enabled, url]
+      properties:
+        enabled: {type: boolean}
+        url: {type: string}
+        secret: {type: string}
+        header_name: {type: string}
+        header_value: {type: string}
+
+    DailyReportSettings:
+      type: object
+      required: [enabled, time_of_day, revision, last_sent_date, updated_at]
+      properties:
+        enabled: {type: boolean}
+        time_of_day: {type: string}
+        revision: {type: integer, format: int64}
+        last_sent_date: {type: string, nullable: true}
+        updated_at: {type: string, format: date-time, nullable: true}
+
+    DailyReportSettingsUpdate:
+      type: object
+      required: [revision, enabled, time_of_day]
+      properties:
+        revision: {type: integer, format: int64}
+        enabled: {type: boolean}
+        time_of_day: {type: string}
 
     PublicBranding:
       type: object

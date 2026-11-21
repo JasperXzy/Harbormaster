@@ -181,6 +181,12 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, model.QuietHours{Start: "23:00", End: "08:00", Timezone: h.loc.String()})
 	case "/notify/telegram/control":
 		respond(w, 200, model.DefaultTelegramControlSettings())
+	case "/notify/email":
+		respond(w, 200, model.EmailChannel{Status: "not_configured", Port: 587, TLSMode: "starttls", ToAddresses: []string{}, SubjectPrefix: "[Harbormaster]"})
+	case "/notify/webhook":
+		respond(w, 200, model.WebhookChannel{Status: "not_configured"})
+	case "/notify/daily-report":
+		respond(w, 200, model.DefaultDailyReportSettings())
 	case "/settings/heartbeat":
 		respond(w, 200, model.HeartbeatSettings{IntervalSeconds: 60})
 	case "/settings/branding":

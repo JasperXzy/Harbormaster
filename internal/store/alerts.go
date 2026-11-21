@@ -208,6 +208,9 @@ func (s *Store) EvaluateAlerts(ctx context.Context, now time.Time) error {
 		return err
 	}
 	observations = append(observations, m4Obs...)
+	if err = evaluateDailyReportTx(ctx, tx, accounts, now); err != nil {
+		return err
+	}
 	seen := map[string]bool{}
 	for _, o := range observations {
 		seen[o.rule+"/"+o.target] = true

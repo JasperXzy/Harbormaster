@@ -97,6 +97,10 @@ var auditActionSummary = map[string]string{
 	"trace_schedule_updated":             "修改每日线路快照设置",
 	"cron_triggered":                     "通过 URL Cron 触发刷新与巡检",
 	"version_checked":                    "在线检查最新版本",
+	"email_channel_updated":              "修改邮件（SMTP）通知渠道",
+	"webhook_channel_updated":            "修改 Webhook 通知渠道",
+	"daily_report_updated":               "修改每日流量简报设置",
+	"daily_report_sent":                  "手动发送每日流量简报",
 }
 
 func auditSummaryText(e model.AuditEntry) string {

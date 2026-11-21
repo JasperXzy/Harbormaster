@@ -93,6 +93,9 @@ func enqueueNotification(ctx context.Context, tx *sql.Tx, in model.Notification,
 	if err != nil {
 		return in, err
 	}
+	if err = enqueueExtraChannelDeliveriesTx(ctx, tx, id, in, reason != nil, now); err != nil {
+		return in, err
+	}
 	return readNotification(tx.QueryRowContext(ctx, "SELECT "+notificationColumns+" FROM notification WHERE id=?", id))
 }
 func (s *Store) EnqueueNotification(ctx context.Context, in model.Notification, now time.Time) (model.Notification, error) {
