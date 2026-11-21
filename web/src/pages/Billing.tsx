@@ -1,8 +1,8 @@
 // 费用：各账号的余额、低余额提醒阈值、本月账单、包年包月实例的到期与续费。
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import { billTypeName, errorText, RENEWAL, SITE } from "../api/labels";
-import type { Account, AccountFinance, AlertRule, Instance } from "../api/types";
+import { billTypeName, CHARGE, errorText, regionName, RENEWAL, SITE } from "../api/labels";
+import type { Account, AccountFinance, AlertRule, IdleCandidate, Instance } from "../api/types";
 import { Async, Badge, Card, EmptyState, ErrorState, errMsg, Skeleton, Spinner, useToast } from "../components/ui";
 import { useShared } from "../lib/data";
 import { stamp, ymd } from "../lib/format";
@@ -38,6 +38,8 @@ export function Billing() {
         ))}
       </div>
       <Renewals instances={instances.data?.items} accounts={accounts.data} />
+      <InstanceMonthlyCostCard instances={instances.data?.items} accounts={accounts.data} />
+      <IdleResourcesCard accounts={accounts.data} />
     </>
   );
 }
@@ -171,6 +173,138 @@ function Renewals({ instances, accounts }: { instances: Instance[] | undefined; 
           </table>
         </div>
       )}
+    </Card>
+  );
+}
+
+const IDLE_REASON_TEXT: Record<string, string> = {
+  stopped_subscription: "包年包月机器已关机闲置，仍在计费",
+  stopped_keep_charging: "按量机器普通停机（未节省停机），仍收计算与磁盘费",
+  stopped_not_charge_exempt: "机器已停机但未进入免计费状态",
+  unattached_cloud_disk: "未挂载的独立云盘仍在持续计费",
+  disk_on_stopped_instances: "挂载在停机实例上的云盘仍在计费",
+  unbound_eip: "未绑定实例的弹性公网 IP（可能产生闲置占用费）",
+};
+
+const IDLE_KIND_TEXT: Record<string, string> = {
+  ecs: "ECS 实例",
+  swas: "轻量服务器",
+  disk: "云盘",
+  eip: "弹性公网 IP",
+};
+
+function InstanceMonthlyCostCard({ instances, accounts }: { instances: Instance[] | undefined; accounts: Account[] }) {
+  const [selectedId, setSelectedId] = useState<string>("");
+  useEffect(() => {
+    if (!selectedId && instances?.length) setSelectedId(instances[0].id);
+  }, [instances, selectedId]);
+
+  const finRes = useResource(
+    () => (selectedId ? api.instanceFinance(selectedId) : Promise.resolve(null)),
+    [selectedId],
+  );
+
+  if (!instances?.length) return null;
+  const accName = (id: string) => accounts.find((a) => a.id === id)?.name ?? id;
+
+  return (
+    <Card
+      title="单实例本月费用明细"
+      sub="来自阿里云账单接口按实例归集的原始账单行（不捏造预估抵扣）"
+      right={
+        <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} aria-label="选择实例查看本月账单">
+          {instances.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.name} · {accName(i.account_id)}
+            </option>
+          ))}
+        </select>
+      }
+    >
+      <Async res={finRes}>
+        {(fin) => {
+          if (!fin) return null;
+          const rows = fin.bill.data?.items ?? [];
+          if (fin.bill.status === "failing") {
+            return <div className="field-error">读取失败：{errorText(fin.bill.last_error?.code ?? "internal_error")}</div>;
+          }
+          if (!rows.length) {
+            return <EmptyState title={`本月（${fin.billing_cycle}）暂无该实例的独立账单行`}>包年包月在往月已付清、或处于免费额度内的按量项目可能不产生当月扣费行。</EmptyState>;
+          }
+          return (
+            <div className="table-wrap">
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>计费产品</th>
+                    <th>账单类型</th>
+                    <th className="num">原价</th>
+                    <th className="num">折后应付</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((it, idx) => (
+                    <tr key={idx}>
+                      <td><b>{it.product_name || it.product_code}</b></td>
+                      <td className="sub">{billTypeName(it.bill_type)}</td>
+                      <td className="num sub">{money(it.pretax_amount, it.currency)}</td>
+                      <td className="num"><b>{money(it.after_discount_amount, it.currency)}</b></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }}
+      </Async>
+    </Card>
+  );
+}
+
+function IdleResourcesCard({ accounts }: { accounts: Account[] }) {
+  const res = useResource(() => api.idleResources({ limit: 100 }), [], { refreshMs: 120_000 });
+  const accName = (id: string) => accounts.find((a) => a.id === id)?.name ?? id;
+
+  return (
+    <Card title="闲置计费资源巡检" sub="自动识别未绑定 EIP、未挂载云盘、普通停机未省钱的按量 ECS 等仍在产生费用的资源">
+      <Async res={res}>
+        {(page) =>
+          !page.items.length ? (
+            <EmptyState title="当前未发现闲置计费资源">各账号下的弹性公网 IP、云盘与停机实例均无明显闲置浪费。</EmptyState>
+          ) : (
+            <div className="table-wrap">
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th>资源名称 / ID</th>
+                    <th>类型与地域</th>
+                    <th>计费方式</th>
+                    <th>闲置原因</th>
+                    <th>发现时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {page.items.map((c: IdleCandidate) => (
+                    <tr key={c.id}>
+                      <td>
+                        <b>{c.name}</b>
+                        <div className="sub">{accName(c.account_id)} · <span className="mono">{c.cloud_id}</span>{c.public_ip ? ` · ${c.public_ip}` : ""}{c.size_gib ? ` · ${c.size_gib} GiB` : ""}</div>
+                      </td>
+                      <td>
+                        <Badge level="warning">{IDLE_KIND_TEXT[c.kind] ?? c.kind}</Badge>
+                        <div className="sub">{regionName(c.region_id)}</div>
+                      </td>
+                      <td className="sub">{CHARGE[c.charge_type as Instance["charge_type"]] ?? c.charge_type}</td>
+                      <td className="wrap">{IDLE_REASON_TEXT[c.reason] ?? c.reason}</td>
+                      <td className="sub">{stamp(c.observed_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+      </Async>
     </Card>
   );
 }

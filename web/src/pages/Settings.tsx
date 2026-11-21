@@ -32,7 +32,7 @@ export function Settings({ onLogout }: { onLogout: () => void }) {
       {tab === "accounts" && <><Accounts /><RamPolicies /></>}
       {tab === "agents" && <Agents />}
       {tab === "security" && <SecurityTab onLogout={onLogout} />}
-      {tab === "access" && <><ApiKeys /><WidgetSummaryGuide /><Backup /></>}
+      {tab === "access" && <><ApiKeys /><WidgetSummaryGuide /><UrlCronGuide /><Backup /></>}
       {tab === "system" && (
         <>
           <div className="grid g2">
@@ -184,6 +184,26 @@ function WidgetSummaryGuide() {
         </p>
         <div>
           <div className="sub" style={{ marginBottom: 4 }}>请求示例</div>
+          <div className="codebox"><code>{curl}</code><CopyButton text={curl} className="btn" /></div>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function UrlCronGuide() {
+  const origin = typeof location !== "undefined" ? location.origin : "https://example.com";
+  const url = `${origin}/api/v1/integrations/cron/run`;
+  const curl = `curl -X POST -H "Authorization: Bearer 你的cron_API_Key" ${url}`;
+  return (
+    <details className="card fold">
+      <summary><h2>外部 URL Cron 定时触发说明</h2><span className="sub">供无常驻后台环境或外部调度器主动触发一轮采集与告警评估</span><div className="spacer" /><span className="sub">展开</span></summary>
+      <div className="stack" style={{ marginTop: 12 }}>
+        <p className="sub" style={{ margin: 0 }}>
+          创建一个勾选 <b>“触发定时任务”</b>（<span className="mono">cron:run</span>）的 API Key，即可通过 GitHub Actions、Cloudflare Cron 或系统 crontab 安全触发刷新任务与额度巡检。
+        </p>
+        <div>
+          <div className="sub" style={{ marginBottom: 4 }}>调用示例</div>
           <div className="codebox"><code>{curl}</code><CopyButton text={curl} className="btn" /></div>
         </div>
       </div>
@@ -886,23 +906,80 @@ function General() {
 }
 
 function About({ onLogout }: { onLogout: () => void }) {
-  const info = useResource(api.systemInfo, []);
+  const toast = useToast();
+  const vc = useResource(api.versionCenter, []);
+  const [checking, setChecking] = useState(false);
+
+  const checkUpdate = async () => {
+    setChecking(true);
+    try {
+      const next = await api.checkLatestVersion();
+      vc.mutate(() => next);
+      if (next.last_error) toast(errorText(next.last_error.code), true);
+      else if (next.update_available) toast(`发现新版本 ${next.latest_version}`);
+      else toast("当前已是最新版本");
+    } catch (e) {
+      toast(errMsg(e), true);
+    } finally {
+      setChecking(false);
+    }
+  };
+
   return (
-    <Card title="版本与退出">
-      <div className="rowline">
-        <div className="grow"><b>退出登录</b><div className="sub">在公用电脑上用完后记得退出。</div></div>
-        <button className="btn" onClick={onLogout}>退出登录</button>
-      </div>
-      <div style={{ marginTop: 12 }}>
-        <Async res={info} lines={2}>
-          {(v) => (
+    <Card
+      title="版本中心与升级指引"
+      sub="只读容器安全模式：面板不会挂载宿主机 docker.sock，提供一键复制的标准升级命令"
+      right={
+        <div className="inline">
+          <button className="btn sm" disabled={checking} onClick={checkUpdate}>
+            {checking && <Spinner />} 检查新版本
+          </button>
+          <button className="btn sm" onClick={onLogout}>退出登录</button>
+        </div>
+      }
+    >
+      <Async res={vc} lines={4}>
+        {(v) => (
+          <div className="stack">
             <dl className="kv">
-              <dt>当前版本</dt><dd>{v.version}<span className="sub">（{v.commit} · {v.built_at ? `${stamp(v.built_at)} 构建` : "构建时间未提供"}）</span></dd>
-              <dt>采集程序最新版本</dt><dd>{v.latest_agent_version}</dd>
+              <dt>服务端版本</dt>
+              <dd>
+                <b>{v.server_version}</b>
+                <span className="sub">（{v.server_commit} · {v.server_build_time !== "unknown" ? stamp(v.server_build_time) : "开发构建"} · {v.deployment_mode}）</span>
+                {v.update_available && v.latest_version && (
+                  <span style={{ marginLeft: 8 }}>
+                    <Badge level="warning">有新版本 {v.latest_version}</Badge>
+                    {v.release_url && (
+                      <a href={v.release_url} target="_blank" rel="noreferrer" style={{ marginLeft: 8, fontSize: "var(--fs-sm)" }}>
+                        查看更新说明 ↗
+                      </a>
+                    )}
+                  </span>
+                )}
+              </dd>
+              <dt>内置 Agent 版本</dt>
+              <dd>{v.bundled_agent_version ?? "未内置"}</dd>
+              {v.checked_at && (
+                <>
+                  <dt>上次在线检查</dt>
+                  <dd className="sub">
+                    {stamp(v.checked_at)}
+                    {v.latest_version ? `（最新稳定版 ${v.latest_version}）` : ""}
+                  </dd>
+                </>
+              )}
             </dl>
-          )}
-        </Async>
-      </div>
+            <div>
+              <div className="sub" style={{ marginBottom: 4 }}>Docker Compose 升级命令</div>
+              <div className="codebox"><code>{v.upgrade_commands.docker_compose}</code><CopyButton text={v.upgrade_commands.docker_compose} className="btn" /></div>
+            </div>
+            <div>
+              <div className="sub" style={{ marginBottom: 4 }}>二进制 / Systemd 升级提示</div>
+              <div className="codebox"><code>{v.upgrade_commands.binary_hint}</code><CopyButton text={v.upgrade_commands.binary_hint} className="btn" /></div>
+            </div>
+          </div>
+        )}
+      </Async>
     </Card>
   );
 }

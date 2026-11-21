@@ -95,6 +95,44 @@ export type AuditEntry = S["AuditEntry"];
 export type InstanceRealtimeEvent = S["InstanceRealtimeEvent"];
 export type AgentStatusEvent = S["AgentStatusEvent"];
 
+// M3 网络延迟与线路监测
+export type ProbePoint = operations["listNetworkPoints"]["responses"][200]["content"]["application/json"]["items"][number];
+export type NetworkTarget = operations["listNetworkTargets"]["responses"][200]["content"]["application/json"]["items"][number];
+export type NetworkTargetInput = operations["createNetworkTargets"]["requestBody"]["content"]["application/json"];
+export type ProbePlan = operations["listNetworkPlans"]["responses"][200]["content"]["application/json"]["items"][number];
+export type ProbePlanInput = operations["createNetworkPlans"]["requestBody"]["content"]["application/json"];
+export type ProbeRun = operations["listProbeRuns"]["responses"][200]["content"]["application/json"]["items"][number];
+export type TraceSchedule = operations["getTraceSchedule"]["responses"][200]["content"]["application/json"];
+export type TraceScheduleInput = operations["saveTraceSchedule"]["requestBody"]["content"]["application/json"];
+export type TraceSnapshot = operations["listTraceSnapshots"]["responses"][200]["content"]["application/json"]["items"][number];
+export type TraceRun = operations["listNetworkTraces"]["responses"][200]["content"]["application/json"]["items"][number];
+export type TraceDetail = operations["getNetworkTrace"]["responses"][200]["content"]["application/json"];
+export type TraceSubmission = operations["submitNetworkTrace"]["requestBody"]["content"]["application/json"];
+export type TraceAccepted = operations["submitNetworkTrace"]["responses"][202]["content"]["application/json"];
+export type DuplexTraceSubmission = operations["submitDuplexTrace"]["requestBody"]["content"]["application/json"];
+export type DuplexTraceAccepted = operations["submitDuplexTrace"]["responses"][202]["content"]["application/json"];
+export type DuplexTrace = operations["getDuplexTrace"]["responses"][200]["content"]["application/json"];
+export type IPDBStatus = operations["getOfflineIPDatabaseStatus"]["responses"][200]["content"]["application/json"];
+
+// M4 扩展能力
+export type PublicBranding = S["PublicBranding"];
+export type VersionCenter = S["VersionCenter"];
+export type EmailChannel = S["EmailChannel"];
+export type EmailChannelUpdate = S["EmailChannelUpdate"];
+export type WebhookChannel = S["WebhookChannel"];
+export type WebhookChannelUpdate = S["WebhookChannelUpdate"];
+export type DailyReportSettings = S["DailyReportSettings"];
+export type FailoverRule = S["FailoverRule"];
+export type FailoverRuleInput = S["FailoverRuleInput"];
+export type EIPRotateInput = S["EIPRotateInput"];
+export type ECSCatalog = S["ECSCatalog"];
+export type ECSCreateInput = S["ECSCreateInput"];
+export type ReleasePreview = operations["getECSReleasePreview"]["responses"][200]["content"]["application/json"];
+export type InstanceFinance = operations["getInstanceFinance"]["responses"][200]["content"]["application/json"];
+export type IdleResourcesPage = operations["listIdleResourceCandidates"]["responses"][200]["content"]["application/json"];
+export type IdleCandidate = IdleResourcesPage["items"][number];
+export type IdleSource = IdleResourcesPage["sources"][number];
+
 export interface EventMap {
   "quota.updated": QuotaStatus;
   "instance.realtime": InstanceRealtimeEvent;

@@ -21,11 +21,14 @@ export function Automation() {
   const schedules = useResource(api.powerSchedules, []);
   const keepalive = useResource(api.keepaliveSettings, []);
   const monthly = useResource(api.monthlyResetSettings, []);
+  const failovers = useResource(api.failoverRules, []);
 
   const [ruleModal, setRuleModal] = useState<{ rule?: T.QuotaProtectionRule } | null>(null);
   const [delRule, setDelRule] = useState<T.QuotaProtectionRule>();
   const [schModal, setSchModal] = useState<{ sch?: T.PowerSchedule } | null>(null);
   const [delSch, setDelSch] = useState<T.PowerSchedule>();
+  const [foModal, setFoModal] = useState<{ rule?: T.FailoverRule } | null>(null);
+  const [delFo, setDelFo] = useState<T.FailoverRule>();
   const [simModal, setSimModal] = useState(false);
   const [answering, setAnswering] = useState<string>();
 
@@ -249,6 +252,68 @@ export function Automation() {
         <MonthlyResetCard res={monthly} instances={insts} accName={accName} />
       </div>
 
+      <Card
+        title="主备切换（跨账号容灾）"
+        sub="当主实例因流量额度保护自动停机时，自动拉起备实例（支持跨阿里云账号）并发出通知"
+        right={<button className="btn primary" disabled={insts.length < 2} onClick={() => setFoModal({})}>＋ 添加主备规则</button>}
+      >
+        <Async res={failovers}>
+          {(list) =>
+            !list.length ? (
+              <EmptyState title="还没有主备切换规则">
+                {insts.length < 2 ? "至少需要两台纳管实例才能配置主备切换。" : "适合主节点流量耗尽自动停机后，立即将同地域或跨账号备机开机接管。"}
+              </EmptyState>
+            ) : (
+              <div>
+                {list.map((f) => {
+                  const pInst = insts.find((x) => x.id === f.primary_instance_id);
+                  const sInst = insts.find((x) => x.id === f.standby_instance_id);
+                  return (
+                    <div className={`rowline ${f.dry_run ? "sim-card" : ""}`} key={f.id} style={f.dry_run ? { padding: "10px 12px", borderRadius: "var(--r-md)", marginBottom: 8 } : { alignItems: "flex-start" }}>
+                      <div className="grow">
+                        <div className="inline">
+                          <b>{f.name}</b>
+                          {f.dry_run && <Badge level="warning">试运行</Badge>}
+                          <span className="tag">额度停机 → 拉起备机</span>
+                        </div>
+                        <div className="sub" style={{ marginTop: 4 }}>
+                          主实例：<b>{pInst ? `${pInst.name}（${accName(pInst.account_id)}）` : f.primary_instance_id}</b> → 备实例：<b>{sInst ? `${sInst.name}（${accName(sInst.account_id)}）` : f.standby_instance_id}</b>
+                          {f.last_triggered_at && ` · 上次触发：${stamp(f.last_triggered_at)}`}
+                        </div>
+                      </div>
+                      <div className="inline">
+                        <button className="btn sm" onClick={() => setFoModal({ rule: f })}>修改</button>
+                        <button className="btn sm danger" onClick={() => setDelFo(f)}>删除</button>
+                        <Switch
+                          on={f.enabled}
+                          label={`启用 ${f.name}`}
+                          onChange={async (enabled) => {
+                            try {
+                              const saved = await api.updateFailoverRule(f.id, {
+                                revision: f.revision,
+                                name: f.name,
+                                enabled,
+                                dry_run: f.dry_run,
+                                primary_instance_id: f.primary_instance_id,
+                                standby_instance_id: f.standby_instance_id,
+                              });
+                              failovers.mutate((l) => l.map((x) => (x.id === saved.id ? saved : x)));
+                              toast(enabled ? `已启用主备规则“${f.name}”` : `已停用“${f.name}”`);
+                            } catch (e) {
+                              toast(errMsg(e), true);
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          }
+        </Async>
+      </Card>
+
       <DecisionsFold instName={instName} accName={accName} rules={rules.data ?? []} />
       <JobsFold instName={instName} accName={accName} accounts={accs} />
 
@@ -309,7 +374,117 @@ export function Automation() {
           onSaved={() => { setSimModal(false); sims.reload(); }}
         />
       )}
+      {foModal && (
+        <FailoverModal
+          initial={foModal.rule}
+          accounts={accs}
+          instances={insts}
+          onClose={() => setFoModal(null)}
+          onSaved={() => { setFoModal(null); failovers.reload(); }}
+        />
+      )}
+      {delFo && (
+        <Confirm
+          title={`删除主备切换规则“${delFo.name}”？`}
+          okText="删除"
+          danger
+          body="删除后，主实例因额度停机时不再自动启动备实例。"
+          onClose={() => setDelFo(undefined)}
+          onOk={async () => {
+            await api.deleteFailoverRule(delFo.id, delFo.revision);
+            failovers.reload();
+            toast("主备切换规则已删除");
+          }}
+        />
+      )}
     </>
+  );
+}
+
+function FailoverModal({
+  initial,
+  accounts,
+  instances,
+  onClose,
+  onSaved,
+}: {
+  initial?: T.FailoverRule;
+  accounts: T.Account[];
+  instances: T.Instance[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const toast = useToast();
+  const accName = (id: string) => accounts.find((a) => a.id === id)?.name ?? id;
+  const [name, setName] = useState(initial?.name ?? "");
+  const [primaryId, setPrimaryId] = useState(initial?.primary_instance_id ?? instances[0]?.id ?? "");
+  const [standbyId, setStandbyId] = useState(initial?.standby_instance_id ?? instances.find((i) => i.id !== (initial?.primary_instance_id ?? instances[0]?.id))?.id ?? "");
+  const [dryRun, setDryRun] = useState(initial?.dry_run ?? false);
+  const [enabled, setEnabled] = useState(initial?.enabled ?? true);
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return toast("请填写规则名称", true);
+    if (!primaryId || !standbyId || primaryId === standbyId) return toast("请选择两台不同的实例分别作为主实例与备实例", true);
+    setBusy(true);
+    try {
+      const payload: T.FailoverRuleInput = {
+        revision: initial?.revision ?? 0,
+        name: name.trim(),
+        enabled,
+        dry_run: dryRun,
+        primary_instance_id: primaryId,
+        standby_instance_id: standbyId,
+      };
+      if (initial) await api.updateFailoverRule(initial.id, payload);
+      else await api.createFailoverRule(payload);
+      toast(initial ? "主备规则已更新" : "主备规则已创建");
+      onSaved();
+    } catch (err) {
+      toast(errMsg(err), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={initial ? "修改主备切换规则" : "添加主备切换规则"} onClose={onClose}>
+      <form className="stack" onSubmit={submit}>
+        <div>
+          <label className="lbl">规则名称</label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="如：新加坡主力耗尽切香港备机" />
+        </div>
+        <div>
+          <label className="lbl">主实例（被额度保护停机时触发）</label>
+          <select value={primaryId} onChange={(e) => setPrimaryId(e.target.value)} style={{ width: "100%" }}>
+            {instances.map((i) => (
+              <option key={i.id} value={i.id}>{i.name} · {accName(i.account_id)}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="lbl">备实例（自动开机接管，支持跨账号）</label>
+          <select value={standbyId} onChange={(e) => setStandbyId(e.target.value)} style={{ width: "100%" }}>
+            {instances.map((i) => (
+              <option key={i.id} value={i.id} disabled={i.id === primaryId}>{i.name} · {accName(i.account_id)}</option>
+            ))}
+          </select>
+        </div>
+        <div className="inline">
+          <Switch on={dryRun} onChange={setDryRun} label="试运行模式" />
+          <span>试运行模式（只发命中提醒，不真正启动备实例）</span>
+        </div>
+        <div className="inline">
+          <Switch on={enabled} onChange={setEnabled} label="立即启用" />
+          <span>保存后启用此规则</span>
+        </div>
+        <div className="actions">
+          <button type="button" className="btn" onClick={onClose}>取消</button>
+          <button className="btn primary" disabled={busy}>{busy && <Spinner />} 保存</button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

@@ -29,6 +29,7 @@ export const NAV: (NavItem | "sep")[] = [
   { path: "/", title: "总览", icon: <><rect x="3" y="3" width="7" height="9" rx="1.5" /><rect x="14" y="3" width="7" height="5" rx="1.5" /><rect x="14" y="12" width="7" height="9" rx="1.5" /><rect x="3" y="16" width="7" height="5" rx="1.5" /></> },
   { path: "/instances", title: "实例", icon: <><rect x="3" y="4" width="18" height="7" rx="1.5" /><rect x="3" y="13" width="18" height="7" rx="1.5" /><path d="M7 7.5h.01M7 16.5h.01" /></> },
   { path: "/traffic", title: "流量", icon: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /> },
+  { path: "/network", title: "网络", icon: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></> },
   { path: "/automation", title: "自动", icon: <path d="M13 2 4 14h7l-1 8 9-12h-7z" /> },
   { path: "/billing", title: "费用", icon: <><rect x="3" y="6" width="18" height="13" rx="2" /><path d="M3 10h18M7 15h3" /></> },
   "sep",

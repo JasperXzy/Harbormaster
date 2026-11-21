@@ -13,8 +13,22 @@ export function Login({ onDone }: { onDone: () => void }) {
   const [pkBusy, setPkBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [wait, setWait] = useState(0); // 登录限速的剩余秒数
+  const [brandName, setBrandName] = useState("Harbormaster");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    api.publicBranding().then(
+      (b) => {
+        if (b.name) {
+          setBrandName(b.name);
+          document.title = b.name;
+        }
+        if (b.has_logo && !MOCK) {
+          setLogoUrl(`/api/v1/public/branding/logo?v=${encodeURIComponent(b.updated_at ?? "1")}`);
+        }
+      },
+      () => {},
+    );
     api.loginMethods().then(
       (m) => {
         setPasswordEnabled(m.password_enabled);
@@ -75,7 +89,10 @@ export function Login({ onDone }: { onDone: () => void }) {
   return (
     <div className="solo">
       <div className="solo-box">
-        <div className="brand"><Logo size={28} /><span>Harbormaster</span></div>
+        <div className="brand">
+          {logoUrl ? <img src={logoUrl} alt="" width={28} height={28} style={{ borderRadius: 6, objectFit: "cover", flex: "none" }} /> : <Logo size={28} />}
+          <span>{brandName}</span>
+        </div>
         <div className="card stack">
           {passkeyEnabled && (
             <button type="button" className={`btn ${passwordEnabled ? "" : "primary"} block`} disabled={pkBusy || busy || wait > 0} onClick={loginWithPasskey}>

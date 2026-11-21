@@ -110,16 +110,23 @@ export const ALERT_RULE: Record<T.AlertRuleKey, { title: string; desc: string }>
   instance_expiring: { title: "实例快到期", desc: "包年包月的机器到期前提醒，避免忘记续费。" },
   spec_bandwidth_insufficient: { title: "规格带宽不足", desc: "买的公网带宽超过了机器规格能跑的上限时通知。" },
   instance_public_ip_changed: { title: "公网 IP 变了", desc: "每次发现实例的公网 IP 变化都通知。" },
+  swas_traffic_usage: { title: "轻量套餐流量", desc: "轻量应用服务器月套餐流量越过 80% / 90% / 95% 或预计周期末耗尽时提醒。" },
+  cpu_credit_low: { title: "突发性能 CPU 积分偏低", desc: "ECS 突发性能实例（t5 / t6）剩余积分低于 24 小时基准上限设定比例（默认 20%）时提醒。" },
+  system_event: { title: "阿里云系统维护与抢占回收", desc: "ECS 计划维护事件与抢占式实例回收中断预警（回收预警不受静默时段限制）。" },
 };
 
 export const JOB_TYPE: Record<T.JobType, string> = {
   refresh: "读取资源与用量",
   permission_check: "检查权限",
-  telegram_test: "发送测试通知",
+  telegram_test: "发送 Telegram 测试",
+  email_test: "发送邮件测试",
+  webhook_test: "发送 Webhook 测试",
   heartbeat_test: "测试心跳上报",
   instance_power: "实例开关机",
   instance_release: "释放云服务器",
-  network_probe: "网络延迟探测",
+  instance_eip_rotate: "更换弹性公网 IP",
+  instance_create: "创建云服务器",
+  network_probe: "网络延迟与路由探测",
 };
 
 export const JOB_STATUS: Record<T.JobStatus, [Level, string]> = {
@@ -248,6 +255,24 @@ const ERROR: Record<string, string> = {
   aliyun_unreachable: "连不上阿里云接口，请稍后再试。",
   backup_unavailable: "备份没有生成成功，请稍后再试。",
   job_timeout: "操作等待超时，结果未知。请稍后刷新查看。",
+  eip_manage_disabled: "服务器未开启弹性公网 IP 管理能力（HM_EIP_MANAGE_ENABLED=false）。",
+  instance_create_disabled: "服务器未开启创建实例能力（HM_INSTANCE_CREATE_ENABLED=false）。",
+  instance_release_disabled: "服务器未开启释放实例能力（HM_INSTANCE_RELEASE_ENABLED=false）。",
+  unmanaged_eip_protected: "当前绑定的弹性公网 IP 不是由本面板创建的，出于安全保护拒绝解绑与释放。",
+  eip_rotate_unsupported: "这台实例带有固定公网 IP 或不支持弹性公网 IP 轮换。",
+  instance_eip_busy: "这台实例已有进行中的换 IP 任务，请等它完成后再试。",
+  instance_release_busy: "这台实例已有进行中的释放或开关机任务，请稍后再试。",
+  release_preview_changed: "实例或云盘状态已变化，请重新读取释放预览后再确认。",
+  email_not_configured: "还没有保存邮件（SMTP）通知设置。",
+  webhook_not_configured: "还没有保存 Webhook 通知设置。",
+  email_configuration_changed: "邮件通知设置刚刚被改动过，请刷新页面后再试。",
+  webhook_configuration_changed: "Webhook 通知设置刚刚被改动过，请刷新页面后再试。",
+  daily_report_changed: "每日简报设置刚刚被改动过，请刷新页面后再试。",
+  network_configuration_changed: "网络探测配置刚刚被改动过，请刷新后再试。",
+  target_in_use: "还有测速组合正在使用这个目标，请先删除对应测速组合。",
+  probe_queue_full: "当前探测任务队列繁忙，请稍后再试。",
+  ipdb_unavailable: "离线 IP 归属数据库尚未就绪。",
+  version_check_failed: "在线检查 GitHub Release 最新版本失败，请稍后重试。",
 };
 export const errorText = (code: string) => ERROR[code] ?? `操作没有成功（${code}）。`;
 
@@ -260,6 +285,9 @@ const FIELD_ERROR: Record<string, string> = {
   out_of_range: "数值超出允许的范围",
   invalid_for_instance: "这台机器不支持所选的关机方式（包年包月或轻量服务器不能节省停机）",
   not_current_server: "所填实例 ID 与当前检测到的面板所在机器不一致",
+  mismatch: "输入的实例名称与实际名称不完全一致",
+  must_differ_from_primary: "备实例不能与主实例相同",
+  region_not_enabled: "该地域尚未在账号配置中启用扫描",
 };
 export const fieldErrorText = (code: string) => FIELD_ERROR[code] ?? "填写有误";
 

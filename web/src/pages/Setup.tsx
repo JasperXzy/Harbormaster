@@ -17,11 +17,31 @@ export function Setup({ minPassword, onDone }: { minPassword: number; onDone: ()
   const [step, setStep] = useState(0);
   const [account, setAccount] = useState<Account>();
   const [telegramOk, setTelegramOk] = useState(false);
+  const [brandName, setBrandName] = useState("Harbormaster");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.publicBranding().then(
+      (b) => {
+        if (b.name) {
+          setBrandName(b.name);
+          document.title = b.name;
+        }
+        if (b.has_logo && !MOCK) {
+          setLogoUrl(`/api/v1/public/branding/logo?v=${encodeURIComponent(b.updated_at ?? "1")}`);
+        }
+      },
+      () => {},
+    );
+  }, []);
 
   return (
     <div className="solo">
       <div className="solo-box wide">
-        <div className="brand"><Logo size={28} /><span>Harbormaster</span></div>
+        <div className="brand">
+          {logoUrl ? <img src={logoUrl} alt="" width={28} height={28} style={{ borderRadius: 6, objectFit: "cover", flex: "none" }} /> : <Logo size={28} />}
+          <span>{brandName}</span>
+        </div>
         <div>
           <div className="wizard-steps" aria-hidden="true">{STEPS.map((_, i) => <span key={i} className={i <= step ? "on" : ""} />)}</div>
           <div className="sub" style={{ marginTop: 6 }}>第 {step + 1} 步，共 {STEPS.length} 步 · {STEPS[step]}</div>

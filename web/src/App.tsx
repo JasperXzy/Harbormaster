@@ -12,6 +12,7 @@ import { Automation } from "./pages/Automation";
 import { Billing } from "./pages/Billing";
 import { Instances } from "./pages/Instances";
 import { Login } from "./pages/Login";
+import { Network } from "./pages/Network";
 import { Notify } from "./pages/Notify";
 import { Overview } from "./pages/Overview";
 import { Settings } from "./pages/Settings";
@@ -26,6 +27,7 @@ const PAGES: Record<string, { title: string; el: (p: { onLogout: () => void }) =
   "/": { title: "总览", el: () => <Overview /> },
   "/instances": { title: "实例", el: () => <Instances /> },
   "/traffic": { title: "流量", el: () => <Traffic /> },
+  "/network": { title: "网络", el: () => <Network /> },
   "/automation": { title: "自动化", el: () => <Automation /> },
   "/billing": { title: "费用", el: () => <Billing /> },
   "/notify": { title: "通知", el: () => <Notify /> },

@@ -130,13 +130,44 @@ export async function uploadBrandingLogo(revision: number, file: File): Promise<
   throw new ApiError(res.status, err?.code ?? "internal_error", err?.message ?? "", err?.fields, err?.retry_after_seconds);
 }
 
+/** 下载纯文本导出（如单向/双向线路追踪报告） */
+export async function downloadText(path: string, fallbackName: string): Promise<{ text: string; filename: string }> {
+  if (import.meta.env.VITE_API_MODE === "mock") {
+    const { handle } = await import("../mocks/server");
+    const res = await handle("GET", path, undefined);
+    if (res.status >= 200 && res.status < 300) {
+      return { text: typeof res.body === "string" ? res.body : JSON.stringify(res.body, null, 2), filename: fallbackName };
+    }
+    const err = (res.body as T.ErrorBody | null)?.error;
+    throw new ApiError(res.status, err?.code ?? "internal_error", err?.message ?? "");
+  }
+  let res: Response;
+  try {
+    res = await fetch(BASE + path, { method: "GET", credentials: "same-origin", headers: { Accept: "text/plain" } });
+  } catch {
+    throw new ApiError(0, "network_error", "network error");
+  }
+  if (!res.ok) {
+    if (res.status === 401) onUnauthenticated();
+    const err = ((await res.json().catch(() => null)) as T.ErrorBody | null)?.error;
+    throw new ApiError(res.status, err?.code ?? "internal_error", err?.message ?? "");
+  }
+  const name = /filename="?([^";]+)"?/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? fallbackName;
+  return { text: await res.text(), filename: name };
+}
+
 export const api = {
   finance: (account_id: string) => request<T.AccountFinance>("GET", `/accounts/${account_id}/finance`),
+  instanceFinance: (instance_id: string) => request<T.InstanceFinance>("GET", `/instances/${instance_id}/finance`),
+  idleResources: (p: { account_id?: string; region_id?: string; kind?: string; cursor?: string; limit?: number } = {}) =>
+    request<T.IdleResourcesPage>("GET", "/idle-resources" + qs(p)),
   apiKeys: () => request<{ items: T.APIKey[]; next_cursor: string | null }>("GET", "/api-keys" + qs({ limit: 100 })).then((r) => r.items),
   createApiKey: (name: string, scopes: T.APIKeyScope[]) => request<{ api_key: T.APIKey; token: string }>("POST", "/api-keys", { name, scopes }),
   revokeApiKey: (id: string) => request<void>("DELETE", `/api-keys/${id}`),
   ramPolicies: () => request<{ items: T.RAMPolicyDraft[] }>("GET", "/ram-policies").then((r) => r.items),
   instanceEvents: (p: { instance_id?: string; cursor?: string; limit?: number } = {}) => request<{ items: T.InstanceEvent[]; next_cursor: string | null }>("GET", "/instance-events" + qs(p)),
+  systemEvents: (p: { account_id?: string; instance_id?: string; category?: string; cursor?: string; limit?: number } = {}) =>
+    request<{ items: T.SystemEvent[]; next_cursor: string | null }>("GET", "/system-events" + qs(p)),
 
   setupStatus: () => request<T.SetupStatus>("GET", "/setup/status"),
   completeSetup: (b: T.SetupRequest) => request<T.Session>("POST", "/setup", b, { quiet401: true }).then(keepSession),
@@ -155,6 +186,9 @@ export const api = {
   deletePasskey: (id: string) => request<void>("DELETE", `/passkeys/${id}`),
 
   systemInfo: () => request<T.SystemInfo>("GET", "/system/info"),
+  versionCenter: () => request<T.VersionCenter>("GET", "/system/version-center"),
+  checkLatestVersion: () => request<T.VersionCenter>("POST", "/system/version-center/check"),
+  publicBranding: () => request<T.PublicBranding>("GET", "/public/branding", undefined, { quiet401: true }),
   branding: () => request<T.Branding>("GET", "/settings/branding"),
   updateBrandingName: (revision: number, name: string) => request<T.Branding>("PUT", "/settings/branding", { revision, name }),
   deleteBrandingLogo: (revision: number) => request<T.Branding>("DELETE", `/settings/branding/logo?revision=${encodeURIComponent(String(revision))}`),
@@ -189,6 +223,15 @@ export const api = {
   clearProtectionExemption: (id: string) => request<void>("DELETE", `/instances/${id}/protection-exemption`),
   confirmInstanceIntent: (id: string, decision: "keep_stopped" | "resume") =>
     request<{ instance_id: string; decision: string; job_id?: string | null }>("POST", `/instances/${id}/intent-confirmation`, { decision }),
+  rotateInstanceEIP: (id: string, b: T.EIPRotateInput, idempotencyKey = randomIdempotencyKey("eip")) =>
+    request<T.JobAccepted>("POST", `/instances/${id}/change-eip`, b, { headers: { "Idempotency-Key": idempotencyKey } }),
+  releasePreview: (id: string) => request<T.ReleasePreview>("GET", `/instances/${id}/release-preview`),
+  releaseInstance: (id: string, confirmation_name: string, preview_token: string, idempotencyKey = randomIdempotencyKey("rel")) =>
+    request<T.JobAccepted>("POST", `/instances/${id}/release`, { confirmation_name, preview_token }, { headers: { "Idempotency-Key": idempotencyKey } }),
+  ecsCatalog: (account_id: string, region_id: string) =>
+    request<T.ECSCatalog>("GET", "/cloud/ecs-catalog" + qs({ account_id, region_id })),
+  createECSInstance: (b: T.ECSCreateInput, idempotencyKey = randomIdempotencyKey("ecs")) =>
+    request<T.JobAccepted>("POST", "/instances/create", b, { headers: { "Idempotency-Key": idempotencyKey } }),
   agentInstallCommand: (id: string) => request<T.AgentInstallCommand>("POST", `/instances/${id}/agent/install-command`),
   revokeAgentToken: (id: string) => request<void>("DELETE", `/instances/${id}/agent/token`),
   agentHourlyHistory: (id: string, p: { from: string; to: string; limit?: number }) =>
@@ -229,10 +272,47 @@ export const api = {
   updateKeepaliveSettings: (b: T.KeepaliveSettings) => request<T.KeepaliveSettings>("PUT", "/automation/keepalive", b),
   monthlyResetSettings: () => request<T.MonthlyResetSettings>("GET", "/automation/monthly-reset"),
   updateMonthlyResetSettings: (b: T.MonthlyResetSettings) => request<T.MonthlyResetSettings>("PUT", "/automation/monthly-reset", b),
+  failoverRules: () => request<{ items: T.FailoverRule[] }>("GET", "/automation/failovers").then((r) => r.items),
+  createFailoverRule: (b: T.FailoverRuleInput) => request<T.FailoverRule>("POST", "/automation/failovers", b),
+  updateFailoverRule: (id: string, b: T.FailoverRuleInput) => request<T.FailoverRule>("PUT", `/automation/failovers/${id}`, b),
+  deleteFailoverRule: (id: string, revision: number) => request<void>("DELETE", `/automation/failovers/${id}` + qs({ revision })),
+
+  // M3 网络延迟与线路追踪
+  networkPoints: () => request<{ items: T.ProbePoint[]; next_cursor: string | null }>("GET", "/network/points" + qs({ limit: 200 })).then((r) => r.items),
+  networkTargets: () => request<{ items: T.NetworkTarget[]; next_cursor: string | null }>("GET", "/network/targets" + qs({ limit: 200 })).then((r) => r.items),
+  createNetworkTarget: (b: T.NetworkTargetInput) => request<T.NetworkTarget>("POST", "/network/targets", b),
+  updateNetworkTarget: (id: string, b: T.NetworkTargetInput) => request<T.NetworkTarget>("PUT", `/network/targets/${id}`, b),
+  deleteNetworkTarget: (id: string, revision: number) => request<void>("DELETE", `/network/targets/${id}`, { revision }),
+  networkPlans: () => request<{ items: T.ProbePlan[]; next_cursor: string | null }>("GET", "/network/plans" + qs({ limit: 200 })).then((r) => r.items),
+  createNetworkPlan: (b: T.ProbePlanInput) => request<T.ProbePlan>("POST", "/network/plans", b),
+  updateNetworkPlan: (id: string, b: T.ProbePlanInput) => request<T.ProbePlan>("PUT", `/network/plans/${id}`, b),
+  deleteNetworkPlan: (id: string, revision: number) => request<void>("DELETE", `/network/plans/${id}`, { revision }),
+  probeRuns: (planId: string, p: { from: string; to: string; limit?: number; cursor?: string }) =>
+    request<{ items: T.ProbeRun[]; next_cursor: string | null }>("GET", `/network/plans/${planId}/runs` + qs(p)),
+  traceSchedule: (planId: string) => request<T.TraceSchedule>("GET", `/network/plans/${planId}/trace-schedule`),
+  saveTraceSchedule: (planId: string, b: T.TraceScheduleInput) => request<T.TraceSchedule>("PUT", `/network/plans/${planId}/trace-schedule`, b),
+  traceSnapshots: (planId: string, p: { from: string; to: string; limit?: number; cursor?: string }) =>
+    request<{ items: T.TraceSnapshot[]; next_cursor: string | null }>("GET", `/network/plans/${planId}/trace-snapshots` + qs(p)),
+  networkTraces: (p: { from: string; to: string; point_id?: string; target_id?: string; limit?: number; cursor?: string }) =>
+    request<{ items: T.TraceRun[]; next_cursor: string | null }>("GET", "/network/traces" + qs(p)),
+  submitTrace: (b: T.TraceSubmission) => request<T.TraceAccepted>("POST", "/network/traces", b),
+  networkTrace: (id: string) => request<T.TraceDetail>("GET", `/network/traces/${id}`),
+  submitDuplexTrace: (b: T.DuplexTraceSubmission) => request<T.DuplexTraceAccepted>("POST", "/network/duplex-traces", b),
+  duplexTrace: (id: string) => request<T.DuplexTrace>("GET", `/network/duplex-traces/${id}`),
+  networkIPDB: () => request<T.IPDBStatus>("GET", "/network/ipdb"),
 
   telegram: () => request<T.TelegramChannel>("GET", "/notify/telegram"),
   updateTelegram: (b: T.TelegramChannelUpdate) => request<T.TelegramChannel>("PUT", "/notify/telegram", b),
   testTelegram: () => request<T.JobAccepted>("POST", "/notify/telegram/test"),
+  emailChannel: () => request<T.EmailChannel>("GET", "/notify/email"),
+  updateEmailChannel: (b: T.EmailChannelUpdate) => request<T.EmailChannel>("PUT", "/notify/email", b),
+  testEmailChannel: () => request<T.JobAccepted>("POST", "/notify/email/test"),
+  webhookChannel: () => request<T.WebhookChannel>("GET", "/notify/webhook"),
+  updateWebhookChannel: (b: T.WebhookChannelUpdate) => request<T.WebhookChannel>("PUT", "/notify/webhook", b),
+  testWebhookChannel: () => request<T.JobAccepted>("POST", "/notify/webhook/test"),
+  dailyReport: () => request<T.DailyReportSettings>("GET", "/notify/daily-report"),
+  updateDailyReport: (b: { revision: number; enabled: boolean; time_of_day: string }) => request<T.DailyReportSettings>("PUT", "/notify/daily-report", b),
+  sendDailyReportNow: () => request<{ notification_id: string }>("POST", "/notify/daily-report/send"),
   telegramControl: () => request<T.TelegramControlSettings>("GET", "/notify/telegram/control"),
   updateTelegramControl: (b: T.TelegramControlSettings) => request<T.TelegramControlSettings>("PUT", "/notify/telegram/control", b),
   quietHours: () => request<T.QuietHours>("GET", "/notify/quiet-hours"),

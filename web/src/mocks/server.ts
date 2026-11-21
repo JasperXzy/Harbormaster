@@ -186,6 +186,7 @@ export async function handle(method: string, fullPath: string, body: unknown, _h
   const is = (m: string, p: string) => method === m && path === p;
 
   /* 公开接口 */
+  if (is("GET", "/public/branding")) return ok({ name: db.branding.name, has_logo: Boolean(db.branding.logo), updated_at: db.branding.updated_at } satisfies T.PublicBranding);
   if (is("GET", "/setup/status")) return ok({ initialized: db.initialized, password_min_length: 10 } satisfies T.SetupStatus);
   if (is("POST", "/setup")) {
     if (db.initialized) return fail(409, "already_initialized");
@@ -249,7 +250,27 @@ export async function handle(method: string, fullPath: string, body: unknown, _h
   /* 出错场景：登录正常，数据接口全部失败 */
   if (scene === "error" && !(seg[0] === "settings" || seg[0] === "system")) return fail(500, "internal_error");
 
-  if (is("GET", "/system/info")) return ok({ version: "0.2.0-mock", commit: "e7b926b", built_at: iso(Date.now() - 86400_000), latest_agent_version: "0.2.0", data_mode: "demo", read_only: false } satisfies T.SystemInfo);
+  if (is("GET", "/system/info")) return ok({ version: "0.4.0-mock", commit: "6530cb3", built_at: iso(Date.now() - 86400_000), latest_agent_version: "0.4.0", data_mode: "demo", read_only: false, instance_power_enabled: true, instance_release_enabled: false, eip_manage_enabled: false, instance_create_enabled: false } satisfies T.SystemInfo);
+  if (is("GET", "/system/version-center") || is("POST", "/system/version-center/check")) {
+    return ok({
+      server_version: "0.4.0-mock",
+      server_commit: "6530cb3",
+      server_build_time: iso(Date.now() - 86400_000),
+      bundled_agent_version: "0.4.0",
+      deployment_mode: "demo",
+      checked_at: method === "POST" ? iso() : null,
+      latest_version: method === "POST" ? "0.4.0" : null,
+      release_url: "https://github.com/JasperXzy/harbormaster/releases",
+      release_notes: null,
+      update_available: method === "POST" ? false : null,
+      last_error: null,
+      upgrade_commands: {
+        docker_compose: "docker compose pull hm-server && docker compose up -d hm-server",
+        binary_hint: "systemctl restart harbormaster-server",
+        agent_hint: "在实例详情点击升级命令并在机器上执行",
+      },
+    } satisfies T.VersionCenter);
+  }
   if (is("GET", "/settings/branding")) return ok(db.branding);
   if (is("PUT", "/settings/branding")) {
     const name = String(b.name ?? "").trim();
@@ -794,6 +815,275 @@ export async function handle(method: string, fullPath: string, body: unknown, _h
     return ok(page(all, q));
   }
   if (is("POST", "/backups")) return fail(501, "not_implemented");
+
+  /* ---------- M3 & M4 模拟接口 ---------- */
+  if (is("GET", "/notify/email")) {
+    return ok({ enabled: false, status: "not_configured", host: "", port: 587, tls_mode: "starttls", username: "", password_set: false, from_address: "", to_addresses: [], subject_prefix: "[Harbormaster]", last_success_at: null, last_error: null, revision: 1 } satisfies T.EmailChannel);
+  }
+  if (is("PUT", "/notify/email")) {
+    return ok({ enabled: Boolean(b.enabled), status: "not_tested", host: String(b.host ?? ""), port: Number(b.port) || 587, tls_mode: (b.tls_mode as "starttls" | "implicit_tls" | "none") ?? "starttls", username: String(b.username ?? ""), password_set: true, from_address: String(b.from_address ?? ""), to_addresses: (b.to_addresses as string[]) ?? [], subject_prefix: String(b.subject_prefix ?? "[Harbormaster]"), last_success_at: null, last_error: null, revision: 2 } satisfies T.EmailChannel);
+  }
+  if (is("POST", "/notify/email/test")) return ok(startJob("email_test", 500, () => ({})), 202);
+  if (is("GET", "/notify/webhook")) {
+    return ok({ enabled: false, status: "not_configured", url: "", secret_set: false, header_name: "", header_value_set: false, last_success_at: null, last_error: null, revision: 1 } satisfies T.WebhookChannel);
+  }
+  if (is("PUT", "/notify/webhook")) {
+    return ok({ enabled: Boolean(b.enabled), status: "not_tested", url: String(b.url ?? ""), secret_set: Boolean(b.secret), header_name: String(b.header_name ?? ""), header_value_set: Boolean(b.header_value), last_success_at: null, last_error: null, revision: 2 } satisfies T.WebhookChannel);
+  }
+  if (is("POST", "/notify/webhook/test")) return ok(startJob("webhook_test", 500, () => ({})), 202);
+  if (is("GET", "/notify/daily-report")) {
+    return ok({ enabled: false, time_of_day: "09:00", revision: 1, last_sent_date: null, updated_at: null } satisfies T.DailyReportSettings);
+  }
+  if (is("PUT", "/notify/daily-report")) {
+    return ok({ enabled: Boolean(b.enabled), time_of_day: String(b.time_of_day ?? "09:00"), revision: Number(b.revision ?? 1) + 1, last_sent_date: null, updated_at: iso() } satisfies T.DailyReportSettings);
+  }
+  if (is("POST", "/notify/daily-report/send")) return ok({ notification_id: "ntf_daily_mock" }, 202);
+
+  if (is("GET", "/automation/failovers")) return ok({ items: [] as T.FailoverRule[] });
+  if (is("POST", "/automation/failovers") || (seg[0] === "automation" && seg[1] === "failovers" && seg[2] && method === "PUT")) {
+    const out: T.FailoverRule = {
+      id: seg[2] ?? "fo_mock_1",
+      revision: Number(b.revision ?? 0) + 1,
+      name: String(b.name ?? "主备容灾"),
+      enabled: Boolean(b.enabled),
+      dry_run: Boolean(b.dry_run),
+      primary_instance_id: String(b.primary_instance_id ?? ""),
+      standby_instance_id: String(b.standby_instance_id ?? ""),
+      last_triggered_at: null,
+      created_at: iso(),
+      updated_at: iso(),
+    };
+    return ok(out, method === "POST" ? 201 : 200);
+  }
+  if (seg[0] === "automation" && seg[1] === "failovers" && seg[2] && method === "DELETE") return ok(undefined, 204);
+
+  if (is("GET", "/idle-resources")) return ok({ items: [], sources: [], next_cursor: null } satisfies T.IdleResourcesPage);
+  if (is("GET", "/system-events")) return ok({ items: [] as T.SystemEvent[], next_cursor: null });
+  if (seg[0] === "instances" && seg[2] === "finance" && method === "GET") {
+    const inst = db.instances.find((x) => x.id === seg[1]);
+    if (!inst) return fail(404, "not_found");
+    const cycle = new Date().toISOString().slice(0, 7);
+    return ok({
+      instance_id: inst.id,
+      account_id: inst.account_id,
+      enabled: true,
+      billing_cycle: cycle,
+      updated_at: iso(),
+      bill: { status: "ok", fetched_at: iso(), last_attempt_at: iso(), last_error: null, data: { billing_cycle: cycle, items: [] } },
+    } as unknown as T.InstanceFinance);
+  }
+  if (seg[0] === "instances" && seg[2] === "release-preview" && method === "GET") {
+    const inst = db.instances.find((x) => x.id === seg[1]);
+    if (!inst) return fail(404, "not_found");
+    return ok({
+      instance_id: inst.id,
+      account_id: inst.account_id,
+      status: inst.status === "stopped" ? "eligible" : "blocked",
+      block_reasons: inst.status !== "stopped" ? ["instance_not_stopped"] : [],
+      fetched_at: iso(),
+      last_attempt_at: iso(),
+      last_error: null,
+      expires_at: iso(Date.now() + 300_000),
+      preview_token: null,
+      execution_enabled: false,
+      impact: {
+        cloud_instance_id: inst.cloud_instance_id,
+        instance_name: inst.name,
+        cloud_status: inst.status === "stopped" ? "Stopped" : "Running",
+        instance_charge_type: "PostPaid",
+        spot_strategy: "NoSpot",
+        deletion_protection: false,
+        locked: false,
+        instance_data_action: "delete",
+        fixed_public_ip_action: "release_if_present",
+        manual_snapshots_action: "retain",
+        eips_action: "retain",
+        disks: [],
+      },
+    } satisfies T.ReleasePreview);
+  }
+  if (seg[0] === "instances" && seg[2] === "release" && method === "POST") return fail(503, "instance_release_disabled");
+  if (seg[0] === "instances" && seg[2] === "change-eip" && method === "POST") return fail(503, "eip_manage_disabled");
+  if (is("POST", "/instances/create")) return fail(503, "instance_create_disabled");
+  if (is("GET", "/cloud/ecs-catalog")) {
+    return ok({
+      account_id: q.get("account_id") ?? "",
+      region_id: q.get("region_id") ?? "ap-southeast-1",
+      zones: [{ id: "ap-southeast-1a", name: "新加坡 可用区 A" }],
+      images: [{ id: "debian_12_x64", name: "Debian 12.8 64位" }],
+      instance_types: [{ id: "ecs.e-c1m1.large", cpu: 2, memory_gib: 2 }],
+      vpcs: [{ id: "vpc-mock", name: "default-vpc", cidr_block: "172.16.0.0/12" }],
+      vswitches: [{ id: "vsw-mock", vpc_id: "vpc-mock", zone_id: "ap-southeast-1a", name: "default-vsw", cidr_block: "172.16.0.0/24" }],
+    } satisfies T.ECSCatalog);
+  }
+
+  /* M3 网络延迟与线路模拟 */
+  if (is("GET", "/network/points")) {
+    const pts: T.ProbePoint[] = [
+      { id: "server", name: "面板服务端", point_kind: "server", instance_id: null, available: true, unavailable_reason: null, updated_at: iso(), trace: { available: true, unavailable_reason: null, methods: ["icmp", "tcp"], last_poll_at: iso() } },
+      ...db.instances
+        .filter((i) => i.agent.status === "online")
+        .map((i) => ({
+          id: "agent:" + i.id,
+          name: i.name,
+          point_kind: "agent" as const,
+          instance_id: i.id,
+          available: true,
+          unavailable_reason: null,
+          updated_at: iso(),
+          trace: { available: true, unavailable_reason: null, methods: ["icmp", "tcp"] as ("icmp" | "tcp")[], last_poll_at: iso() },
+        })),
+    ];
+    return ok({ items: pts, next_cursor: null });
+  }
+  if (is("GET", "/network/targets")) {
+    return ok({
+      items: [
+        { id: "tgt_cf", revision: 1, name: "Cloudflare DNS", kind: "custom", host: "1.1.1.1", instance_id: null, tcp_port: null, enabled: true, created_at: iso(), updated_at: iso() },
+      ] satisfies T.NetworkTarget[],
+      next_cursor: null,
+    });
+  }
+  if (is("POST", "/network/targets") || (seg[0] === "network" && seg[1] === "targets" && seg[2] && method === "PUT")) {
+    return ok({
+      id: seg[2] ?? "tgt_" + Math.random().toString(36).slice(2, 7),
+      revision: Number(b.revision ?? 0) + 1,
+      name: String(b.name ?? "目标"),
+      kind: (b.kind as "custom" | "instance") ?? "custom",
+      host: (b.host as string | null) ?? null,
+      instance_id: (b.instance_id as string | null) ?? null,
+      tcp_port: (b.tcp_port as number | null) ?? null,
+      enabled: Boolean(b.enabled ?? true),
+      created_at: iso(),
+      updated_at: iso(),
+    } satisfies T.NetworkTarget, method === "POST" ? 201 : 200);
+  }
+  if (seg[0] === "network" && seg[1] === "targets" && seg[2] && method === "DELETE") return ok(undefined, 204);
+  if (is("GET", "/network/plans")) {
+    const run: T.ProbeRun = {
+      id: "run_1",
+      plan_id: "plan_1",
+      plan_revision: 1,
+      target_id: "tgt_cf",
+      target_revision: 1,
+      point_kind: "server",
+      instance_id: null,
+      created_at: iso(),
+      updated_at: iso(),
+      status: "succeeded",
+      skip_reason: null,
+      job_id: "job_prb_1",
+      request: { host: "1.1.1.1", port: 0, family: "ipv4", method: "icmp", count: 5, timeout_ms: 2000, interval_ms: 1000 },
+      result: {
+        started_at: iso(Date.now() - 5000),
+        finished_at: iso(),
+        address: "1.1.1.1",
+        resolved_addresses: ["1.1.1.1"],
+        samples: [{ sequence: 1, started_at: iso(), rtt_ms: 14.2, error_code: null }],
+        summary: { attempts: 5, succeeded: 5, loss_percent: 0, minimum_ms: 13.8, maximum_ms: 15.1, average_ms: 14.3, jitter_ms: 0.4 },
+      },
+      error: null,
+    };
+    return ok({
+      items: [
+        { id: "plan_1", revision: 1, name: "面板 → Cloudflare", point_kind: "server", instance_id: null, target_id: "tgt_cf", family: "ipv4", method: "icmp", frequency_seconds: 300, count: 5, timeout_ms: 2000, interval_ms: 1000, enabled: true, created_at: iso(), updated_at: iso(), next_run_at: iso(Date.now() + 300_000), last_run: run },
+      ] satisfies T.ProbePlan[],
+      next_cursor: null,
+    });
+  }
+  if (is("POST", "/network/plans") || (seg[0] === "network" && seg[1] === "plans" && seg[2] && method === "PUT")) {
+    return ok({
+      id: seg[2] ?? "plan_" + Math.random().toString(36).slice(2, 7),
+      revision: Number(b.revision ?? 0) + 1,
+      name: String(b.name ?? "测速组合"),
+      point_kind: (b.point_kind as "server" | "agent") ?? "server",
+      instance_id: (b.instance_id as string | null) ?? null,
+      target_id: String(b.target_id ?? "tgt_cf"),
+      family: (b.family as "ipv4" | "ipv6") ?? "ipv4",
+      method: (b.method as "icmp" | "tcp") ?? "icmp",
+      frequency_seconds: Number(b.frequency_seconds ?? 300),
+      count: 5,
+      timeout_ms: 2000,
+      interval_ms: 1000,
+      enabled: Boolean(b.enabled ?? true),
+      created_at: iso(),
+      updated_at: iso(),
+      next_run_at: iso(Date.now() + 300_000),
+      last_run: null,
+    } satisfies T.ProbePlan, method === "POST" ? 201 : 200);
+  }
+  if (seg[0] === "network" && seg[1] === "plans" && seg[2] && method === "DELETE") return ok(undefined, 204);
+  if (seg[0] === "network" && seg[1] === "plans" && seg[3] === "runs" && method === "GET") {
+    const items: T.ProbeRun[] = Array.from({ length: 12 }, (_, idx) => ({
+      id: `run_${idx}`,
+      plan_id: seg[2],
+      plan_revision: 1,
+      target_id: "tgt_cf",
+      target_revision: 1,
+      point_kind: "server",
+      instance_id: null,
+      created_at: iso(Date.now() - idx * 3600_000),
+      updated_at: iso(Date.now() - idx * 3600_000),
+      status: "succeeded",
+      skip_reason: null,
+      job_id: `job_prb_${idx}`,
+      request: { host: "1.1.1.1", port: 0, family: "ipv4", method: "icmp", count: 5, timeout_ms: 2000, interval_ms: 1000 },
+      result: {
+        started_at: iso(Date.now() - idx * 3600_000),
+        finished_at: iso(Date.now() - idx * 3600_000),
+        address: "1.1.1.1",
+        resolved_addresses: ["1.1.1.1"],
+        samples: [],
+        summary: { attempts: 5, succeeded: 5, loss_percent: 0, minimum_ms: 13.5, maximum_ms: 16.0 + (idx % 3), average_ms: 14.2 + (idx % 3) * 0.5, jitter_ms: 0.4 },
+      },
+      error: null,
+    }));
+    return ok({ items, next_cursor: null });
+  }
+  if (seg[0] === "network" && seg[1] === "plans" && seg[3] === "trace-schedule") {
+    return ok({ plan_id: seg[2], revision: 1, enabled: Boolean(b.enabled ?? false), notify_changes: Boolean(b.notify_changes ?? true), time_of_day: String(b.time_of_day ?? "03:00"), max_hops: 30, count: 3, timeout_ms: 1000, active: false, timezone: db.settings.business_timezone, updated_at: iso(), next_run_at: null } satisfies T.TraceSchedule);
+  }
+  if (seg[0] === "network" && seg[1] === "plans" && seg[3] === "trace-snapshots") {
+    return ok({ items: [] as T.TraceSnapshot[], next_cursor: null });
+  }
+  if (is("GET", "/network/traces")) return ok({ items: [] as T.TraceRun[], next_cursor: null });
+  if (is("POST", "/network/traces")) return ok({ job_id: "job_trc_1", trace_id: "trc_mock_1" } satisfies T.TraceAccepted, 202);
+  if (seg[0] === "network" && seg[1] === "traces" && seg[2] && seg[3] === "export" && method === "GET") return ok("trace: trc_mock_1\nstatus: succeeded\n1 1 1.1.1.1 14.200ms echo_reply 0 0 -\n");
+  if (seg[0] === "network" && seg[1] === "traces" && seg[2] && method === "GET") {
+    return ok({
+      id: seg[2],
+      job_id: "job_trc_1",
+      point_id: "server",
+      point_name: "面板服务端",
+      point_kind: "server",
+      instance_id: null,
+      target: null,
+      request: { host: "1.1.1.1", family: "ipv4", method: "icmp", port: 0, max_hops: 30, count: 3, timeout_ms: 1000 },
+      created_at: iso(),
+      updated_at: iso(),
+      status: "succeeded",
+      enrichment_status: "complete",
+      duplex_id: null,
+      duplex_direction: null,
+      outcome: { started_at: iso(), finished_at: iso(), address: "1.1.1.1", reached: true, stop_reason: "reached", hop_count: 1, sample_count: 3 },
+      error: null,
+      result: {
+        started_at: iso(),
+        finished_at: iso(),
+        address: "1.1.1.1",
+        resolved_addresses: ["1.1.1.1"],
+        reached: true,
+        stop_reason: "reached",
+        hops: [{ ttl: 1, samples: [{ sequence: 1, started_at: iso(), address: "1.1.1.1", rtt_ms: 14.2, reply: "echo_reply", icmp_type: 0, icmp_code: 0, error_code: null }] }],
+      },
+      enrichment: null,
+      enrichment_error: null,
+    } satisfies T.TraceDetail);
+  }
+  if (is("GET", "/network/ipdb")) {
+    const ds = { name: "dbip-asn-lite", edition: "2026-11", built_at: iso(), size_bytes: 4_200_000, origin: "bundled" as const, storage: "memory" as const, source_url: "https://db-ip.com" };
+    return ok({ mode: "country", city_enabled: false, auto_update: false, asn: ds, country: { ...ds, name: "dbip-country-lite" }, city: null, last_check_at: null, last_update_at: null, last_error: null, attribution: [{ name: "IP Geolocation by DB-IP", url: "https://db-ip.com", license: "CC BY 4.0", license_url: "https://creativecommons.org/licenses/by/4.0/" }], go_heap_alloc_bytes: 16_777_216, process_peak_rss_bytes: null, mapped_file_bytes: 0 } satisfies T.IPDBStatus);
+  }
 
   return fail(404, "not_found");
 }

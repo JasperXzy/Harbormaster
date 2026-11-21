@@ -3,9 +3,9 @@ import { useEffect, useState, type FormEvent } from "react";
 import { api } from "../api/client";
 import { waitForJob } from "../api/jobs";
 import { AGENT, CHARGE, errorText, INSTANCE_EVENT, INSTANCE_STATUS, KIND, protectionOf, regionName, RENEWAL, RULE, SCOPE, STOP_MODE, SUBJECT_KIND } from "../api/labels";
-import type { AgentInstallCommand, Instance, InstanceEvent } from "../api/types";
+import type { Account, AgentInstallCommand, Instance, InstanceEvent, SystemEvent, SystemInfo } from "../api/types";
 import { LineChart } from "../components/charts/LineChart";
-import { Async, Badge, Banner, Card, Confirm, CopyButton, EmptyState, ErrorState, errMsg, Fresh, Modal, SegToggle, Skeleton, Spinner, useToast } from "../components/ui";
+import { Async, Badge, Banner, Card, Confirm, CopyButton, EmptyState, ErrorState, errMsg, Fresh, Modal, SegToggle, Skeleton, Spinner, Switch, useToast } from "../components/ui";
 import { useShared } from "../lib/data";
 import { ago, duration, gb, gbValue, num, rate, stamp, time, ymd } from "../lib/format";
 import { Link } from "../lib/router";
@@ -82,7 +82,9 @@ export function Instances() {
   const [only, setOnly] = useState(false);
   const [detail, setDetail] = useState<string>();
   const [install, setInstall] = useState<string>();
+  const [creatingECS, setCreatingECS] = useState(false);
   const [answering, setAnswering] = useState<string>();
+  const sysInfoRes = useResource(api.systemInfo, []);
 
   if (instances.error) return <div className="card"><ErrorState error={instances.error} onRetry={instances.reload} /></div>;
   if (!instances.data || !accounts.data) return <div className="card"><Skeleton lines={6} height={18} /></div>;
@@ -129,11 +131,17 @@ export function Instances() {
           accs.some((a) => a.enabled && a.sync_status === "never_synced") ? (
             <EmptyState title="正在第一次扫描">刚添加的账号正在读取名下的机器，通常一两分钟内完成，这里会自动出现。</EmptyState>
           ) : (
-            <EmptyState title="还没有发现实例">这些账号在所选地域里没有云服务器或轻量服务器。如果机器在别的地域，请到设置页为账号勾选对应地域。</EmptyState>
+            <EmptyState
+              title="还没有发现实例"
+              action={accs.some((a) => a.enabled) ? <button className="btn primary" onClick={() => setCreatingECS(true)}>＋ 创建云服务器 (ECS)</button> : undefined}
+            >
+              这些账号在所选地域里没有云服务器或轻量服务器。如果机器在别的地域，请到设置页为账号勾选对应地域。
+            </EmptyState>
           )
         ) : (
           <EmptyState title="还没有添加阿里云账号" action={<Link className="btn primary" to="/settings">去添加账号</Link>}>添加账号后会自动发现它名下的机器。</EmptyState>
         )}
+        {creatingECS && <CreateECSModal accounts={accs} sysInfo={sysInfoRes.data} onClose={() => setCreatingECS(false)} onCreated={() => { setCreatingECS(false); reloadAll(); }} />}
       </div>
     );
 
@@ -176,6 +184,7 @@ export function Instances() {
               </select>
             )}
             <label className={`check ${only ? "on" : ""}`}><input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} />只看需要处理的</label>
+            <button className="btn sm primary" onClick={() => setCreatingECS(true)}>＋ 创建 ECS</button>
           </div>
         }
       >
@@ -246,15 +255,17 @@ export function Instances() {
         )}
       </Card>
       <Events />
-      {cur && <InstanceDetail i={cur} account={accName(cur.account_id)} onClose={() => setDetail(undefined)} onInstall={() => { setDetail(undefined); setInstall(cur.id); }} />}
+      <SystemEventsFold instances={all} accounts={accs} />
+      {cur && <InstanceDetail i={cur} account={accName(cur.account_id)} sysInfo={sysInfoRes.data} onClose={() => setDetail(undefined)} onInstall={() => { setDetail(undefined); setInstall(cur.id); }} />}
       {inst && <AgentInstall i={inst} onClose={() => setInstall(undefined)} />}
+      {creatingECS && <CreateECSModal accounts={accs} sysInfo={sysInfoRes.data} onClose={() => setCreatingECS(false)} onCreated={() => { setCreatingECS(false); reloadAll(); }} />}
     </>
   );
 }
 
 type DetailTab = "overview" | "traffic" | "meta";
 
-function InstanceDetail({ i, account, onClose, onInstall }: { i: Instance; account: string; onClose: () => void; onInstall: () => void }) {
+function InstanceDetail({ i, account, sysInfo, onClose, onInstall }: { i: Instance; account: string; sysInfo?: SystemInfo; onClose: () => void; onInstall: () => void }) {
   const toast = useToast();
   const now = useNow();
   const [tab, setTab] = useState<DetailTab>("overview");
@@ -262,6 +273,9 @@ function InstanceDetail({ i, account, onClose, onInstall }: { i: Instance; accou
   const [powerConfirm, setPowerConfirm] = useState<"start" | "stop" | "reboot" | null>(null);
   const [stopMode, setStopMode] = useState<"keep_charging" | "stop_charging">("keep_charging");
   const [powerBusy, setPowerBusy] = useState(false);
+  const [showChangeEIP, setShowChangeEIP] = useState(false);
+  const [showRelease, setShowRelease] = useState(false);
+  const finRes = useResource(() => api.instanceFinance(i.id), [i.id]);
   const { instances, reloadAll } = useShared();
   const [sl, st] = INSTANCE_STATUS[i.status];
   const [al, at] = AGENT[i.agent.status];
@@ -347,6 +361,12 @@ function InstanceDetail({ i, account, onClose, onInstall }: { i: Instance; accou
       <div className="inline" style={{ marginBottom: 14 }}>
         <SegToggle label="详情分页" value={tab} onChange={setTab} options={[["overview", "概览与控制"], ["traffic", "流量曲线"], ["meta", "备注与分组"]]} />
         <div className="spacer" />
+        {i.kind === "ecs" && (
+          <button className="btn sm" onClick={() => setShowChangeEIP(true)}>更换弹性 IP</button>
+        )}
+        {i.kind === "ecs" && i.status === "stopped" && (i.charge_type === "pay_as_you_go" || i.charge_type === "spot") && (
+          <button className="btn sm danger" onClick={() => setShowRelease(true)}>释放实例</button>
+        )}
         {i.status === "stopped" && <button className="btn sm primary" disabled={powerBusy} onClick={() => setPowerConfirm("start")}>{powerBusy && <Spinner />} 开机</button>}
         {i.status === "running" && (
           <>
@@ -391,6 +411,24 @@ function InstanceDetail({ i, account, onClose, onInstall }: { i: Instance; accou
               </>
             )}
             <dt>带宽上限</dt><dd>{i.bandwidth_mbps ? `${i.bandwidth_mbps} Mbps` : "—"}{specNote(i) && <div style={{ marginTop: 4 }}><Badge level="warning">规格带宽不足</Badge><div className="sub" style={{ marginTop: 4 }}>{specNote(i)}</div></div>}</dd>
+            <dt>本月账单</dt>
+            <dd>
+              {finRes.data ? (
+                finRes.data.bill.data?.items.length ? (
+                  <span>
+                    {finRes.data.bill.data.items.map((it, k) => (
+                      <span key={k} style={{ marginRight: 10 }}>
+                        {it.product_name || it.product_code}: <b>{it.currency} {it.after_discount_amount}</b>
+                      </span>
+                    ))}
+                  </span>
+                ) : (
+                  <span className="sub">本月（{finRes.data.billing_cycle}）暂无独立扣费行</span>
+                )
+              ) : (
+                <span className="sub">读取中…</span>
+              )}
+            </dd>
             <dt>临时豁免关机</dt>
             <dd>
               {exemptActive ? (
@@ -447,6 +485,21 @@ function InstanceDetail({ i, account, onClose, onInstall }: { i: Instance; accou
 
       {tab === "traffic" && <InstanceTrafficTab i={i} onClose={onClose} />}
       {tab === "meta" && <InstanceMetaTab i={i} onClose={onClose} />}
+      {showChangeEIP && (
+        <ChangeEIPModal
+          i={i}
+          enabled={Boolean(sysInfo?.eip_manage_enabled)}
+          onClose={() => setShowChangeEIP(false)}
+          onDone={() => { setShowChangeEIP(false); reloadAll(); }}
+        />
+      )}
+      {showRelease && (
+        <ReleaseECSModal
+          i={i}
+          onClose={() => setShowRelease(false)}
+          onReleased={() => { setShowRelease(false); onClose(); reloadAll(); }}
+        />
+      )}
     </Modal>
   );
 }
@@ -689,5 +742,422 @@ function Events() {
         </div>
       )}
     </details>
+  );
+}
+
+function SystemEventsFold({ instances, accounts }: { instances: Instance[]; accounts: Account[] }) {
+  const [open, setOpen] = useState(false);
+  const res = useResource(() => (open ? api.systemEvents({ limit: 30 }) : Promise.resolve(null)), [open]);
+  const accName = (id: string) => accounts.find((a) => a.id === id)?.name ?? id;
+  const instName = (id: string | null, cloudId: string) => (id ? instances.find((i) => i.id === id)?.name ?? cloudId : cloudId);
+
+  return (
+    <details className="card fold" onToggle={(e) => setOpen(e.currentTarget.open)}>
+      <summary>
+        <h2>阿里云系统维护与抢占回收事件</h2>
+        <span className="sub">ECS 计划维护时间窗与抢占式实例回收中断预警</span>
+        <div className="spacer" />
+        <span className="sub">展开</span>
+      </summary>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          <Async res={res}>
+            {(p) =>
+              !p || !p.items.length ? (
+                <EmptyState title="近期没有阿里云系统维护或抢占回收事件" />
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr><th>发布/观测时间</th><th>实例</th><th>类别与事件</th><th>云端状态</th></tr>
+                    </thead>
+                    <tbody>
+                      {p.items.map((ev: SystemEvent) => (
+                        <tr key={ev.id}>
+                          <td>{stamp(ev.published_at ?? ev.observed_at)}</td>
+                          <td>
+                            <b>{instName(ev.instance_id, ev.cloud_instance_id)}</b>
+                            <div className="sub">{accName(ev.account_id)} · {regionName(ev.region_id)}</div>
+                          </td>
+                          <td>
+                            <Badge level={ev.category === "spot_interruption" ? "critical" : ev.category === "maintenance" ? "warning" : "neutral"}>
+                              {ev.category === "spot_interruption" ? "抢占回收预警" : ev.category === "maintenance" ? "计划维护" : "系统事件"}
+                            </Badge>
+                            <span className="mono sub" style={{ marginLeft: 6 }}>{ev.event_type}</span>
+                            {ev.not_before && <div className="sub">计划开始：{stamp(ev.not_before)}</div>}
+                          </td>
+                          <td><span className="tag">{ev.provider_status}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            }
+          </Async>
+        </div>
+      )}
+    </details>
+  );
+}
+
+function ChangeEIPModal({ i, enabled, onClose, onDone }: { i: Instance; enabled: boolean; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const [bw, setBw] = useState("100");
+  const [chargeType, setChargeType] = useState<"PayByTraffic" | "PayByBandwidth">("PayByTraffic");
+  const [busy, setBusy] = useState(false);
+
+  const hasFixedIP = i.public_ips.some((p) => p.type === "instance_public_ip");
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const { job_id } = await api.rotateInstanceEIP(i.id, {
+        bandwidth_mbps: Math.max(1, Math.min(2000, Number(bw) || 100)),
+        internet_charge_type: chargeType,
+      });
+      toast("已提交更换弹性公网 IP 任务，正在执行…");
+      const job = await waitForJob(job_id);
+      if (job.status === "failed") toast(errorText(job.error?.code ?? "internal_error"), true);
+      else toast("弹性公网 IP 更换完成");
+      onDone();
+    } catch (err) {
+      toast(errMsg(err), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={`更换弹性公网 IP：${i.name}`} onClose={onClose}>
+      <form className="stack" onSubmit={submit}>
+        {!enabled && (
+          <Banner level="warning">
+            当前服务器默认关闭弹性公网 IP 写操作（<span className="mono">HM_EIP_MANAGE_ENABLED=false</span>），防止误触发计费。如需启用请在服务端配置中显式开启。
+          </Banner>
+        )}
+        {hasFixedIP && (
+          <Banner level="critical">
+            该实例当前带有固定实例公网 IP（非弹性公网 IP），阿里云不支持直接轮换 EIP。
+          </Banner>
+        )}
+        <p className="note" style={{ margin: 0 }}>
+          安全边界：仅当实例当前未绑定公网 IP、或当前绑定的 EIP 是由 Harbormaster 之前创建的受管 EIP 时才允许替换与释放旧 EIP；<b>原有的用户自有 EIP 会被严格拒绝解绑和释放</b>。
+        </p>
+        <div className="grid g2">
+          <div>
+            <label className="lbl">计费方式</label>
+            <select value={chargeType} onChange={(e) => setChargeType(e.target.value as "PayByTraffic" | "PayByBandwidth")} style={{ width: "100%" }}>
+              <option value="PayByTraffic">按使用流量（PayByTraffic）</option>
+              <option value="PayByBandwidth">按固定带宽（PayByBandwidth）</option>
+            </select>
+          </div>
+          <div>
+            <label className="lbl">峰值带宽（Mbps）</label>
+            <input type="number" min={1} max={2000} value={bw} onChange={(e) => setBw(e.target.value)} />
+          </div>
+        </div>
+        <div className="actions">
+          <button type="button" className="btn" onClick={onClose}>取消</button>
+          <button className="btn primary" disabled={busy || !enabled || hasFixedIP}>
+            {busy && <Spinner />} 确认申请并更换 IP
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function ReleaseECSModal({ i, onClose, onReleased }: { i: Instance; onClose: () => void; onReleased: () => void }) {
+  const toast = useToast();
+  const previewRes = useResource(() => api.releasePreview(i.id), [i.id]);
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    const pv = previewRes.data;
+    if (!pv?.preview_token) return;
+    setBusy(true);
+    try {
+      const { job_id } = await api.releaseInstance(i.id, typed, pv.preview_token);
+      toast("已提交释放任务，等待阿里云确认…");
+      const job = await waitForJob(job_id);
+      if (job.status === "failed") toast(errorText(job.error?.code ?? "internal_error"), true);
+      else toast(`实例 ${i.name} 已释放`);
+      onReleased();
+    } catch (err) {
+      toast(errMsg(err), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={`释放按量 ECS 实例：${i.name}`} onClose={onClose} wide>
+      <Async res={previewRes} lines={4}>
+        {(pv) => {
+          const canExec = pv.execution_enabled && pv.block_reasons.length === 0 && !!pv.preview_token;
+          return (
+            <div className="stack">
+              {!pv.execution_enabled && (
+                <Banner level="warning">
+                  当前服务器默认关闭高危实例释放开关（<span className="mono">HM_INSTANCE_RELEASE_ENABLED=false</span>）。以下仅展示只读释放影响预览。
+                </Banner>
+              )}
+              {pv.block_reasons.length > 0 && (
+                <Banner level="critical">
+                  当前不满足安全释放条件：{pv.block_reasons.join("、")}
+                </Banner>
+              )}
+              {pv.impact && (
+                <dl className="kv">
+                  <dt>云端实例名称</dt><dd><b>{pv.impact.instance_name}</b>（<span className="mono">{pv.impact.cloud_instance_id}</span>）</dd>
+                  <dt>实例计算与系统盘</dt><dd>不可恢复销毁（{pv.impact.disks.length} 块挂载云盘）</dd>
+                  <dt>弹性公网 IP</dt><dd>保留不自动删除（{pv.impact.eips_action}）</dd>
+                  <dt>手动快照</dt><dd>保留不自动删除（{pv.impact.manual_snapshots_action}）</dd>
+                </dl>
+              )}
+              {canExec && (
+                <div>
+                  <label className="lbl">
+                    不可恢复操作：请输入完整实例名称 <b>{pv.impact?.instance_name ?? i.name}</b> 确认释放
+                  </label>
+                  <input type="text" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+                </div>
+              )}
+              <div className="actions">
+                <button className="btn" onClick={onClose}>取消</button>
+                <button
+                  className="btn danger"
+                  disabled={!canExec || busy || typed !== (pv.impact?.instance_name ?? i.name)}
+                  onClick={submit}
+                >
+                  {busy && <Spinner />} 永久释放此实例
+                </button>
+              </div>
+            </div>
+          );
+        }}
+      </Async>
+    </Modal>
+  );
+}
+
+function CreateECSModal({
+  accounts,
+  sysInfo,
+  onClose,
+  onCreated,
+}: {
+  accounts: Account[];
+  sysInfo?: SystemInfo;
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const toast = useToast();
+  const enabledAccs = accounts.filter((a) => a.enabled && a.region_ids.length > 0);
+  const [accountId, setAccountId] = useState(enabledAccs[0]?.id ?? "");
+  const curAcc = enabledAccs.find((a) => a.id === accountId) ?? enabledAccs[0];
+  const [regionId, setRegionId] = useState(curAcc?.region_ids[0] ?? "ap-southeast-1");
+
+  useEffect(() => {
+    if (curAcc && !curAcc.region_ids.includes(regionId)) {
+      setRegionId(curAcc.region_ids[0] ?? "ap-southeast-1");
+    }
+  }, [curAcc, regionId]);
+
+  const catRes = useResource(
+    () => (accountId && regionId ? api.ecsCatalog(accountId, regionId) : Promise.resolve(null)),
+    [accountId, regionId],
+  );
+
+  const [zoneId, setZoneId] = useState("");
+  const [instanceType, setInstanceType] = useState("");
+  const [imageId, setImageId] = useState("");
+  const [instanceName, setInstanceName] = useState("hm-node-01");
+  const [chargeType, setChargeType] = useState<"PostPaid" | "Spot">("PostPaid");
+  const [netCharge, setNetCharge] = useState<"PayByTraffic" | "PayByBandwidth">("PayByTraffic");
+  const [bwOut, setBwOut] = useState("100");
+  const [diskGiB, setDiskGiB] = useState("20");
+  const [autoNet, setAutoNet] = useState(true);
+  const [vpcId, setVpcId] = useState("");
+  const [vswId, setVswId] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const c = catRes.data;
+    if (!c) return;
+    if (!zoneId && c.zones[0]) setZoneId(c.zones[0].id);
+    if (!instanceType && c.instance_types[0]) setInstanceType(c.instance_types[0].id);
+    if (!imageId && c.images[0]) setImageId(c.images[0].id);
+    if (!vpcId && c.vpcs[0]) setVpcId(c.vpcs[0].id);
+    if (!vswId && c.vswitches[0]) setVswId(c.vswitches[0].id);
+  }, [catRes.data, zoneId, instanceType, imageId, vpcId, vswId]);
+
+  const createEnabled = Boolean(sysInfo?.instance_create_enabled);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const { job_id } = await api.createECSInstance({
+        account_id: accountId,
+        region_id: regionId,
+        zone_id: zoneId,
+        instance_name: instanceName.trim(),
+        instance_type: instanceType,
+        image_id: imageId,
+        instance_charge_type: chargeType,
+        internet_charge_type: netCharge,
+        bandwidth_out_mbps: Number(bwOut) || 0,
+        system_disk_gib: Number(diskGiB) || 20,
+        auto_create_network: autoNet,
+        vpc_id: autoNet ? "" : vpcId,
+        vswitch_id: autoNet ? "" : vswId,
+        confirm,
+      });
+      toast("已提交创建 ECS 任务，正在创建网络与实例…");
+      const job = await waitForJob(job_id);
+      if (job.status === "failed") toast(errorText(job.error?.code ?? "internal_error"), true);
+      else toast("ECS 实例已创建成功");
+      onCreated();
+    } catch (err) {
+      toast(errMsg(err), true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title="创建阿里云 ECS 实例（按量 / 抢占式）" onClose={onClose} wide>
+      <form className="stack" onSubmit={submit}>
+        {!createEnabled && (
+          <Banner level="warning">
+            当前服务器默认关闭创建实例开关（<span className="mono">HM_INSTANCE_CREATE_ENABLED=false</span>），防止产生预期外云资源费用。你可以先预览地域目录，如需直接创建请在服务端开启该环境变量。
+          </Banner>
+        )}
+        <div className="grid g2">
+          <div>
+            <label className="lbl">阿里云账号</label>
+            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} style={{ width: "100%" }}>
+              {enabledAccs.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="lbl">地域</label>
+            <select value={regionId} onChange={(e) => { setRegionId(e.target.value); setZoneId(""); setInstanceType(""); setImageId(""); }} style={{ width: "100%" }}>
+              {(curAcc?.region_ids ?? []).map((r) => (
+                <option key={r} value={r}>{regionName(r)} ({r})</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <Async res={catRes} lines={4}>
+          {(cat) =>
+            !cat ? null : (
+              <>
+                <div className="grid g3">
+                  <div>
+                    <label className="lbl">可用区</label>
+                    <select value={zoneId} onChange={(e) => setZoneId(e.target.value)} style={{ width: "100%" }}>
+                      {cat.zones.map((z) => (
+                        <option key={z.id} value={z.id}>{z.name || z.id}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="lbl">实例规格</label>
+                    <select value={instanceType} onChange={(e) => setInstanceType(e.target.value)} style={{ width: "100%" }}>
+                      {cat.instance_types.map((t) => (
+                        <option key={t.id} value={t.id}>{t.id} ({t.cpu}C / {t.memory_gib}G)</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="lbl">系统镜像</label>
+                    <select value={imageId} onChange={(e) => setImageId(e.target.value)} style={{ width: "100%" }}>
+                      {cat.images.map((im) => (
+                        <option key={im.id} value={im.id}>{im.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid g3">
+                  <div>
+                    <label className="lbl">实例名称</label>
+                    <input type="text" value={instanceName} onChange={(e) => setInstanceName(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="lbl">实例计费方式（不支持包年包月）</label>
+                    <select value={chargeType} onChange={(e) => setChargeType(e.target.value as "PostPaid" | "Spot")} style={{ width: "100%" }}>
+                      <option value="PostPaid">按量付费（PostPaid）</option>
+                      <option value="Spot">抢占式实例（Spot）</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="lbl">系统盘大小（GiB）</label>
+                    <input type="number" min={20} max={500} value={diskGiB} onChange={(e) => setDiskGiB(e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid g2">
+                  <div>
+                    <label className="lbl">公网带宽计费</label>
+                    <select value={netCharge} onChange={(e) => setNetCharge(e.target.value as "PayByTraffic" | "PayByBandwidth")} style={{ width: "100%" }}>
+                      <option value="PayByTraffic">按使用流量</option>
+                      <option value="PayByBandwidth">按固定带宽</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="lbl">公网出带宽峰值（0–200 Mbps）</label>
+                    <input type="number" min={0} max={200} value={bwOut} onChange={(e) => setBwOut(e.target.value)} />
+                  </div>
+                </div>
+                <div className="inline">
+                  <Switch on={autoNet} onChange={setAutoNet} label="自动创建专有网络与安全组" />
+                  <span>若无可用网络则自动创建 VPC、交换机与最小权限安全组</span>
+                </div>
+                {!autoNet && (
+                  <div className="grid g2">
+                    <div>
+                      <label className="lbl">已有 VPC</label>
+                      <select value={vpcId} onChange={(e) => setVpcId(e.target.value)} style={{ width: "100%" }}>
+                        {cat.vpcs.map((v) => (
+                          <option key={v.id} value={v.id}>{v.name || v.id} ({v.cidr_block})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="lbl">已有交换机</label>
+                      <select value={vswId} onChange={(e) => setVswId(e.target.value)} style={{ width: "100%" }}>
+                        {cat.vswitches.filter((s) => !vpcId || s.vpc_id === vpcId).map((s) => (
+                          <option key={s.id} value={s.id}>{s.name || s.id} ({s.zone_id})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </>
+            )
+          }
+        </Async>
+
+        <label className="inline" style={{ cursor: "pointer" }}>
+          <input type="checkbox" checked={confirm} onChange={(e) => setConfirm(e.target.checked)} style={{ width: "auto" }} />
+          <span>我已知晓创建按量或抢占式 ECS 会立即在阿里云产生计算、存储与公网费用</span>
+        </label>
+
+        <div className="actions">
+          <button type="button" className="btn" onClick={onClose}>取消</button>
+          <button className="btn primary" disabled={busy || !createEnabled || !confirm || !zoneId || !instanceType || !imageId}>
+            {busy && <Spinner />} 确认创建 ECS
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }

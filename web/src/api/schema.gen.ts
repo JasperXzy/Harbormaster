@@ -95,6 +95,104 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/automation/failovers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 主备切换规则列表 */
+        get: operations["listFailoverRules"];
+        put?: never;
+        /** 新建主备切换规则 */
+        post: operations["createFailoverRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/automation/failovers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** 修改主备切换规则 */
+        put: operations["updateFailoverRule"];
+        post?: never;
+        /** 删除主备切换规则 */
+        delete: operations["deleteFailoverRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/{instance_id}/change-eip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。 */
+                instance_id: components["parameters"]["InstanceId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 申请新弹性公网 IP 并替换当前受管 EIP
+         * @description 需生产开启 HM_EIP_MANAGE_ENABLED=true。严格保护：若实例当前绑定了非本面板创建的原有 EIP 或固定公网 IP，自动返回 409 unmanaged_eip_protected / eip_rotate_unsupported，绝不解绑或释放原有 EIP。
+         */
+        post: operations["rotateInstanceEIP"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/cloud/ecs-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询指定账号与地域的可用区、镜像、规格与 VPC/交换机选项 */
+        get: operations["getECSCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/instances/create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 创建按量或抢占式 ECS 实例
+         * @description 需生产开启 HM_INSTANCE_CREATE_ENABLED=true。不支持包年包月。
+         */
+        post: operations["createECSInstance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/instances/{instance_id}/intent-confirmation": {
         parameters: {
             query?: never;
@@ -971,6 +1069,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 登录页 / 首次安装页读取自定义面板名称与图标状态 */
+        get: operations["getPublicBranding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/branding/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 登录页 / 首次安装页读取自定义 Logo 图片 */
+        get: operations["getPublicBrandingLogo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/version-center": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 版本中心与升级指引 */
+        get: operations["getVersionCenter"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/system/version-center/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 在线检查 GitHub Release 最新版本 */
+        post: operations["checkLatestVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/system/info": {
         parameters: {
             query?: never;
@@ -1405,6 +1571,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/integrations/cron/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** URL Cron 兼容触发接口（仅接受 cron:run API Key，不接受管理员会话密码） */
+        post: operations["runUrlCron"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/integrations/instances/refresh": {
         parameters: {
             query?: never;
@@ -1797,6 +1980,111 @@ export interface paths {
          * @description 用已保存的设置发送。任务失败时 `Job.error.code` 说明原因（如 `telegram_unauthorized`、`telegram_chat_not_found`、`telegram_unreachable`、`telegram_rate_limited`、`telegram_proxy_unauthorized`、`telegram_delivery_uncertain`）。An unfinished test is reused instead of queueing another. Tests bypass quiet hours.
          */
         post: operations["sendTelegramTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notify/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 邮件（SMTP）通知渠道配置 */
+        get: operations["getEmailChannel"];
+        /** 保存邮件（SMTP）通知渠道配置 */
+        put: operations["updateEmailChannel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notify/email/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 发送测试邮件 */
+        post: operations["testEmailChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notify/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Webhook 通知渠道配置 */
+        get: operations["getWebhookChannel"];
+        /** 保存 Webhook 通知渠道配置 */
+        put: operations["updateWebhookChannel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notify/webhook/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 发送测试 Webhook 请求 */
+        post: operations["testWebhookChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notify/daily-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 每日流量简报配置 */
+        get: operations["getDailyReport"];
+        /** 保存每日流量简报配置 */
+        put: operations["updateDailyReport"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notify/daily-report/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 立即生成并投递一份当前流量简报 */
+        post: operations["sendDailyReportNow"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2513,7 +2801,7 @@ export interface components {
          * @description network_probe 包含固定测速及线路追踪任务。
          * @enum {string}
          */
-        JobType: "refresh" | "permission_check" | "telegram_test" | "instance_power" | "instance_release" | "heartbeat_test" | "network_probe";
+        JobType: "refresh" | "permission_check" | "telegram_test" | "email_test" | "webhook_test" | "instance_power" | "instance_release" | "instance_eip_rotate" | "instance_create" | "heartbeat_test" | "network_probe";
         /** @enum {string} */
         JobStatus: "queued" | "running" | "succeeded" | "failed";
         /** @enum {string} */
@@ -2666,6 +2954,10 @@ export interface components {
             instance_power_enabled?: boolean;
             /** @description Whether this production serve process accepts release jobs and starts the separate worker. False by default and in demo; independent of power capability and not proof of cloud write permission. */
             instance_release_enabled?: boolean;
+            /** @description Whether this production serve process accepts EIP rotation jobs. False by default and in demo. */
+            eip_manage_enabled?: boolean;
+            /** @description Whether this production serve process accepts ECS instance creation jobs. False by default and in demo. */
+            instance_create_enabled?: boolean;
             version: string;
             commit: string;
             /**
@@ -3227,6 +3519,8 @@ export interface components {
             usage: components["schemas"]["CPUMetric"];
             /** @description ECS absolute credits; null for SWAS, whose CPU endpoint does not expose this metric. */
             credit_balance: components["schemas"]["CPUMetric"] | null;
+            /** @description 突发规格 24 小时常规累积积分上限（BaselineCredit × 60 × 24 / 100），非突发规格不返回。 */
+            credit_max_24h?: number | null;
         };
         CPUMetric: {
             /** @enum {string} */
@@ -4430,11 +4724,118 @@ export interface components {
                 updated_at: string | null;
             }[];
         };
+        EmailChannel: {
+            enabled: boolean;
+            /** @enum {string} */
+            status: "ok" | "failing" | "not_tested" | "not_configured";
+            host: string;
+            port: number;
+            /** @enum {string} */
+            tls_mode: "starttls" | "implicit_tls" | "none";
+            username: string;
+            password_set: boolean;
+            from_address: string;
+            to_addresses: string[];
+            subject_prefix: string;
+            /** Format: date-time */
+            last_success_at: string | null;
+            last_error: {
+                code: string;
+                message: string;
+            } | null;
+            /** Format: int64 */
+            revision: number;
+        };
+        EmailChannelUpdate: {
+            enabled: boolean;
+            host: string;
+            port: number;
+            /** @enum {string} */
+            tls_mode: "starttls" | "implicit_tls" | "none";
+            username?: string;
+            password?: string;
+            from_address: string;
+            to_addresses: string[];
+            subject_prefix?: string;
+        };
+        WebhookChannel: {
+            enabled: boolean;
+            /** @enum {string} */
+            status: "ok" | "failing" | "not_tested" | "not_configured";
+            url: string;
+            secret_set: boolean;
+            header_name: string;
+            header_value_set: boolean;
+            /** Format: date-time */
+            last_success_at: string | null;
+            last_error: {
+                code: string;
+                message: string;
+            } | null;
+            /** Format: int64 */
+            revision: number;
+        };
+        WebhookChannelUpdate: {
+            enabled: boolean;
+            url: string;
+            secret?: string;
+            header_name?: string;
+            header_value?: string;
+        };
+        DailyReportSettings: {
+            enabled: boolean;
+            time_of_day: string;
+            /** Format: int64 */
+            revision: number;
+            last_sent_date: string | null;
+            /** Format: date-time */
+            updated_at: string | null;
+        };
+        DailyReportSettingsUpdate: {
+            /** Format: int64 */
+            revision: number;
+            enabled: boolean;
+            time_of_day: string;
+        };
+        PublicBranding: {
+            name: string;
+            has_logo: boolean;
+            /** Format: date-time */
+            updated_at: string | null;
+        };
+        CronRunResponse: {
+            job_id: string | null;
+            scheduled: boolean;
+            /** Format: date-time */
+            triggered_at: string;
+        };
+        VersionCenter: {
+            server_version: string;
+            server_commit: string;
+            server_build_time: string;
+            bundled_agent_version: string | null;
+            deployment_mode: string;
+            /** Format: date-time */
+            checked_at: string | null;
+            latest_version: string | null;
+            release_url: string | null;
+            release_notes: string | null;
+            update_available: boolean | null;
+            last_error: {
+                code: string;
+                message: string;
+            } | null;
+            upgrade_commands: {
+                docker_compose: string;
+                binary_hint: string;
+                agent_hint: string;
+            };
+        };
         /**
          * @description 内置规则；仅返回当前已实现且有可用来源的规则。
          * @enum {string}
          */
-        AlertRuleKey: "cdt_usage" | "cdt_forecast_exceed" | "account_api_failure" | "agent_offline" | "cdt_official_unavailable" | "instance_expiring" | "spec_bandwidth_insufficient" | "instance_public_ip_changed" | "balance_low" | "network_latency" | "network_loss" | "network_unreachable" | "network_route_change" | "idle_resource_detected" | "quota_protection" | "cdt_estimation_deviation";
+        AlertRuleKey: "cdt_usage" | "cdt_forecast_exceed" | "swas_traffic_usage" | "cpu_credit_low" | "system_event" | "account_api_failure" | "agent_offline" | "cdt_official_unavailable" | "instance_expiring" | "spec_bandwidth_insufficient" | "instance_public_ip_changed" | "balance_low" | "network_latency" | "network_loss" | "network_unreachable" | "network_route_change" | "idle_resource_detected" | "quota_protection" | "cdt_estimation_deviation";
         /** @enum {string} */
         Severity: "info" | "warning" | "serious" | "critical";
         /** @description 每条规则只用到其中一部分字段，用不到的字段不返回。spec_bandwidth_insufficient、instance_public_ip_changed、network_route_change 和 idle_resource_detected 使用空对象，无额外阈值。公网 IP 和线路变化按每次有效事件记录，不产生恢复通知；线路还需要组合中明确开启 notify_changes。闲置候选依据新采集的明确状态去重与恢复，未估算金额。 */
@@ -4471,8 +4872,10 @@ export interface components {
             }[];
             /** @description instance_expiring only. Default 7; compare freshly collected expiry against now plus this many 24-hour days. Missing expiry is unknown. Stopped subscription instances remain applicable. */
             before_days?: number;
-            /** @description cdt_usage 的默认档位（账号可以单独覆盖）。 */
+            /** @description cdt_usage 与 swas_traffic_usage 的默认档位。 */
             thresholds_percent?: number[];
+            /** @description cpu_credit_low 低于 24 小时累积上限的百分比阈值（默认 20）。 */
+            threshold_percent?: number;
             /** @description account_api_failure、cdt_official_unavailable 为连续失败次数；cdt_estimation_deviation 为不同可信截止的连续精确偏差次数（默认 3）；network_unreachable 为完整测速全部失败的连续次数，默认 3。 */
             consecutive_failures?: number;
             /** @description agent_offline：连续多少秒无新鲜上报视为掉线，默认 30。实例状态和 settings 使用同一值；关闭告警不关闭状态监测。尚未收到首次有效上报的注册不触发掉线告警。 */
@@ -4540,6 +4943,89 @@ export interface components {
             instance_id: string;
             agent: components["schemas"]["Agent"];
             realtime_protection: components["schemas"]["RealtimeProtection"];
+        };
+        FailoverRuleInput: {
+            /** Format: int64 */
+            revision?: number;
+            name: string;
+            enabled: boolean;
+            dry_run: boolean;
+            primary_instance_id: string;
+            standby_instance_id: string;
+        };
+        FailoverRule: {
+            id: string;
+            /** Format: int64 */
+            revision: number;
+            name: string;
+            enabled: boolean;
+            dry_run: boolean;
+            primary_instance_id: string;
+            standby_instance_id: string;
+            /** Format: date-time */
+            last_triggered_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        EIPRotateInput: {
+            /** @default 100 */
+            bandwidth_mbps?: number;
+            /**
+             * @default PayByTraffic
+             * @enum {string}
+             */
+            internet_charge_type?: "PayByTraffic" | "PayByBandwidth";
+            bandwidth_package_id?: string;
+        };
+        ECSCatalog: {
+            account_id: string;
+            region_id: string;
+            zones: {
+                id: string;
+                name: string;
+            }[];
+            images: {
+                id: string;
+                name: string;
+            }[];
+            instance_types: {
+                id: string;
+                cpu: number;
+                memory_gib: number;
+            }[];
+            vpcs: {
+                id: string;
+                name: string;
+                cidr_block: string;
+            }[];
+            vswitches: {
+                id: string;
+                vpc_id: string;
+                zone_id: string;
+                name: string;
+                cidr_block: string;
+            }[];
+        };
+        ECSCreateInput: {
+            account_id: string;
+            region_id: string;
+            zone_id: string;
+            instance_name: string;
+            instance_type: string;
+            image_id: string;
+            /** @enum {string} */
+            instance_charge_type: "PostPaid" | "Spot";
+            /** @enum {string} */
+            internet_charge_type: "PayByTraffic" | "PayByBandwidth";
+            bandwidth_out_mbps: number;
+            system_disk_gib: number;
+            auto_create_network: boolean;
+            vpc_id?: string;
+            vswitch_id?: string;
+            security_group_id?: string;
+            confirm: boolean;
         };
     };
     responses: {
@@ -4860,6 +5346,211 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             409: components["responses"]["Conflict"];
             422: components["responses"]["ValidationFailed"];
+        };
+    };
+    listFailoverRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 主备切换规则列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["FailoverRule"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createFailoverRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FailoverRuleInput"];
+            };
+        };
+        responses: {
+            /** @description 已创建 */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FailoverRule"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    updateFailoverRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FailoverRuleInput"];
+            };
+        };
+        responses: {
+            /** @description 已更新 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FailoverRule"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    deleteFailoverRule: {
+        parameters: {
+            query: {
+                revision: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已删除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    rotateInstanceEIP: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description Harbormaster 内部的实例 ID（Instance.id），不是阿里云实例 ID。 */
+                instance_id: components["parameters"]["InstanceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EIPRotateInput"];
+            };
+        };
+        responses: {
+            202: components["responses"]["JobAccepted"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            /** @description eip_manage_disabled or internal_error */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getECSCatalog: {
+        parameters: {
+            query: {
+                account_id: string;
+                region_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description ECS 创建目录数据 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ECSCatalog"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            /** @description 阿里云接口查询失败 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createECSInstance: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ECSCreateInput"];
+            };
+        };
+        responses: {
+            202: components["responses"]["JobAccepted"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            /** @description instance_create_disabled or internal_error */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     confirmInstanceIntent: {
@@ -6807,6 +7498,90 @@ export interface operations {
             422: components["responses"]["ValidationFailed"];
         };
     };
+    getPublicBranding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 公开品牌状态 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicBranding"];
+                };
+            };
+        };
+    };
+    getPublicBrandingLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description PNG 图片 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getVersionCenter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 版本中心状态 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionCenter"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    checkLatestVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 最新检查结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionCenter"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     getSystemInfo: {
         parameters: {
             query?: never;
@@ -7522,6 +8297,34 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    runUrlCron: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    account_id?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description 已触发定时巡检与刷新队列 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CronRunResponse"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     refreshInstancesWithAPIKey: {
         parameters: {
             query?: never;
@@ -8174,6 +8977,201 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+        };
+    };
+    getEmailChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SMTP 渠道状态（密码永不返回） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailChannel"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateEmailChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailChannelUpdate"];
+            };
+        };
+        responses: {
+            /** @description 已保存的 SMTP 渠道状态 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailChannel"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    testEmailChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: components["responses"]["JobAccepted"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getWebhookChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook 渠道状态（签名密钥与自定义请求头值永不返回） */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookChannel"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateWebhookChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookChannelUpdate"];
+            };
+        };
+        responses: {
+            /** @description 已保存的 Webhook 渠道状态 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookChannel"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    testWebhookChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: components["responses"]["JobAccepted"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getDailyReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 日报配置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyReportSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateDailyReport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DailyReportSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description 已保存的日报配置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DailyReportSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+        };
+    };
+    sendDailyReportNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已进入通知发件箱 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        notification_id: string;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     getTelegramControl: {
