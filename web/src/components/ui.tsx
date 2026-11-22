@@ -1,35 +1,33 @@
-// 基础组件：状态徽标、开关、分段切换、弹窗、提示、各种状态占位。
+// Modern Cloud Console Primitives: Tinted Badges, Slide-over Drawers, InfoTip Popovers, SubTabs, KPI Cards, Modals & Toasts.
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "../api/client";
 import { errorText } from "../api/labels";
 import { isStale, type FreshKind } from "../lib/freshness";
 import { ago, stamp } from "../lib/format";
 import { useNow } from "../lib/useResource";
+import { CheckIcon, CloseIcon, CopyIcon, InfoIcon } from "./icons";
 
 export type Level = "good" | "warning" | "serious" | "critical" | "neutral";
 
-/* 状态图标：形状与颜色同时区分，色弱也能看懂 */
 export function LevelIcon({ level }: { level: Level }) {
   switch (level) {
     case "good":
       return (
         <svg viewBox="0 0 12 12" aria-hidden="true">
-          <circle cx="6" cy="6" r="5" fill="currentColor" />
-          <path d="M3.6 6.2 5.2 7.7 8.4 4.5" stroke="#fff" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <circle cx="6" cy="6" r="5" fill="currentColor" opacity="0.22" />
+          <circle cx="6" cy="6" r="3.2" fill="currentColor" />
         </svg>
       );
     case "warning":
       return (
         <svg viewBox="0 0 12 12" aria-hidden="true">
-          <path d="M6 1 11.2 10.5H.8z" fill="currentColor" />
-          <path d="M6 4.5v2.5M6 8.6v.01" stroke="#0b0b0b" strokeWidth="1.3" strokeLinecap="round" />
+          <path d="M6 1.2 11.2 10.4H.8z" fill="currentColor" />
         </svg>
       );
     case "serious":
       return (
         <svg viewBox="0 0 12 12" aria-hidden="true">
-          <rect x="1.5" y="1.5" width="9" height="9" rx="2" transform="rotate(45 6 6)" fill="currentColor" />
-          <path d="M6 3.8v2.6M6 8.2v.01" stroke="#fff" strokeWidth="1.3" strokeLinecap="round" />
+          <rect x="2" y="2" width="8" height="8" rx="1.8" transform="rotate(45 6 6)" fill="currentColor" />
         </svg>
       );
     case "critical":
@@ -42,7 +40,7 @@ export function LevelIcon({ level }: { level: Level }) {
     default:
       return (
         <svg viewBox="0 0 12 12" aria-hidden="true">
-          <circle cx="6" cy="6" r="4.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          <circle cx="6" cy="6" r="3.5" fill="currentColor" opacity="0.55" />
         </svg>
       );
   }
@@ -73,13 +71,93 @@ export function SegToggle<V extends string>({ value, onChange, options, label }:
   );
 }
 
+export function SubTabs<V extends string>({
+  value,
+  onChange,
+  tabs,
+  right,
+}: {
+  value: V;
+  onChange: (v: V) => void;
+  tabs: { key: V; label: string; badge?: number | string }[];
+  right?: ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
+      <div className="subtabs" role="tablist" style={{ borderBottom: 0 }}>
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={t.key === value}
+            className={`subtab ${t.key === value ? "on" : ""}`}
+            onClick={() => onChange(t.key)}
+          >
+            <span>{t.label}</span>
+            {t.badge !== undefined && t.badge !== 0 && <span className="subtab-badge">{t.badge}</span>}
+          </button>
+        ))}
+      </div>
+      {right && (
+        <>
+          <div className="spacer" />
+          <div style={{ paddingBottom: 6 }}>{right}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
+export function KpiCard({ label, value, unit, foot, icon }: { label: string; value: ReactNode; unit?: string; foot?: ReactNode; icon?: ReactNode }) {
+  return (
+    <div className="kpi-card">
+      <div className="kpi-top">
+        <span>{label}</span>
+        {icon && <span className="kpi-icon">{icon}</span>}
+      </div>
+      <div className="kpi-val">
+        {value}
+        {unit && <small>{unit}</small>}
+      </div>
+      {foot && <div className="kpi-foot">{foot}</div>}
+    </div>
+  );
+}
+
+export function InfoTip({ children, label = "说明" }: { children: ReactNode; label?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span
+      className="infotip-wrap"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        className="infotip-btn"
+        aria-label={label}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+      >
+        <InfoIcon size={14} />
+      </button>
+      {open && <span className="infotip-pop" role="tooltip">{children}</span>}
+    </span>
+  );
+}
+
 export function Card({ title, sub, right, children, className = "" }: { title?: ReactNode; sub?: ReactNode; right?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={`card ${className}`}>
       {(title || right) && (
         <div className="card-head">
-          {title && <h2>{title}</h2>}
-          {sub && <span className="sub">{sub}</span>}
+          <div className="card-head-titles">
+            {title && <h2>{title}</h2>}
+            {sub && <span className="sub">{sub}</span>}
+          </div>
           <div className="spacer" />
           {right}
         </div>
@@ -91,7 +169,6 @@ export function Card({ title, sub, right, children, className = "" }: { title?: 
 
 export const Spinner = () => <span className="spin" role="status" aria-label="处理中" />;
 
-/* ---------- 状态占位 ---------- */
 export function Skeleton({ lines = 3, height = 14 }: { lines?: number; height?: number }) {
   return (
     <div aria-busy="true" aria-label="正在加载" style={{ display: "grid", gap: 10 }}>
@@ -123,20 +200,17 @@ export function ErrorState({ error, onRetry }: { error: ApiError; onRetry?: () =
         <circle cx="12" cy="12" r="9" />
         <path d="M12 7.5v5M12 16v.01" />
       </svg>
-      <div className="t">没能取到数据</div>
+      <div className="t">读取失败</div>
       <div className="d">{errorText(error.code)}</div>
       {onRetry && (
         <div className="act">
-          <button className="btn" onClick={onRetry}>
-            再试一次
-          </button>
+          <button className="btn sm" onClick={onRetry}>重试</button>
         </div>
       )}
     </div>
   );
 }
 
-/** 一块内容的三种状态：加载中 / 出错 / 有数据（空数据由调用方在 children 里判断） */
 export function Async<T>({ res, children, lines }: { res: { data: T | undefined; error: ApiError | undefined; loading: boolean; reload: () => void }; children: (data: T) => ReactNode; lines?: number }) {
   if (res.data !== undefined) return <>{children(res.data)}</>;
   if (res.error) return <ErrorState error={res.error} onRetry={res.reload} />;
@@ -146,24 +220,23 @@ export function Async<T>({ res, children, lines }: { res: { data: T | undefined;
 export function Banner({ level, children, action }: { level: "warning" | "critical" | "neutral"; children: ReactNode; action?: ReactNode }) {
   return (
     <div className={`banner ${level}`} role={level === "critical" ? "alert" : "status"}>
-      <Badge level={level}>{""}</Badge>
+      <Badge level={level}>{level === "critical" ? "异常" : level === "warning" ? "提示" : "说明"}</Badge>
       <div className="body">{children}</div>
       {action}
     </div>
   );
 }
 
-/** "截至 17:42"；超过时限没更新则变成醒目的"数据已过期" */
-/** quiet：数据新鲜时什么都不显示，只在过期或缺失时提示 */
-export function Fresh({ at, kind, prefix = "截至", name = "数据", quiet }: { at: string | null | undefined; kind: FreshKind; prefix?: string; name?: string; quiet?: boolean }) {
+export function Fresh({ at, kind, prefix = "更新于", name = "数据", quiet }: { at: string | null | undefined; kind: FreshKind; prefix?: string; name?: string; quiet?: boolean }) {
   const now = useNow(5000);
-  if (!at) return <span className="chip stale">还没有{name}</span>;
-  if (isStale(at, kind, now))
+  if (!at) return quiet ? null : <span className="chip">暂无{name}</span>;
+  if (isStale(at, kind, now)) {
     return (
       <span className="chip stale" title={`最后更新于 ${stamp(at)}`}>
-        <LevelIconInline /> {name}已过期 · 停在 {stamp(at)}
+        <span className="dot warn" /> {name}延迟 · {stamp(at)}
       </span>
     );
+  }
   if (quiet) return null;
   return (
     <span className="chip" title={ago(at, now)}>
@@ -171,13 +244,62 @@ export function Fresh({ at, kind, prefix = "截至", name = "数据", quiet }: {
     </span>
   );
 }
-const LevelIconInline = () => (
-  <span style={{ width: 12, height: 12, display: "inline-flex", color: "var(--warning)" }}>
-    <LevelIcon level="warning" />
-  </span>
-);
 
-/* ---------- 弹窗 ---------- */
+/* ---------- Slide-over Drawer ---------- */
+export function Drawer({
+  title,
+  sub,
+  right,
+  footer,
+  wide,
+  children,
+  onClose,
+}: {
+  title: ReactNode;
+  sub?: ReactNode;
+  right?: ReactNode;
+  footer?: ReactNode;
+  wide?: boolean;
+  children: ReactNode;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    ref.current?.focus();
+    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", key);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", key);
+      document.body.style.overflow = "";
+      prev?.focus?.();
+    };
+  }, [onClose]);
+
+  return (
+    <div className="drawer-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className={`drawer ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" tabIndex={-1} ref={ref}>
+        <div className="drawer-head">
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <h2>{title}</h2>
+            {sub && <div className="sub" style={{ marginTop: 3 }}>{sub}</div>}
+          </div>
+          <div className="inline" style={{ flexWrap: "nowrap" }}>
+            {right}
+            <button type="button" className="btn icon" onClick={onClose} aria-label="关闭抽屉">
+              <CloseIcon size={16} />
+            </button>
+          </div>
+        </div>
+        <div className="drawer-body">{children}</div>
+        {footer && <div className="drawer-foot">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Centered Modal ---------- */
 export function Modal({ title, children, onClose, wide }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -195,14 +317,18 @@ export function Modal({ title, children, onClose, wide }: { title: string; child
   return (
     <div className="modal-bg" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`modal ${wide ? "wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
-        <h2>{title}</h2>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+          <h2 style={{ margin: 0 }}>{title}</h2>
+          <button type="button" className="btn icon" style={{ width: 28, height: 28 }} onClick={onClose} aria-label="关闭">
+            <CloseIcon size={15} />
+          </button>
+        </div>
         {children}
       </div>
     </div>
   );
 }
 
-/** 确认弹窗。传 typeToConfirm 时必须先输入指定文字，用于删除等不可恢复的操作。 */
 export function Confirm({ title, body, okText, danger, typeToConfirm, onOk, onClose }: { title: string; body: ReactNode; okText: string; danger?: boolean; typeToConfirm?: string; onOk: () => Promise<void> | void; onClose: () => void }) {
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
@@ -227,9 +353,7 @@ export function Confirm({ title, body, okText, danger, typeToConfirm, onOk, onCl
         </div>
       )}
       <div className="actions">
-        <button className="btn" onClick={onClose}>
-          取消
-        </button>
+        <button className="btn" onClick={onClose}>取消</button>
         <button className={`btn ${danger ? "danger" : "primary"}`} disabled={busy || (!!typeToConfirm && typed !== typeToConfirm)} onClick={ok}>
           {busy && <Spinner />} {okText}
         </button>
@@ -238,7 +362,7 @@ export function Confirm({ title, body, okText, danger, typeToConfirm, onOk, onCl
   );
 }
 
-/* ---------- 轻提示 ---------- */
+/* ---------- Toast ---------- */
 interface ToastItem {
   id: number;
   text: string;
@@ -269,12 +393,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/** 把接口错误变成提示文字 */
 export const errMsg = (e: unknown) => errorText(e instanceof ApiError ? e.code : e instanceof Error ? e.message : "internal_error");
 
-export function CopyButton({ text, label = "复制", className = "btn sm" }: { text: string; label?: string; className?: string }) {
+export function CopyButton({ text, label = "复制", className = "btn sm", iconOnly = false }: { text: string; label?: string; className?: string; iconOnly?: boolean }) {
   const [done, setDone] = useState(false);
-  const copy = async () => {
+  const copy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
       await navigator.clipboard.writeText(text);
     } catch {
@@ -288,9 +412,16 @@ export function CopyButton({ text, label = "复制", className = "btn sm" }: { t
     setDone(true);
     setTimeout(() => setDone(false), 1800);
   };
+  if (iconOnly) {
+    return (
+      <button type="button" className="infotip-btn" title={done ? "已复制" : label} aria-label={label} onClick={copy}>
+        {done ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
+      </button>
+    );
+  }
   return (
     <button type="button" className={className} onClick={copy}>
-      {done ? "已复制 ✓" : label}
+      {done ? <><CheckIcon size={13} /> 已复制</> : label}
     </button>
   );
 }

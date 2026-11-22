@@ -90,7 +90,9 @@ export function Login({ onDone }: { onDone: () => void }) {
     <div className="solo">
       <div className="solo-box">
         <div className="brand">
-          {logoUrl ? <img src={logoUrl} alt="" width={28} height={28} style={{ borderRadius: 6, objectFit: "cover", flex: "none" }} /> : <Logo size={28} />}
+          <div className="brand-mark">
+            {logoUrl ? <img src={logoUrl} alt="" width={20} height={20} style={{ borderRadius: 5, objectFit: "cover" }} /> : <Logo size={17} />}
+          </div>
           <span>{brandName}</span>
         </div>
         <div className="card stack">
