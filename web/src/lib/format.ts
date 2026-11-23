@@ -35,6 +35,14 @@ export function rate(bytesPerSecond: number): string {
 
 export const pct = (ratio: number, d = 0) => `${num(ratio * 100, d)}%`;
 
+/** 版本号格式化：纯数字开头补 v 前缀，已有 v 或分支标签（如 v0.4.0 / main-xxx）原样显示，避免出现 vv0.4.0。 */
+export function ver(v: string | null | undefined): string {
+  if (!v) return "—";
+  const s = v.trim();
+  if (!s) return "—";
+  return /^\d/.test(s) ? `v${s}` : s;
+}
+
 function parts(iso: string) {
   const f = new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   const o: Record<string, string> = {};

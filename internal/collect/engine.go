@@ -384,7 +384,11 @@ func (e *Engine) scanAccount(ctx context.Context, j model.Job, a model.Account) 
 		if err := before(); err != nil {
 			return result, err
 		}
-		return result, e.Store.SaveCDT(scanCtx, j, a, o, time.Now().UTC())
+		err := e.Store.SaveCDT(scanCtx, j, a, o, time.Now().UTC())
+		if err == nil {
+			e.refreshEstimatesBestEffort(scanCtx)
+		}
+		return result, err
 	}
 	result := e.Scanner.Scan(scanCtx, a, credential, j.Type == "permission_check", before)
 	if scanner, ok := e.Scanner.(SystemEventScanner); ok && j.Type == "permission_check" {
@@ -468,7 +472,19 @@ func (e *Engine) scanAccount(ctx context.Context, j model.Job, a model.Account) 
 	if err := before(); err != nil {
 		return result, err
 	}
-	return result, e.Store.SaveScan(scanCtx, j, a, result, time.Now().UTC())
+	err = e.Store.SaveScan(scanCtx, j, a, result, time.Now().UTC())
+	if err == nil {
+		e.refreshEstimatesBestEffort(scanCtx)
+	}
+	return result, err
+}
+
+func (e *Engine) refreshEstimatesBestEffort(ctx context.Context) {
+	loc, err := e.Store.BusinessLocation(ctx, e.Timezone)
+	if err != nil {
+		return
+	}
+	_ = e.Store.RefreshEstimates(ctx, loc, time.Now().UTC())
 }
 
 // SchedulerProgress is independent of individual cloud account outcomes. A

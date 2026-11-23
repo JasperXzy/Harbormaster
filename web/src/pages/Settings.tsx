@@ -8,7 +8,7 @@ import { AccountForm, PermissionList } from "../components/AccountForm";
 import { ActivityIcon, GlobeIcon, MonitorIcon, PlusIcon, ServerIcon, ShieldIcon, ZapIcon } from "../components/icons";
 import { Async, Badge, Card, Confirm, CopyButton, Drawer, EmptyState, ErrorState, errMsg, Modal, SegToggle, Skeleton, Spinner, Switch, useToast, type Level } from "../components/ui";
 import { useShared } from "../lib/data";
-import { ago, duration, gb, setTimezone, stamp } from "../lib/format";
+import { ago, duration, gb, setTimezone, stamp, ver } from "../lib/format";
 import { Link, useQueryTab } from "../lib/router";
 import { useNow, useResource } from "../lib/useResource";
 import { createPasskeyCredential, passkeySupported } from "../lib/webauthn";
@@ -329,7 +329,9 @@ function AgentsCard() {
             <tbody>
               {list.map((i) => {
                 const [l, t] = AGENT[i.agent.status];
-                const old = Boolean(i.agent.update_available || (info.data && i.agent.version && i.agent.version !== info.data.latest_agent_version));
+                const curVer = i.agent.version ? ver(i.agent.version) : null;
+                const latestVer = info.data?.latest_agent_version ? ver(info.data.latest_agent_version) : null;
+                const old = Boolean(i.agent.update_available || (curVer && latestVer && curVer !== latestVer));
                 return (
                   <tr key={i.id}>
                     <td>
@@ -341,8 +343,8 @@ function AgentsCard() {
                       {i.agent.offline_since && <div className="sub">失联 {duration((now - new Date(i.agent.offline_since).getTime()) / 1000)}</div>}
                     </td>
                     <td className="mono">
-                      {i.agent.version ? `v${i.agent.version}` : "—"}
-                      {old && <div className="sub" style={{ color: "var(--warning)" }}>可升级至 v{info.data?.latest_agent_version}</div>}
+                      {curVer ?? "—"}
+                      {old && latestVer && <div className="sub" style={{ color: "var(--warning)" }}>可升级至 {latestVer}</div>}
                     </td>
                     <td>{i.agent.last_report_at ? ago(i.agent.last_report_at, now) : "—"}</td>
                     <td className="only-wide sub">{i.agent.registered_at ? stamp(i.agent.registered_at) : "—"}</td>
@@ -1114,11 +1116,11 @@ function VersionCenterCard({ onLogout }: { onLogout: () => void }) {
             <dl className="kv">
               <dt>服务端版本</dt>
               <dd>
-                <b>v{v.server_version}</b>
+                <b>{ver(v.server_version)}</b>
                 <span className="sub"> · {v.server_commit} · {v.deployment_mode}</span>
                 {v.update_available && v.latest_version && (
                   <span style={{ marginLeft: 8 }}>
-                    <Badge level="warning">新版本 {v.latest_version}</Badge>
+                    <Badge level="warning">新版本 {ver(v.latest_version)}</Badge>
                     {v.release_url && (
                       <a href={v.release_url} target="_blank" rel="noreferrer" style={{ marginLeft: 8, fontSize: "var(--fs-sm)" }}>
                         更新日志 ↗
@@ -1128,7 +1130,7 @@ function VersionCenterCard({ onLogout }: { onLogout: () => void }) {
                 )}
               </dd>
               <dt>内置 Agent</dt>
-              <dd className="mono">{v.bundled_agent_version ? `v${v.bundled_agent_version}` : "未内置"}</dd>
+              <dd className="mono">{v.bundled_agent_version ? ver(v.bundled_agent_version) : "未内置"}</dd>
               {v.checked_at && (
                 <>
                   <dt>最近检查</dt>

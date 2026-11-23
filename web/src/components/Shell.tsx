@@ -5,7 +5,7 @@ import { useConnState } from "../api/events";
 import { waitForJob } from "../api/jobs";
 import { useShared } from "../lib/data";
 import { isStale } from "../lib/freshness";
-import { stamp } from "../lib/format";
+import { stamp, ver } from "../lib/format";
 import { Link, usePath } from "../lib/router";
 import { nextTheme, THEME_LABEL, useTheme } from "../lib/theme";
 import { quotaView } from "../lib/usage";
@@ -189,7 +189,7 @@ export function Shell({
         </nav>
 
         <div className="foot">
-          <span>{version ? `v${version.replace(/^v/, "")}` : "Harbormaster"}</span>
+          <span>{version ? ver(version) : "Harbormaster"}</span>
           <span>{dataMode === "demo" ? "演示环境" : "生产就绪"}</span>
         </div>
       </aside>
