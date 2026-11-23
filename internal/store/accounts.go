@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"maps"
 	"slices"
 	"time"
 
@@ -38,6 +39,9 @@ func loadAccount(ctx context.Context, q queryRower, id string) (model.Account, e
 	if err = json.Unmarshal([]byte(raw), &a); err != nil {
 		return a, err
 	}
+	if a.CDTSubjectOverrides == nil {
+		a.CDTSubjectOverrides = map[string]bool{}
+	}
 	a.Revision = revision
 	a.InstanceCount = count
 	a.CredentialVersion = credentialVersion
@@ -67,6 +71,9 @@ func (s *Store) Accounts(ctx context.Context) ([]model.Account, error) {
 		if err = json.Unmarshal([]byte(raw), &a); err != nil {
 			return nil, err
 		}
+		if a.CDTSubjectOverrides == nil {
+			a.CDTSubjectOverrides = map[string]bool{}
+		}
 		a.Revision = revision
 		a.CredentialVersion = credentialVersion
 		a.InstanceCount = count
@@ -93,6 +100,9 @@ func (s *Store) CreateAccount(ctx context.Context, a model.Account, cipher []byt
 	if err = nameAvailable(ctx, tx, a.Name, a.ID); err != nil {
 		return model.Job{}, err
 	}
+	if a.CDTSubjectOverrides == nil {
+		a.CDTSubjectOverrides = map[string]bool{}
+	}
 	raw, err := json.Marshal(a)
 	if err != nil {
 		return model.Job{}, err
@@ -110,7 +120,7 @@ func (s *Store) CreateAccount(ctx context.Context, a model.Account, cipher []byt
 	if err != nil {
 		return j, err
 	}
-	if err = appendAudit(ctx, tx, auditEvent{Action: "account_created", TargetType: "account", TargetID: a.ID, AccountID: a.ID, Details: model.AuditDetails{ChangedFields: []string{"name", "site", "region_ids", "enabled", "track_mainland", "track_overseas", "quota_mainland_bytes", "quota_overseas_bytes", "reset_day", "alert_thresholds_percent"}, CredentialsChanged: true, Revision: new(int64(1))}}, a.UpdatedAt); err != nil {
+	if err = appendAudit(ctx, tx, auditEvent{Action: "account_created", TargetType: "account", TargetID: a.ID, AccountID: a.ID, Details: model.AuditDetails{ChangedFields: []string{"name", "site", "region_ids", "enabled", "track_mainland", "track_overseas", "cdt_confirmed", "quota_mainland_bytes", "quota_overseas_bytes", "reset_day", "alert_thresholds_percent"}, CredentialsChanged: true, Revision: new(int64(1))}}, a.UpdatedAt); err != nil {
 		return j, err
 	}
 	return j, tx.Commit()
@@ -131,9 +141,13 @@ func (s *Store) UpdateAccount(ctx context.Context, id string, change func(*model
 	previous := a
 	previous.RegionIDs = slices.Clone(a.RegionIDs)
 	previous.Thresholds = slices.Clone(a.Thresholds)
+	previous.CDTSubjectOverrides = maps.Clone(a.CDTSubjectOverrides)
 	cipher, err := change(&a)
 	if err != nil {
 		return a, err
+	}
+	if a.CDTSubjectOverrides == nil {
+		a.CDTSubjectOverrides = map[string]bool{}
 	}
 	if err = nameAvailable(ctx, tx, a.Name, id); err != nil {
 		return a, err
@@ -192,6 +206,11 @@ func (s *Store) UpdateAccount(ctx context.Context, id string, change func(*model
 			return a, err
 		}
 	}
+	if previous.CDTConfirmed != a.CDTConfirmed || !maps.Equal(previous.CDTSubjectOverrides, a.CDTSubjectOverrides) {
+		if _, err = tx.ExecContext(ctx, "UPDATE daily_work SET generation=generation+1,pending=1 WHERE account_id=?", id); err != nil {
+			return a, err
+		}
+	}
 	action := "account_updated"
 	if previous.Enabled && !a.Enabled {
 		action = "account_disabled"
@@ -200,6 +219,7 @@ func (s *Store) UpdateAccount(ctx context.Context, id string, change func(*model
 		auditChange{"name", previous.Name, a.Name}, auditChange{"region_ids", previous.RegionIDs, a.RegionIDs},
 		auditChange{"enabled", previous.Enabled, a.Enabled},
 		auditChange{"track_mainland", previous.TrackMainland, a.TrackMainland}, auditChange{"track_overseas", previous.TrackOverseas, a.TrackOverseas},
+		auditChange{"cdt_confirmed", previous.CDTConfirmed, a.CDTConfirmed}, auditChange{"cdt_subject_overrides", previous.CDTSubjectOverrides, a.CDTSubjectOverrides},
 		auditChange{"quota_mainland_bytes", previous.QuotaMainland, a.QuotaMainland},
 		auditChange{"quota_overseas_bytes", previous.QuotaOverseas, a.QuotaOverseas}, auditChange{"reset_day", previous.ResetDay, a.ResetDay},
 		auditChange{"alert_thresholds_percent", previous.Thresholds, a.Thresholds})

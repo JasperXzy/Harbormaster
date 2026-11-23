@@ -98,7 +98,11 @@ func (s *Store) ProbePoints(ctx context.Context, after string, limit int, now ti
 		return nil, err
 	}
 	defer tx.Rollback()
-	rows, err := tx.QueryContext(ctx, "SELECT id FROM instance WHERE id>? UNION SELECT 'server' WHERE 'server'>? ORDER BY id LIMIT ?", after, after, limit)
+	rows, err := tx.QueryContext(ctx, `SELECT i.id FROM instance i
+ WHERE i.id>?
+ AND (EXISTS(SELECT 1 FROM resource_snapshot r WHERE r.id=i.id AND r.account_id=i.account_id AND r.kind=i.kind AND r.present=1)
+  OR EXISTS(SELECT 1 FROM probe_plan p WHERE p.deleted=0 AND json_extract(p.config_json,'$.point_kind')='agent' AND json_extract(p.config_json,'$.instance_id')=i.id))
+ UNION SELECT 'server' WHERE 'server'>? ORDER BY id LIMIT ?`, after, after, limit)
 	if err != nil {
 		return nil, err
 	}

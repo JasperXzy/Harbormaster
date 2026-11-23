@@ -58,8 +58,8 @@ func (e *Engine) encrypt(id string, c model.Credential) ([]byte, error) {
 }
 func (e *Engine) CreateAccount(ctx context.Context, in model.AccountCreate) (model.Account, model.Job, error) {
 	now := time.Now().UTC()
-	a := model.Account{ID: model.NewID("acct_"), Name: strings.TrimSpace(in.Name), Site: in.Site, RegionIDs: in.RegionIDs, Enabled: true, QuotaMainland: 20 << 30, QuotaOverseas: 200 << 30, ResetDay: 1, Thresholds: []int{80, 90, 95}, SyncStatus: "never_synced", UpdatedAt: now, Revision: 1}
-	model.AccountUpdate{TrackMainland: in.TrackMainland, TrackOverseas: in.TrackOverseas, QuotaMainland: in.QuotaMainland, QuotaOverseas: in.QuotaOverseas, ResetDay: in.ResetDay, Thresholds: in.Thresholds}.Apply(&a)
+	a := model.Account{ID: model.NewID("acct_"), Name: strings.TrimSpace(in.Name), Site: in.Site, RegionIDs: in.RegionIDs, Enabled: true, CDTSubjectOverrides: map[string]bool{}, QuotaMainland: 20 << 30, QuotaOverseas: 200 << 30, ResetDay: 1, Thresholds: []int{80, 90, 95}, SyncStatus: "never_synced", UpdatedAt: now, Revision: 1}
+	model.AccountUpdate{TrackMainland: in.TrackMainland, TrackOverseas: in.TrackOverseas, CDTConfirmed: in.CDTConfirmed, QuotaMainland: in.QuotaMainland, QuotaOverseas: in.QuotaOverseas, ResetDay: in.ResetDay, Thresholds: in.Thresholds}.Apply(&a)
 	f := a.Validate()
 	for k, v := range in.Credential.Validate() {
 		f[k] = v

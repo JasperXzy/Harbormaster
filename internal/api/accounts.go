@@ -96,6 +96,11 @@ func (p *productionPanel) business(w http.ResponseWriter, r *http.Request, path 
 		} else if r.Method == "DELETE" {
 			w.WriteHeader(204)
 		} else {
+			if in.CDTConfirmed != nil || len(in.CDTSubjectOverrides) > 0 || in.TrackMainland != nil || in.TrackOverseas != nil {
+				if loc, lErr := p.businessLocation(r.Context()); lErr == nil {
+					_ = p.s.RefreshEstimates(r.Context(), loc, p.now().UTC())
+				}
+			}
 			writeJSON(w, 200, a)
 		}
 	case path == "/instances/refresh" && r.Method == "POST":

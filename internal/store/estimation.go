@@ -216,6 +216,7 @@ func calculateEstimateAt(ctx context.Context, tx *sql.Tx, a model.Account, scope
 			return v, err
 		}
 		sub := observed.meteringSubject
+		sub.Eligible = a.ResolveSubjectCDT(sub.ID, observed.Kind, sub.Rule, sub.Eligible)
 		sub.Empty = observed.knownEmpty()
 		if sub.Eligible != nil && !*sub.Eligible {
 			continue

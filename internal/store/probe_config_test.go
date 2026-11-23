@@ -244,3 +244,68 @@ func TestProbePointAvailabilityAndCredentialRotation(t *testing.T) {
 		t.Fatal(view.LastRun)
 	}
 }
+
+func TestProbePointsHideReleasedInstancesUnlessPlanned(t *testing.T) {
+	s, _, _, now := historyAgent(t)
+	setAlertAccount(t, s, "ok", 0)
+	ctx := context.Background()
+	saveEventScan(t, s, model.ScanResult{Snapshots: []model.Snapshot{eventSnapshot("running", []string{"1.1.1.1"}, nil)}}, now)
+
+	// While present=1, "ecs" is returned alongside "server".
+	points, err := s.ProbePoints(ctx, "", 201, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hasECS := false
+	for _, pt := range points {
+		if pt.ID == "ecs" {
+			hasECS = true
+		}
+	}
+	if !hasECS {
+		t.Fatalf("expected present ecs in probe points, got %+v", points)
+	}
+
+	// Simulate cloud release (present=0) with no active probe_plan -> hidden from ProbePoints.
+	if _, err = s.DB.Exec("UPDATE resource_snapshot SET present=0 WHERE id='ecs'"); err != nil {
+		t.Fatal(err)
+	}
+	points, err = s.ProbePoints(ctx, "", 201, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, pt := range points {
+		if pt.ID == "ecs" {
+			t.Fatalf("released instance without active probe plan should be hidden, got %+v", pt)
+		}
+	}
+
+	// If an active probe_plan references it, ProbePoints keeps it with instance_unavailable.
+	plan := model.DefaultProbePlan()
+	plan.Name = "still-bound"
+	plan.PointKind = "agent"
+	plan.InstanceID = new("ecs")
+	plan.TargetID = "target_cloudflare_dns"
+	plan.Family = "ipv4"
+	plan.Method = "icmp"
+	plan.Enabled = true
+	if _, err = s.SaveProbePlan(ctx, "", plan, now); err != nil {
+		t.Fatal(err)
+	}
+	points, err = s.ProbePoints(ctx, "", 201, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, pt := range points {
+		if pt.ID == "ecs" {
+			found = true
+			if pt.Available || pt.UnavailableReason == nil || *pt.UnavailableReason != "instance_unavailable" {
+				t.Fatalf("expected instance_unavailable for planned released instance, got %+v", pt)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected planned released instance to remain visible, got %+v", points)
+	}
+}

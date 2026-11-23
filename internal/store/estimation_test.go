@@ -289,3 +289,39 @@ func TestEstimateFailureDoesNotStarveOtherAccounts(t *testing.T) {
 		t.Fatal("one account starved another", count, err)
 	}
 }
+
+func TestManualCDTConfirmationClearsUnknownAndRespectsExclusion(t *testing.T) {
+	s, _, _, base := estimateFixture(t)
+	ctx := context.Background()
+	now := base.Add(120 * time.Second)
+
+	// Fixture subject has counts_toward_cdt = nil -> cdt_eligibility_unknown is reported.
+	v := estimateRow(t, s, now)
+	if !slices.Contains(v.Reasons, "cdt_eligibility_unknown") || v.Increment == nil || *v.Increment != 12000 {
+		t.Fatalf("expected unknown eligibility initially, got %+v", v)
+	}
+
+	// Confirm CDT at account level -> cdt_eligibility_unknown disappears, increment stays 12000.
+	if _, err := s.UpdateAccount(ctx, "a", func(a *model.Account) ([]byte, error) {
+		a.CDTConfirmed = true
+		return nil, nil
+	}, now, 5*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	v = estimateRow(t, s, now)
+	if slices.Contains(v.Reasons, "cdt_eligibility_unknown") || v.Increment == nil || *v.Increment != 12000 {
+		t.Fatalf("expected confirmed eligibility, got %+v", v)
+	}
+
+	// Explicitly exclude subject via override -> subject is skipped (increment becomes 0) and no unknown reason.
+	if _, err := s.UpdateAccount(ctx, "a", func(a *model.Account) ([]byte, error) {
+		a.CDTSubjectOverrides["subject"] = false
+		return nil, nil
+	}, now, 5*time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	v = estimateRow(t, s, now)
+	if slices.Contains(v.Reasons, "cdt_eligibility_unknown") || v.Increment == nil || *v.Increment != 0 {
+		t.Fatalf("expected excluded subject increment 0, got %+v", v)
+	}
+}

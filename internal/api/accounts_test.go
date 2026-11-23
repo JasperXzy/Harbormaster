@@ -210,3 +210,110 @@ func TestAccountAPIUsesEncryptedTasksAndSnapshotReads(t *testing.T) {
 		}
 	}
 }
+
+func TestAccountCDTConfirmationAndSubjectOverrides(t *testing.T) {
+	p := testPanel(t)
+	box, err := security.NewBox(bytes.Repeat([]byte{9}, 32))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.engine = &collect.Engine{Store: p.s, Box: box, Scanner: &apiScanner{}, Interval: 5 * time.Minute}
+	cookie, csrf := setupPanel(t, p)
+	in := map[string]any{"name": "cdt-confirm", "site": "china", "access_key_id": "LTAI5tTestAccount1234", "access_key_secret": "secret-for-cdt-test", "region_ids": []string{"cn-hongkong"}}
+	w := panelRequest(p, "POST", "/accounts", in, cookie, csrf)
+	if w.Code != 201 {
+		t.Fatalf("create failed: %d %s", w.Code, w.Body.String())
+	}
+	var created struct {
+		Account model.Account `json:"account"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	accID := created.Account.ID
+	if created.Account.CDTConfirmed || len(created.Account.CDTSubjectOverrides) != 0 {
+		t.Fatalf("unexpected default cdt fields: %+v", created.Account)
+	}
+
+	// Seed a metered CBWP subject/package/ECS and an immutable SWAS subject.
+	subMetered, _ := json.Marshal(map[string]any{"id": "sub-cbwp", "name": "hk-share", "account_id": accID, "kind": "cbwp_dominant_traffic", "metering_rule": "max_in_out_per_period", "counts_toward_cdt": nil, "cdt_scope": "overseas", "public_ips": []string{"1.2.3.4"}, "instance_ids": []string{"ecs-1"}, "bandwidth_mbps": 200, "data_source": "none"})
+	subSWAS, _ := json.Marshal(map[string]any{"id": "sub-swas", "name": "sha-pro", "account_id": accID, "kind": "swas_no_traffic_package", "metering_rule": "not_metered", "counts_toward_cdt": false, "cdt_scope": nil, "public_ips": []string{"5.6.7.8"}, "instance_ids": []string{"swas-1"}, "bandwidth_mbps": 200, "data_source": "none"})
+	pkgMetered, _ := json.Marshal(map[string]any{"id": "sub-cbwp", "cloud_id": "cbwp-1", "name": "hk-share", "account_id": accID, "region_id": "cn-hongkong", "bandwidth_mbps": 200, "kind": "cbwp_dominant_traffic", "settled_by_cdt": nil, "members": []any{}})
+	ecsSnap, _ := json.Marshal(map[string]any{"id": "ecs-1", "cloud_instance_id": "i-1", "name": "hk-1", "account_id": accID, "kind": "ecs", "region_id": "cn-hongkong", "status": "running", "billing_subject_id": "sub-cbwp", "billing_subject_kind": "cbwp_dominant_traffic", "metering_rule": "max_in_out_per_period", "counts_toward_cdt": nil, "cdt_scope": "overseas", "realtime_protection": "unprotected", "agent": map[string]any{"status": "not_installed"}})
+	for _, row := range [][4]string{
+		{"subject", "sub-cbwp", "cn-hongkong", string(subMetered)},
+		{"subject", "sub-swas", "cn-hongkong", string(subSWAS)},
+		{"package", "sub-cbwp", "cn-hongkong", string(pkgMetered)},
+		{"ecs", "ecs-1", "cn-hongkong", string(ecsSnap)},
+	} {
+		if _, err := p.s.DB.Exec("INSERT INTO resource_snapshot(account_id,kind,id,region,payload_json,present,updated_at) VALUES(?,?,?,?,?,1,'2026-11-24T00:00:00Z')", accID, row[0], row[1], row[2], row[3]); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	readSubjects := func() map[string]any {
+		resp := panelRequest(p, "GET", "/traffic/billing-subjects?account_id="+accID, nil, cookie, "")
+		if resp.Code != 200 {
+			t.Fatalf("subjects failed: %d %s", resp.Code, resp.Body.String())
+		}
+		var body struct {
+			Items []map[string]any `json:"items"`
+		}
+		if err := json.Unmarshal(resp.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]any{}
+		for _, it := range body.Items {
+			out[it["id"].(string)] = it["counts_toward_cdt"]
+		}
+		return out
+	}
+
+	// Default: metered subject is nil, SWAS is false.
+	got := readSubjects()
+	if got["sub-cbwp"] != nil || got["sub-swas"] != false {
+		t.Fatalf("unexpected initial subjects: %+v", got)
+	}
+
+	// Confirm CDT at account level -> metered subject, package, and ECS become true; SWAS remains false.
+	w = panelRequest(p, "PATCH", "/accounts/"+accID, map[string]any{"cdt_confirmed": true}, cookie, csrf)
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"cdt_confirmed":true`) {
+		t.Fatalf("enable cdt_confirmed failed: %d %s", w.Code, w.Body.String())
+	}
+	got = readSubjects()
+	if got["sub-cbwp"] != true || got["sub-swas"] != false {
+		t.Fatalf("cdt_confirmed did not resolve subjects: %+v", got)
+	}
+	w = panelRequest(p, "GET", "/bandwidth-packages?account_id="+accID, nil, cookie, "")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"settled_by_cdt":true`) {
+		t.Fatalf("bandwidth-packages not resolved: %d %s", w.Code, w.Body.String())
+	}
+	w = panelRequest(p, "GET", "/instances?account_id="+accID, nil, cookie, "")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"counts_toward_cdt":true`) {
+		t.Fatalf("instances not resolved: %d %s", w.Code, w.Body.String())
+	}
+
+	// Exclude the CBWP subject via per-subject override (even trying to force SWAS true must stay false).
+	w = panelRequest(p, "PATCH", "/accounts/"+accID, map[string]any{"cdt_subject_overrides": map[string]any{"sub-cbwp": false, "sub-swas": true}}, cookie, csrf)
+	if w.Code != 200 {
+		t.Fatalf("override failed: %d %s", w.Code, w.Body.String())
+	}
+	got = readSubjects()
+	if got["sub-cbwp"] != false || got["sub-swas"] != false {
+		t.Fatalf("override resolution mismatch: %+v", got)
+	}
+	w = panelRequest(p, "GET", "/instances?account_id="+accID, nil, cookie, "")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"counts_toward_cdt":false`) || !strings.Contains(w.Body.String(), `"realtime_protection":"not_applicable"`) {
+		t.Fatalf("excluded instance did not update protection: %d %s", w.Code, w.Body.String())
+	}
+
+	// Clear override with null -> falls back to account cdt_confirmed=true.
+	w = panelRequest(p, "PATCH", "/accounts/"+accID, map[string]any{"cdt_subject_overrides": map[string]any{"sub-cbwp": nil}}, cookie, csrf)
+	if w.Code != 200 {
+		t.Fatalf("clear override failed: %d %s", w.Code, w.Body.String())
+	}
+	got = readSubjects()
+	if got["sub-cbwp"] != true {
+		t.Fatalf("cleared override did not inherit account setting: %+v", got)
+	}
+}

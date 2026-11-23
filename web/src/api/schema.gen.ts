@@ -3072,6 +3072,12 @@ export interface components {
             track_mainland: boolean;
             /** @description 是否记录并计算该账号非中国内地（海外）CDT 流量与额度（默认 true）。 */
             track_overseas: boolean;
+            /** @description 用户手动确认该账号已开通阿里云 CDT。开启后，名下按流量计费及共享带宽包对象默认视为计入 CDT 免费额度（仍可按对象单独覆盖）；固定带宽与轻量实例始终不计入。 */
+            cdt_confirmed: boolean;
+            /** @description 按计费对象 ID 单独覆盖是否计入 CDT（true=计入，false=排除）。未列出的对象继承账号级 cdt_confirmed。 */
+            cdt_subject_overrides: {
+                [key: string]: boolean;
+            };
             /** Format: int64 */
             quota_mainland_bytes: number;
             /** Format: int64 */
@@ -3104,6 +3110,7 @@ export interface components {
             region_ids: string[];
             track_mainland?: boolean;
             track_overseas?: boolean;
+            cdt_confirmed?: boolean;
             /** Format: int64 */
             quota_mainland_bytes?: number;
             /** Format: int64 */
@@ -3121,6 +3128,11 @@ export interface components {
             enabled?: boolean;
             track_mainland?: boolean;
             track_overseas?: boolean;
+            cdt_confirmed?: boolean;
+            /** @description 增量合并按计费对象的 CDT 覆盖配置；传 true/false 设置覆盖，传 null 删除该对象的覆盖使其恢复继承账号配置。 */
+            cdt_subject_overrides?: {
+                [key: string]: boolean | null;
+            };
             /** Format: int64 */
             quota_mainland_bytes?: number;
             /** Format: int64 */

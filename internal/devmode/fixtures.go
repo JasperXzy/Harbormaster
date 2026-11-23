@@ -28,7 +28,7 @@ func makeFixtures(now time.Time, loc *time.Location) fixtures {
 	start := time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, loc)
 	end := start.AddDate(0, 1, 0)
 	for i, id := range []string{"demo-account-1", "demo-account-2"} {
-		f.Accounts = append(f.Accounts, object{"id": id, "name": []string{"Example account A (demo)", "Example account B (demo)"}[i], "site": []string{"china", "international"}[i], "access_key_id_masked": "DEMO***ONLY", "region_ids": []string{"ap-southeast-1", "cn-hongkong", "cn-shanghai"}, "enabled": true, "track_mainland": true, "track_overseas": true, "quota_mainland_bytes": int64(20 << 30), "quota_overseas_bytes": int64(200 << 30), "reset_day": 1, "alert_thresholds_percent": []int{80, 90, 95}, "sync_status": "ok", "last_sync_at": stamp, "last_error": nil, "consecutive_failures": 0, "permission_check": nil, "instance_count": []int{2, 1}[i], "updated_at": stamp})
+		f.Accounts = append(f.Accounts, object{"id": id, "name": []string{"Example account A (demo)", "Example account B (demo)"}[i], "site": []string{"china", "international"}[i], "access_key_id_masked": "DEMO***ONLY", "region_ids": []string{"ap-southeast-1", "cn-hongkong", "cn-shanghai"}, "enabled": true, "track_mainland": true, "track_overseas": true, "cdt_confirmed": i == 0, "cdt_subject_overrides": object{}, "quota_mainland_bytes": int64(20 << 30), "quota_overseas_bytes": int64(200 << 30), "reset_day": 1, "alert_thresholds_percent": []int{80, 90, 95}, "sync_status": "ok", "last_sync_at": stamp, "last_error": nil, "consecutive_failures": 0, "permission_check": nil, "instance_count": []int{2, 1}[i], "updated_at": stamp})
 		for j, scope := range []string{"mainland", "overseas"} {
 			quota := int64(20 << 30)
 			if j == 1 {

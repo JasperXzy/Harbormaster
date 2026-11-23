@@ -163,6 +163,11 @@ function AccountsSection() {
                       ) : (
                         <Badge level="good">同步正常</Badge>
                       )}
+                      {a.cdt_confirmed ? (
+                        <Badge level="good" title="已手动确认开通阿里云 CDT，按流量及共享带宽对象默认计入 CDT 额度">已确认 CDT</Badge>
+                      ) : (
+                        <Badge level="neutral" title="尚未在账号级手动确认 CDT 开通状态，可点「编辑配置」开启或在流量页按对象设置">CDT 待确认</Badge>
+                      )}
                     </div>
                     <div className="sub" style={{ marginTop: 2 }}>
                       {SITE[a.site]} · <span className="mono">{a.access_key_id_masked}</span> · {a.instance_count} 台实例
@@ -188,7 +193,10 @@ function AccountsSection() {
                           : "不统计 CDT 流量池"}
                     {" · "}告警档位 {a.alert_thresholds_percent.join(" / ")}%
                   </div>
-                  <div style={{ marginTop: 3 }}>扫描地域：{a.region_ids.map(regionName).join("、")}</div>
+                  <div style={{ marginTop: 3 }}>
+                    扫描地域：{a.region_ids.map(regionName).join("、")}
+                    {Object.keys(a.cdt_subject_overrides ?? {}).length > 0 && ` · ${Object.keys(a.cdt_subject_overrides).length} 项计费对象单独覆盖 CDT`}
+                  </div>
                 </div>
 
                 <PermissionList check={a.permission_check} pending={checking.has(a.id)} />

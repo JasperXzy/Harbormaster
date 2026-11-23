@@ -62,6 +62,8 @@ type Account struct {
 	Enabled             bool             `json:"enabled"`
 	TrackMainland       ScopeToggle      `json:"track_mainland"`
 	TrackOverseas       ScopeToggle      `json:"track_overseas"`
+	CDTConfirmed        bool             `json:"cdt_confirmed"`
+	CDTSubjectOverrides map[string]bool  `json:"cdt_subject_overrides"`
 	QuotaMainland       int64            `json:"quota_mainland_bytes"`
 	QuotaOverseas       int64            `json:"quota_overseas_bytes"`
 	ResetDay            int              `json:"reset_day"`
@@ -98,6 +100,30 @@ func (a Account) TrackedScopes() []string {
 	return out
 }
 
+// ResolveSubjectCDT applies account-level and per-subject manual CDT
+// confirmations on top of cloud-observed eligibility. Fixed-bandwidth and SWAS
+// subjects are never eligible for CDT; unresolved/unknown subjects remain nil.
+func (a Account) ResolveSubjectCDT(subjectID, kind, rule string, detected *bool) *bool {
+	if rule == "not_metered" || strings.HasPrefix(kind, "swas_") {
+		v := false
+		return &v
+	}
+	if kind == "unknown" || rule == "unknown" || (kind == "" && rule == "") {
+		return nil
+	}
+	if subjectID != "" {
+		if override, ok := a.CDTSubjectOverrides[subjectID]; ok {
+			v := override
+			return &v
+		}
+	}
+	if a.CDTConfirmed {
+		v := true
+		return &v
+	}
+	return detected
+}
+
 // Credential is never an API response or job payload. Both fields are encrypted.
 type Credential struct {
 	AccessKeyID     string `json:"access_key_id"`
@@ -110,23 +136,26 @@ type AccountCreate struct {
 	RegionIDs     []string `json:"region_ids"`
 	TrackMainland *bool    `json:"track_mainland"`
 	TrackOverseas *bool    `json:"track_overseas"`
+	CDTConfirmed  *bool    `json:"cdt_confirmed"`
 	QuotaMainland *int64   `json:"quota_mainland_bytes"`
 	QuotaOverseas *int64   `json:"quota_overseas_bytes"`
 	ResetDay      *int     `json:"reset_day"`
 	Thresholds    *[]int   `json:"alert_thresholds_percent"`
 }
 type AccountUpdate struct {
-	Name            *string   `json:"name"`
-	AccessKeyID     *string   `json:"access_key_id"`
-	AccessKeySecret *string   `json:"access_key_secret"`
-	RegionIDs       *[]string `json:"region_ids"`
-	Enabled         *bool     `json:"enabled"`
-	TrackMainland   *bool     `json:"track_mainland"`
-	TrackOverseas   *bool     `json:"track_overseas"`
-	QuotaMainland   *int64    `json:"quota_mainland_bytes"`
-	QuotaOverseas   *int64    `json:"quota_overseas_bytes"`
-	ResetDay        *int      `json:"reset_day"`
-	Thresholds      *[]int    `json:"alert_thresholds_percent"`
+	Name                *string          `json:"name"`
+	AccessKeyID         *string          `json:"access_key_id"`
+	AccessKeySecret     *string          `json:"access_key_secret"`
+	RegionIDs           *[]string        `json:"region_ids"`
+	Enabled             *bool            `json:"enabled"`
+	TrackMainland       *bool            `json:"track_mainland"`
+	TrackOverseas       *bool            `json:"track_overseas"`
+	CDTConfirmed        *bool            `json:"cdt_confirmed"`
+	CDTSubjectOverrides map[string]*bool `json:"cdt_subject_overrides"`
+	QuotaMainland       *int64           `json:"quota_mainland_bytes"`
+	QuotaOverseas       *int64           `json:"quota_overseas_bytes"`
+	ResetDay            *int             `json:"reset_day"`
+	Thresholds          *[]int           `json:"alert_thresholds_percent"`
 }
 
 var RegionPattern = regexp.MustCompile(`^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$`)
@@ -178,6 +207,14 @@ func (a Account) Validate() map[string]string {
 		}
 		previous = v
 	}
+	if len(a.CDTSubjectOverrides) > 200 {
+		f["cdt_subject_overrides"] = "out_of_range"
+	}
+	for k := range a.CDTSubjectOverrides {
+		if len(k) == 0 || len(k) > 200 || strings.IndexFunc(k, unicode.IsControl) >= 0 {
+			f["cdt_subject_overrides"] = "invalid_format"
+		}
+	}
 	return f
 }
 func (u AccountUpdate) Apply(a *Account) {
@@ -195,6 +232,21 @@ func (u AccountUpdate) Apply(a *Account) {
 	}
 	if u.TrackOverseas != nil {
 		a.TrackOverseas = Toggle(*u.TrackOverseas)
+	}
+	if u.CDTConfirmed != nil {
+		a.CDTConfirmed = *u.CDTConfirmed
+	}
+	if u.CDTSubjectOverrides != nil {
+		if a.CDTSubjectOverrides == nil {
+			a.CDTSubjectOverrides = map[string]bool{}
+		}
+		for k, v := range u.CDTSubjectOverrides {
+			if v == nil {
+				delete(a.CDTSubjectOverrides, k)
+			} else {
+				a.CDTSubjectOverrides[k] = *v
+			}
+		}
 	}
 	if u.QuotaMainland != nil {
 		a.QuotaMainland = *u.QuotaMainland

@@ -355,6 +355,7 @@ export async function handle(method: string, fullPath: string, body: unknown, _h
     const account: T.Account = {
       id: "acc_" + Math.random().toString(36).slice(2, 8), name: c.name, site: c.site, access_key_id_masked: c.access_key_id.slice(0, 6) + "…" + c.access_key_id.slice(-3), region_ids: c.region_ids, enabled: true,
       track_mainland: c.track_mainland ?? true, track_overseas: c.track_overseas ?? true,
+      cdt_confirmed: c.cdt_confirmed ?? false, cdt_subject_overrides: {},
       quota_mainland_bytes: c.quota_mainland_bytes ?? 20 * GB, quota_overseas_bytes: c.quota_overseas_bytes ?? 200 * GB, reset_day: c.reset_day ?? 1, alert_thresholds_percent: c.alert_thresholds_percent ?? [80, 90, 95],
       sync_status: "never_synced", last_sync_at: null, last_error: null, consecutive_failures: 0, permission_check: null, instance_count: 0, updated_at: iso(),
     };
@@ -374,8 +375,24 @@ export async function handle(method: string, fullPath: string, body: unknown, _h
       const u = b as T.AccountUpdate;
       if (u.name !== undefined && !u.name.trim()) return fail(422, "validation_failed", { fields: { name: "required" } });
       if (u.access_key_id) a.access_key_id_masked = u.access_key_id.slice(0, 6) + "…" + u.access_key_id.slice(-3);
-      const { access_key_id: _id, access_key_secret: _secret, ...rest } = u;
+      const { access_key_id: _id, access_key_secret: _secret, cdt_subject_overrides: overrides, ...rest } = u;
       Object.assign(a, rest, { updated_at: iso() });
+      if (overrides) {
+        a.cdt_subject_overrides = { ...(a.cdt_subject_overrides ?? {}) };
+        for (const [sid, val] of Object.entries(overrides)) {
+          if (val === null) delete a.cdt_subject_overrides[sid];
+          else if (typeof val === "boolean") a.cdt_subject_overrides[sid] = val;
+        }
+      }
+      for (const s of db.subjects.filter((x) => x.account_id === a.id)) {
+        if (s.metering_rule === "not_metered" || s.kind.startsWith("swas_") || s.kind === "unknown") continue;
+        const ov = a.cdt_subject_overrides?.[s.id];
+        s.counts_toward_cdt = ov !== undefined ? ov : a.cdt_confirmed ? true : null;
+      }
+      for (const ins of db.instances.filter((x) => x.account_id === a.id && x.billing_subject_id)) {
+        const sub = db.subjects.find((x) => x.id === ins.billing_subject_id);
+        if (sub) ins.counts_toward_cdt = sub.counts_toward_cdt;
+      }
       for (const qt of db.quotas.filter((x) => x.account_id === a.id)) {
         qt.quota_bytes = qt.scope === "mainland" ? a.quota_mainland_bytes : a.quota_overseas_bytes;
         qt.thresholds_percent = a.alert_thresholds_percent;

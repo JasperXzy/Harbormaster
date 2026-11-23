@@ -5082,6 +5082,8 @@ components:
         - enabled
         - track_mainland
         - track_overseas
+        - cdt_confirmed
+        - cdt_subject_overrides
         - quota_mainland_bytes
         - quota_overseas_bytes
         - reset_day
@@ -5116,6 +5118,14 @@ components:
         track_overseas:
           type: boolean
           description: 是否记录并计算该账号非中国内地（海外）CDT 流量与额度（默认 true）。
+        cdt_confirmed:
+          type: boolean
+          description: 用户手动确认该账号已开通阿里云 CDT。开启后，名下按流量计费及共享带宽包对象默认视为计入 CDT 免费额度（仍可按对象单独覆盖）；固定带宽与轻量实例始终不计入。
+        cdt_subject_overrides:
+          type: object
+          description: 按计费对象 ID 单独覆盖是否计入 CDT（true=计入，false=排除）。未列出的对象继承账号级 cdt_confirmed。
+          additionalProperties:
+            type: boolean
         quota_mainland_bytes:
           type: integer
           format: int64
@@ -5179,6 +5189,8 @@ components:
           type: boolean
         track_overseas:
           type: boolean
+        cdt_confirmed:
+          type: boolean
         quota_mainland_bytes:
           type: integer
           format: int64
@@ -5213,6 +5225,14 @@ components:
           type: boolean
         track_overseas:
           type: boolean
+        cdt_confirmed:
+          type: boolean
+        cdt_subject_overrides:
+          type: object
+          description: 增量合并按计费对象的 CDT 覆盖配置；传 true/false 设置覆盖，传 null 删除该对象的覆盖使其恢复继承账号配置。
+          additionalProperties:
+            type: boolean
+            nullable: true
         quota_mainland_bytes:
           type: integer
           format: int64

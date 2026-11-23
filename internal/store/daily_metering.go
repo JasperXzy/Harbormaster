@@ -135,7 +135,8 @@ func calculateDailyScope(ctx context.Context, tx *sql.Tx, a model.Account, scope
 			cursor = maxTime(cursor, w.until)
 			counts := map[string]int{}
 			for _, sub := range w.subjects {
-				if sub.Eligible != nil && !*sub.Eligible {
+				eligible := a.ResolveSubjectCDT(sub.ID, sub.Kind, sub.Rule, sub.Eligible)
+				if eligible != nil && !*eligible {
 					continue
 				}
 				if sub.Scope == nil {
@@ -150,10 +151,11 @@ func calculateDailyScope(ctx context.Context, tx *sql.Tx, a model.Account, scope
 				}
 			}
 			for _, sub := range w.subjects {
-				if sub.Eligible != nil && !*sub.Eligible || sub.Scope == nil || *sub.Scope != scope {
+				eligible := a.ResolveSubjectCDT(sub.ID, sub.Kind, sub.Rule, sub.Eligible)
+				if eligible != nil && !*eligible || sub.Scope == nil || *sub.Scope != scope {
 					continue
 				}
-				if sub.Eligible == nil {
+				if eligible == nil {
 					reasons["cdt_eligibility_unknown"] = true
 				}
 				if len(sub.Members) == 0 {

@@ -148,11 +148,28 @@ func (s *Store) SaveScan(ctx context.Context, j model.Job, a model.Account, resu
 func (s *Store) Snapshots(ctx context.Context, kinds []string, accountID string) ([]map[string]any, error) {
 	// A small fixed set prevents arbitrary SQL fragments from request parameters.
 	allowed := map[string]bool{"ecs": true, "swas": true, "subject": true, "package": true, "regions": true}
-	items := []map[string]any{}
+	var accounts map[string]model.Account
+	needsAccountCDT := false
 	for _, kind := range kinds {
 		if !allowed[kind] {
 			return nil, ErrNotFound
 		}
+		if kind == "ecs" || kind == "subject" || kind == "package" {
+			needsAccountCDT = true
+		}
+	}
+	if needsAccountCDT {
+		list, err := s.Accounts(ctx)
+		if err != nil {
+			return nil, err
+		}
+		accounts = make(map[string]model.Account, len(list))
+		for _, a := range list {
+			accounts[a.ID] = a
+		}
+	}
+	items := []map[string]any{}
+	for _, kind := range kinds {
 		rows, err := s.DB.QueryContext(ctx, "SELECT payload_json FROM resource_snapshot WHERE present=1 AND kind=? AND (?='' OR account_id=?) ORDER BY id", kind, accountID, accountID)
 		if err != nil {
 			return nil, err
@@ -168,6 +185,12 @@ func (s *Store) Snapshots(ctx context.Context, kinds []string, accountID string)
 				rows.Close()
 				return nil, err
 			}
+			if accounts != nil {
+				accID, _ := item["account_id"].(string)
+				if a, ok := accounts[accID]; ok {
+					applySnapshotCDT(a, kind, item)
+				}
+			}
 			items = append(items, item)
 		}
 		err = rows.Err()
@@ -177,4 +200,56 @@ func (s *Store) Snapshots(ctx context.Context, kinds []string, accountID string)
 		}
 	}
 	return items, nil
+}
+
+func snapshotBoolPtr(v any) *bool {
+	b, ok := v.(bool)
+	if !ok {
+		return nil
+	}
+	return &b
+}
+
+func snapshotBoolValue(v *bool) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+
+func applySnapshotCDT(a model.Account, kind string, item map[string]any) {
+	switch kind {
+	case "subject":
+		id, _ := item["id"].(string)
+		subKind, _ := item["kind"].(string)
+		rule, _ := item["metering_rule"].(string)
+		resolved := a.ResolveSubjectCDT(id, subKind, rule, snapshotBoolPtr(item["counts_toward_cdt"]))
+		item["counts_toward_cdt"] = snapshotBoolValue(resolved)
+	case "package":
+		id, _ := item["id"].(string)
+		pkgKind, _ := item["kind"].(string)
+		rule := "unknown"
+		switch pkgKind {
+		case "cbwp_dominant_traffic":
+			rule = "max_in_out_per_period"
+		case "cbwp_bandwidth", "cbwp_95":
+			rule = "not_metered"
+		}
+		resolved := a.ResolveSubjectCDT(id, pkgKind, rule, snapshotBoolPtr(item["settled_by_cdt"]))
+		item["settled_by_cdt"] = snapshotBoolValue(resolved)
+	case "ecs":
+		subID, _ := item["billing_subject_id"].(string)
+		if subID == "" {
+			return
+		}
+		subKind, _ := item["billing_subject_kind"].(string)
+		rule, _ := item["metering_rule"].(string)
+		resolved := a.ResolveSubjectCDT(subID, subKind, rule, snapshotBoolPtr(item["counts_toward_cdt"]))
+		item["counts_toward_cdt"] = snapshotBoolValue(resolved)
+		if resolved != nil && !*resolved {
+			item["realtime_protection"] = "not_applicable"
+		} else if item["realtime_protection"] == "not_applicable" {
+			item["realtime_protection"] = "unprotected"
+		}
+	}
 }

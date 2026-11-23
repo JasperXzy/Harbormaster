@@ -48,6 +48,7 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
   const [all, setAll] = useState<Region[]>();
   const [trackOverseas, setTrackOverseas] = useState(account?.track_overseas ?? true);
   const [trackMainland, setTrackMainland] = useState(account?.track_mainland ?? true);
+  const [cdtConfirmed, setCdtConfirmed] = useState(account?.cdt_confirmed ?? false);
   const [mainland, setMainland] = useState(String((account?.quota_mainland_bytes ?? 20 * GB) / GB));
   const [overseas, setOverseas] = useState(String((account?.quota_overseas_bytes ?? 200 * GB) / GB));
   const [thresholds, setThresholds] = useState((account?.alert_thresholds_percent ?? [80, 90, 95]).join(", "));
@@ -85,6 +86,7 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
     const common = {
       name: name.trim(), region_ids: regions,
       track_mainland: trackMainland, track_overseas: trackOverseas,
+      cdt_confirmed: cdtConfirmed,
       quota_mainland_bytes: Math.round(Number(mainland) * GB), quota_overseas_bytes: Math.round(Number(overseas) * GB),
       reset_day: 1 as const, alert_thresholds_percent: [...th].sort((a, b) => a - b),
     };
@@ -171,6 +173,18 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
           </label>
         </div>
         <div className="field-help">如果某范围没有走 CDT 计费的机器（例如只有轻量固定带宽），取消勾选即可不记录该范围流量，也不会提示覆盖不完整。</div>
+      </div>
+      <div>
+        <span className="lbl" style={{ display: "block", fontSize: "var(--fs-md)", color: "var(--text-2)", marginBottom: 4 }}>CDT 计费归属确认</span>
+        <div className="checks">
+          <label className={`check ${cdtConfirmed ? "on" : ""}`}>
+            <input type="checkbox" checked={cdtConfirmed} onChange={(e) => setCdtConfirmed(e.target.checked)} />
+            已开通阿里云 CDT（默认将按流量 / 共享带宽对象计入 CDT 额度池）
+          </label>
+        </div>
+        <div className="field-help">
+          阿里云 API 无法自动判断账号是否已开通 CDT。勾选后，该账号下按流量计费的 ECS / EIP 及共享带宽包默认归入 CDT 额度（消除「归属待确认」并计算池内占比），仍可在「流量与费用 → 公网出口流量归因」按单个对象单独覆盖。固定带宽与轻量服务器始终不计入 CDT。
+        </div>
       </div>
       <details open={edit}>
         <summary className="sub" style={{ cursor: "pointer" }}>免费额度与告警（一般不用改）</summary>

@@ -27,6 +27,7 @@ export function Traffic() {
   const [tab, setTab] = useQueryTab("quota", ["quota", "billing", "idle", "audit"] as const);
   const [accountId, setAccountId] = useState("all");
   const [pricingOpen, setPricingOpen] = useState(false);
+  const [quotaRev, setQuotaRev] = useState(0);
   const sims = useResource(api.quotaSimulations, [], { refreshMs: 30_000 });
   const accs = accounts.data;
 
@@ -102,7 +103,7 @@ export function Traffic() {
           </div>
 
           {all ? (
-            <AggregateQuotaAndTrends />
+            <AggregateQuotaAndTrends refreshKey={quotaRev} />
           ) : (
             <>
               <QuotaVisualCard res={{ ...quotas, data: quotas.data ? qs : undefined }} />
@@ -110,7 +111,17 @@ export function Traffic() {
             </>
           )}
 
-          <Subjects accountId={accountId} instName={instName} accounts={accs} />
+          <Subjects
+            accountId={accountId}
+            instName={instName}
+            accounts={accs}
+            onCDTChanged={() => {
+              accounts.reload();
+              quotas.reload();
+              instances.reload();
+              setQuotaRev((n) => n + 1);
+            }}
+          />
           <Packages accountId={accountId} accounts={accs} />
         </>
       )}
@@ -153,8 +164,8 @@ export function Traffic() {
 }
 
 /* ---------- Tab 1: Quota & Trends ---------- */
-function AggregateQuotaAndTrends() {
-  const quotas = useResource(() => api.quotas("all"), [], { refreshMs: 10_000 });
+function AggregateQuotaAndTrends({ refreshKey }: { refreshKey: number }) {
+  const quotas = useResource(() => api.quotas("all"), [refreshKey], { refreshMs: 10_000 });
   return (
     <>
       <QuotaVisualCard res={quotas} total />
@@ -412,8 +423,10 @@ function Cumulative({ d, q, scope }: { d: DailyTraffic; q: QuotaStatus; scope: Q
   );
 }
 
-function Subjects({ accountId, instName, accounts }: { accountId: string; instName: (id: string) => string; accounts: Account[] }) {
+function Subjects({ accountId, instName, accounts, onCDTChanged }: { accountId: string; instName: (id: string) => string; accounts: Account[]; onCDTChanged: () => void }) {
+  const toast = useToast();
   const [period, setPeriod] = useState<"today" | "cycle">("today");
+  const [savingId, setSavingId] = useState<string | null>(null);
   const enabled = accounts.filter((a) => a.enabled).map((a) => a.id);
   const res = useResource(
     async () => {
@@ -425,10 +438,35 @@ function Subjects({ accountId, instName, accounts }: { accountId: string; instNa
   );
   const src = { agent: "hm-agent", cloud_monitor: "云监控", none: "暂无数据" } as const;
 
+  const setOverride = async (subjectId: string, subjectName: string, accId: string, mode: "auto" | "include" | "exclude") => {
+    setSavingId(subjectId);
+    try {
+      const value = mode === "auto" ? null : mode === "include";
+      await api.updateAccount(accId, { cdt_subject_overrides: { [subjectId]: value } });
+      await res.reload();
+      onCDTChanged();
+      toast(
+        mode === "auto"
+          ? `${subjectName} 已恢复跟随账号 CDT 设置`
+          : mode === "include"
+            ? `已确认 ${subjectName} 计入 CDT 免费额度`
+            : `已排除 ${subjectName}（不计入 CDT 额度）`,
+      );
+    } catch (e) {
+      toast(errMsg(e), true);
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   return (
     <Card
       title="公网出口流量归因"
-      sub={period === "today" ? "今日零点至今各公网计费对象收发明细" : "本计费周期累计流量与所属额度池占比"}
+      sub={
+        period === "today"
+          ? "今日零点至今各公网计费对象收发明细；可在右侧按对象手动确认或排除 CDT 归属"
+          : "本计费周期累计流量与所属额度池占比；确认走 CDT 后自动计算池内占比"
+      }
       right={<SegToggle label="统计周期" value={period} onChange={setPeriod} options={[["today", "今日流量"], ["cycle", "本月归因"]]} />}
     >
       <Async res={res} lines={4}>
@@ -454,12 +492,16 @@ function Subjects({ accountId, instName, accounts }: { accountId: string; instNa
                     const rx = period === "today" ? s.today_rx_bytes : (s.cycle_rx_bytes ?? null);
                     const tx = period === "today" ? s.today_tx_bytes : (s.cycle_tx_bytes ?? null);
                     const metered = period === "today" ? s.today_metered_bytes : (s.cycle_metered_bytes ?? null);
+                    const acc = accounts.find((a) => a.id === s.account_id);
+                    const canConfigureCDT = s.metering_rule !== "not_metered" && !s.kind.startsWith("swas_") && s.kind !== "unknown";
+                    const rawOverride = acc?.cdt_subject_overrides?.[s.id];
+                    const mode: "auto" | "include" | "exclude" = rawOverride === undefined ? "auto" : rawOverride ? "include" : "exclude";
                     return (
                       <tr key={s.id}>
                         <td>
                           <b>{s.name}</b>
                           <div className="sub">
-                            {accountId === "all" ? `${accounts.find((a) => a.id === s.account_id)?.name ?? ""} · ` : ""}
+                            {accountId === "all" ? `${acc?.name ?? ""} · ` : ""}
                             <span className="mono">{s.public_ips.join("、") || "—"}</span>
                             {s.kind.startsWith("cbwp") ? ` · 成员 ${s.instance_ids.map(instName).join("、")}` : ""}
                           </div>
@@ -473,13 +515,28 @@ function Subjects({ accountId, instName, accounts }: { accountId: string; instNa
                         <td className="num">{metered === null ? <span className="sub">—</span> : <b>{gb(metered)}</b>}</td>
                         {period === "cycle" && <td className="num">{s.cycle_share_percent == null ? <span className="sub">—</span> : `${num(s.cycle_share_percent, 1)}%`}</td>}
                         <td>
-                          {s.counts_toward_cdt === null ? (
-                            <Badge level="warning">待确认</Badge>
-                          ) : s.counts_toward_cdt && s.cdt_scope ? (
-                            <Badge level="good">{SCOPE[s.cdt_scope]}</Badge>
-                          ) : (
-                            <span className="sub">不计入</span>
-                          )}
+                          <div className="inline" style={{ gap: 8, flexWrap: "wrap" }}>
+                            {s.counts_toward_cdt === null ? (
+                              <Badge level="warning">待确认</Badge>
+                            ) : s.counts_toward_cdt && s.cdt_scope ? (
+                              <Badge level="good">{SCOPE[s.cdt_scope]}</Badge>
+                            ) : (
+                              <span className="sub">不计入</span>
+                            )}
+                            {canConfigureCDT && (
+                              <select
+                                aria-label={`设置 ${s.name} 的 CDT 归属`}
+                                value={mode}
+                                disabled={savingId === s.id}
+                                onChange={(e) => setOverride(s.id, s.name, s.account_id, e.target.value as "auto" | "include" | "exclude")}
+                                style={{ padding: "3px 8px", fontSize: "var(--fs-sm)", width: "auto" }}
+                              >
+                                <option value="auto">跟随账号（{acc?.cdt_confirmed ? "已确认" : "待确认"}）</option>
+                                <option value="include">确认计入 CDT</option>
+                                <option value="exclude">排除不计入</option>
+                              </select>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
