@@ -22,7 +22,8 @@ trap cleanup EXIT
 trap 'exit 1' HUP INT TERM
 mkdir "$fixture/data"
 openssl rand -base64 32 > "$fixture/master.key"
-openssl rand -hex 32 > "$fixture/setup.token"
+setup_token=$(openssl rand -hex 32)
+printf '%s\n' "$setup_token" > "$fixture/setup.token"
 sudo chown 65532:65532 "$fixture/data" "$fixture/master.key" "$fixture/setup.token"
 port=$(python3 - <<'PY'
 import socket
@@ -59,11 +60,10 @@ with open(sys.argv[1]) as stream:
 PY
 status=$(curl --silent --output /dev/null --write-out '%{http_code}' -H 'Host: panel.example' "http://127.0.0.1:$port/api/v1/setup/status")
 [ "$status" = 403 ] || { printf '%s\n' 'plain_http_panel_was_accepted' >&2; exit 1; }
-python3 - "$port" "$fixture/setup.token" <<'PY'
-import http.client,json,secrets,sys
+SETUP_TOKEN="$setup_token" python3 - "$port" <<'PY'
+import http.client,json,os,secrets,sys
 port=int(sys.argv[1])
-with open(sys.argv[2]) as stream:
-    token=stream.read().strip()
+token=os.environ['SETUP_TOKEN'].strip()
 headers={'Host':'panel.example','X-Forwarded-Proto':'https','X-Forwarded-For':'192.0.2.5','Origin':'https://panel.example','Content-Type':'application/json'}
 def request(method,path,body=None):
     conn=http.client.HTTPConnection('127.0.0.1',port,timeout=5)
