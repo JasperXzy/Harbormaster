@@ -9,56 +9,11 @@ import { PlusIcon, PowerIcon } from "../components/icons";
 import { Async, Badge, Banner, Card, Confirm, CopyButton, Drawer, EmptyState, ErrorState, errMsg, Fresh, InfoTip, Modal, SegToggle, Skeleton, Spinner, SubTabs, Switch, useToast } from "../components/ui";
 import { useShared } from "../lib/data";
 import { ago, duration, gb, gbValue, num, rate, stamp, time, ver, ymd } from "../lib/format";
+import { INSTANCE_SORT_OPTIONS, sortInstances, useInstanceSort, type InstanceSortKey } from "../lib/instanceSort";
 import { Link, useQueryTab } from "../lib/router";
 import { useNow, useResource } from "../lib/useResource";
 
 const canInstall = (i: Instance) => i.agent.status === "not_installed";
-
-type SortKey = "name" | "status" | "rate" | "bandwidth" | "account" | "region" | "expires";
-type SortDir = "asc" | "desc";
-const SORT_STORAGE_KEY = "hm.instances.sort";
-const SORT_OPTIONS: [SortKey, string, SortDir][] = [
-  ["name", "名称", "asc"],
-  ["rate", "实时速率", "desc"],
-  ["status", "运行状态", "asc"],
-  ["account", "所属账号", "asc"],
-  ["region", "地域", "asc"],
-  ["bandwidth", "公网带宽", "desc"],
-  ["expires", "到期时间", "asc"],
-];
-const STATUS_RANK: Record<Instance["status"], number> = {
-  running: 0,
-  starting: 1,
-  pending: 2,
-  stopping: 3,
-  stopped: 4,
-  unknown: 5,
-};
-const naturalCmp = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" }).compare;
-
-function totalRateBps(i: Instance): number {
-  if (i.realtime) return i.realtime.tx_bytes_per_second + i.realtime.rx_bytes_per_second;
-  const stream = i.cloud_network?.streams?.[0];
-  if (stream && (stream.egress.value != null || stream.ingress.value != null)) {
-    return ((stream.egress.value ?? 0) + (stream.ingress.value ?? 0)) / 8;
-  }
-  return -1;
-}
-
-function loadSavedSort(): { key: SortKey; dir: SortDir } {
-  try {
-    const raw = localStorage.getItem(SORT_STORAGE_KEY);
-    if (raw) {
-      const [k, d] = raw.split(":");
-      if (SORT_OPTIONS.some(([key]) => key === k) && (d === "asc" || d === "desc")) {
-        return { key: k as SortKey, dir: d };
-      }
-    }
-  } catch {
-    // ignore storage errors
-  }
-  return { key: "name", dir: "asc" };
-}
 
 function RateCell({ i }: { i: Instance }) {
   if (i.realtime) {
@@ -164,29 +119,12 @@ export function Instances() {
   const [group, setGroup] = useState("");
   const [tag, setTag] = useState("");
   const [only, setOnly] = useState(false);
-  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>(loadSavedSort);
+  const { sort, updateSort } = useInstanceSort();
   const [detail, setDetail] = useState<string>();
   const [install, setInstall] = useState<string>();
   const [creatingECS, setCreatingECS] = useState(false);
   const [answering, setAnswering] = useState<string>();
   const sysInfoRes = useResource(api.systemInfo, []);
-
-  const updateSort = (key: SortKey, dir?: SortDir) => {
-    setSort((prev) => {
-      const defaultDir = SORT_OPTIONS.find(([k]) => k === key)?.[2] ?? "asc";
-      const next: { key: SortKey; dir: SortDir } = dir
-        ? { key, dir }
-        : prev.key === key
-          ? { key, dir: prev.dir === "asc" ? "desc" : "asc" }
-          : { key, dir: defaultDir };
-      try {
-        localStorage.setItem(SORT_STORAGE_KEY, `${next.key}:${next.dir}`);
-      } catch {
-        // ignore storage errors
-      }
-      return next;
-    });
-  };
 
   if (instances.error) return <div className="card"><ErrorState error={instances.error} onRetry={instances.reload} /></div>;
   if (!instances.data || !accounts.data) return <div className="card"><Skeleton lines={6} height={18} /></div>;
@@ -212,64 +150,29 @@ export function Instances() {
   const needsCount = all.filter(needs).length;
   const needle = q.trim().toLowerCase();
 
-  const rows = all
-    .filter((i) => {
-      if (account && i.account_id !== account) return false;
-      if (group && i.group !== group) return false;
-      if (tag && !(i.tags ?? []).includes(tag)) return false;
-      if (only && !needs(i)) return false;
-      if (needle) {
-        const hay = [
-          i.name,
-          i.cloud_instance_id,
-          i.region_id,
-          regionName(i.region_id),
-          i.group ?? "",
-          ...(i.tags ?? []),
-          i.note ?? "",
-          ...i.public_ips.map((p) => p.address),
-        ]
-          .join(" ")
-          .toLowerCase();
-        if (!hay.includes(needle)) return false;
-      }
-      return true;
-    })
-    .sort((a, b) => {
-      const mul = sort.dir === "asc" ? 1 : -1;
-      let cmp = 0;
-      switch (sort.key) {
-        case "name":
-          cmp = naturalCmp(a.name, b.name);
-          break;
-        case "status":
-          cmp = STATUS_RANK[a.status] - STATUS_RANK[b.status];
-          break;
-        case "rate":
-          cmp = totalRateBps(a) - totalRateBps(b);
-          break;
-        case "bandwidth":
-          cmp = (a.bandwidth_mbps ?? -1) - (b.bandwidth_mbps ?? -1);
-          break;
-        case "account":
-          cmp = naturalCmp(accName(a.account_id), accName(b.account_id));
-          break;
-        case "region":
-          cmp = naturalCmp(regionName(a.region_id), regionName(b.region_id));
-          break;
-        case "expires": {
-          const ea = a.expires_at ? Date.parse(a.expires_at) : null;
-          const eb = b.expires_at ? Date.parse(b.expires_at) : null;
-          if (ea === null && eb === null) cmp = 0;
-          else if (ea === null) return 1;
-          else if (eb === null) return -1;
-          else cmp = ea - eb;
-          break;
-        }
-      }
-      if (cmp !== 0) return cmp * mul;
-      return naturalCmp(a.name, b.name);
-    });
+  const filteredRows = all.filter((i) => {
+    if (account && i.account_id !== account) return false;
+    if (group && i.group !== group) return false;
+    if (tag && !(i.tags ?? []).includes(tag)) return false;
+    if (only && !needs(i)) return false;
+    if (needle) {
+      const hay = [
+        i.name,
+        i.cloud_instance_id,
+        i.region_id,
+        regionName(i.region_id),
+        i.group ?? "",
+        ...(i.tags ?? []),
+        i.note ?? "",
+        ...i.public_ips.map((p) => p.address),
+      ]
+        .join(" ")
+        .toLowerCase();
+      if (!hay.includes(needle)) return false;
+    }
+    return true;
+  });
+  const rows = sortInstances(filteredRows, sort, accName);
 
   const cur = all.find((i) => i.id === detail);
   const inst = all.find((i) => i.id === install);
@@ -397,13 +300,13 @@ export function Instances() {
               <select
                 value={sort.key}
                 onChange={(e) => {
-                  const key = e.target.value as SortKey;
-                  const defDir = SORT_OPTIONS.find(([k]) => k === key)?.[2] ?? "asc";
+                  const key = e.target.value as InstanceSortKey;
+                  const defDir = INSTANCE_SORT_OPTIONS.find(([k]) => k === key)?.[2] ?? "asc";
                   updateSort(key, defDir);
                 }}
                 aria-label="排序字段"
               >
-                {SORT_OPTIONS.map(([key, label]) => (
+                {INSTANCE_SORT_OPTIONS.map(([key, label]) => (
                   <option key={key} value={key}>按{label}排序</option>
                 ))}
               </select>

@@ -55,8 +55,16 @@ export const PROTECTION: Record<T.RealtimeProtection, [Level, string, string]> =
 
 /** 实例的实时保护状态。采集程序在线但额度暂时算不出时，不说“未受保护”，以免和没装的机器混在一起。 */
 export function protectionOf(i: Pick<T.Instance, "realtime_protection" | "agent" | "traffic_estimation">): [Level, string, string] {
-  if (i.traffic_estimation?.status === "ready" && i.traffic_estimation.estimated_bytes !== null)
-    return ["warning", i.traffic_estimation.mode === "unverified" ? "未核实估算" : "估算可用", "采集数据已纳入所在账号与区域的共享估算；这不代表已开启真实停机保护。"];
+  if (i.traffic_estimation?.status === "ready" && i.traffic_estimation.estimated_bytes !== null) {
+    if (i.traffic_estimation.mode === "unverified") {
+      return [
+        "neutral",
+        "窗口估算中",
+        "采集程序在线且实时估算正常。因阿里云 CDT 接口不返回精确出账截止时间，当前按本地延迟窗口（默认 1 小时）叠加采集增量估算；如需用它触发自动停机，请在「策略与通知 → 额度保护」开启允许实时估算触发。",
+      ];
+    }
+    return ["good", "估算可用", "采集数据已纳入所在账号与区域的共享估算；这不代表已开启真实停机保护。"];
+  }
   if (i.realtime_protection === "unprotected" && i.agent.status === "online")
     return ["warning", "暂无法估算", "采集程序在正常上报，所在范围还缺少完整的计量覆盖。请在流量页查看具体原因。"];
   return PROTECTION[i.realtime_protection];

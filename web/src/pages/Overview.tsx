@@ -8,6 +8,16 @@ import { quotaLevel, QuotaLegend, QuotaMeter, quotaUnknown, QuotaUnknownNote } f
 import { Async, Badge, Card, EmptyState, ErrorState, KpiCard, Skeleton, type Level } from "../components/ui";
 import { useShared } from "../lib/data";
 import { gb, rate, stamp } from "../lib/format";
+import {
+  ACCOUNT_SORT_OPTIONS,
+  INSTANCE_SORT_OPTIONS,
+  sortAccounts,
+  sortInstances,
+  useAccountSort,
+  useInstanceSort,
+  type AccountSortKey,
+  type InstanceSortKey,
+} from "../lib/instanceSort";
 import { Link } from "../lib/router";
 import { useResource } from "../lib/useResource";
 import { quotaPool as pool } from "../lib/usage";
@@ -39,6 +49,8 @@ export function Overview() {
   const email = useResource(api.emailChannel, []);
   const webhook = useResource(api.webhookChannel, []);
   const sims = useResource(api.quotaSimulations, [], { refreshMs: 30_000 });
+  const { sort: instSort, updateSort: updateInstSort } = useInstanceSort();
+  const { sort: accSort, updateSort: updateAccSort } = useAccountSort();
   useEvent("notification.created", () => notes.reload());
 
   const firstError = accounts.error ?? instances.error ?? quotas.error;
@@ -80,6 +92,9 @@ export function Overview() {
   const accs = accounts.data;
   const insts = instances.data.items;
   const qs = quotas.data;
+  const accName = (id: string) => accs.find((a) => a.id === id)?.name ?? "—";
+  const sortedAccs = sortAccounts(accs, qs, accSort);
+  const sortedInsts = sortInstances(insts, instSort, accName);
 
   if (!accs.length) {
     return (
@@ -228,12 +243,26 @@ export function Overview() {
 
       {/* 各账号配额卡片 */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
-        <div className="sub" style={{ fontWeight: 600 }}>各账号本月免费流量进度</div>
+        <div className="inline" style={{ gap: 10 }}>
+          <div className="sub" style={{ fontWeight: 600 }}>各账号本月免费流量进度</div>
+          {accs.length > 1 && (
+            <select
+              value={accSort}
+              onChange={(e) => updateAccSort(e.target.value as AccountSortKey)}
+              aria-label="账号卡片排序"
+              style={{ padding: "3px 8px", fontSize: "var(--fs-sm)", width: "auto" }}
+            >
+              {ACCOUNT_SORT_OPTIONS.map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+          )}
+        </div>
         {qs.some((q) => !quotaUnknown(q)) && <QuotaLegend worstCase={qs.some((q) => q.worst_case_bytes !== null && q.worst_case_bytes > 0)} />}
       </div>
 
       <div className="grid g2">
-        {accs.map((a) => (
+        {sortedAccs.map((a) => (
           <AccountCard
             key={a.id}
             account={a}
@@ -249,16 +278,45 @@ export function Overview() {
           title="实例运行速览"
           sub={`共 ${insts.length} 台机器，点击可进入实例工作区操作`}
           right={
-            <Link className="btn sm ghost" to="/instances">
-              管理全部实例 <ChevronRight size={14} />
-            </Link>
+            <div className="inline" style={{ gap: 6, flexWrap: "wrap" }}>
+              {insts.length > 1 && (
+                <>
+                  <select
+                    value={instSort.key}
+                    onChange={(e) => {
+                      const key = e.target.value as InstanceSortKey;
+                      const defDir = INSTANCE_SORT_OPTIONS.find(([k]) => k === key)?.[2] ?? "asc";
+                      updateInstSort(key, defDir);
+                    }}
+                    aria-label="总览实例排序字段"
+                    style={{ padding: "3px 8px", fontSize: "var(--fs-sm)", width: "auto" }}
+                  >
+                    {INSTANCE_SORT_OPTIONS.map(([key, label]) => (
+                      <option key={key} value={key}>按{label}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn sm ghost"
+                    onClick={() => updateInstSort(instSort.key, instSort.dir === "asc" ? "desc" : "asc")}
+                    title={instSort.dir === "asc" ? "当前升序，点击切换为降序" : "当前降序，点击切换为升序"}
+                    aria-label="切换总览实例升降序"
+                  >
+                    {instSort.dir === "asc" ? "↑" : "↓"}
+                  </button>
+                </>
+              )}
+              <Link className="btn sm ghost" to="/instances">
+                管理全部实例 <ChevronRight size={14} />
+              </Link>
+            </div>
           }
         >
           {insts.length === 0 ? (
             <EmptyState title="暂无纳管实例" />
           ) : (
             <div>
-              {insts.slice(0, 6).map((i) => {
+              {sortedInsts.slice(0, 6).map((i) => {
                 const [sl, st] = INSTANCE_STATUS[i.status];
                 const tx = i.realtime?.tx_bytes_per_second ?? (i.cloud_network?.streams?.[0]?.egress.value != null ? i.cloud_network.streams[0].egress.value / 8 : null);
                 const rx = i.realtime?.rx_bytes_per_second ?? (i.cloud_network?.streams?.[0]?.ingress.value != null ? i.cloud_network.streams[0].ingress.value / 8 : null);
