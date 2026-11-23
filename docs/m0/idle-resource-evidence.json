@@ -1,0 +1,290 @@
+{
+  "checked_on": "2026-11-13",
+  "method": "fixed idle-resources read probe via Alibaba Cloud signing SDK",
+  "cloud_writes": 0,
+  "pricing_calls": 0,
+  "production_collector_changed": false,
+  "scopes": [
+    {
+      "account_alias": "jasperxzy",
+      "region": "cn-shanghai",
+      "action": "DescribeInstances",
+      "fetched_at": "2026-11-13T06:20:12Z",
+      "status": "passed",
+      "complete": true,
+      "pages": 1,
+      "row_count": 1,
+      "field_counts": {
+        "Status": {
+          "Running": 1
+        },
+        "StoppedMode": {
+          "Not-applicable": 1
+        },
+        "InstanceChargeType": {
+          "PrePaid": 1
+        },
+        "SpotStrategy": {
+          "NoSpot": 1
+        }
+      }
+    },
+    {
+      "account_alias": "jasperxzy",
+      "region": "cn-shanghai",
+      "action": "DescribeDisks",
+      "fetched_at": "2026-11-13T06:20:13Z",
+      "status": "passed",
+      "complete": true,
+      "pages": 1,
+      "row_count": 1,
+      "field_counts": {
+        "Status": {
+          "In_use": 1
+        },
+        "Type": {
+          "system": 1
+        },
+        "Category": {
+          "cloud_essd_entry": 1
+        },
+        "DiskChargeType": {
+          "PrePaid": 1
+        },
+        "MultiAttach": {
+          "Disabled": 1
+        }
+      }
+    },
+    {
+      "account_alias": "jasperxzy",
+      "region": "cn-shanghai",
+      "action": "DescribeEipAddresses",
+      "fetched_at": "2026-11-13T06:20:13Z",
+      "status": "passed",
+      "complete": true,
+      "pages": 1,
+      "row_count": 0,
+      "field_counts": {
+        "Status": {},
+        "ChargeType": {},
+        "InternetChargeType": {},
+        "ServiceManaged": {},
+        "BusinessStatus": {}
+      }
+    },
+    {
+      "account_alias": "jasperxzy",
+      "region": "ap-southeast-1",
+      "action": "DescribeInstances",
+      "fetched_at": "2026-11-13T06:20:14Z",
+      "status": "passed",
+      "complete": true,
+      "pages": 1,
+      "row_count": 1,
+      "field_counts": {
+        "Status": {
+          "Running": 1
+        },
+        "StoppedMode": {
+          "Not-applicable": 1
+        },
+        "InstanceChargeType": {
+          "PostPaid": 1
+        },
+        "SpotStrategy": {
+          "SpotAsPriceGo": 1
+        }
+      }
+    },
+    {
+      "account_alias": "jasperxzy",
+      "region": "ap-southeast-1",
+      "action": "DescribeDisks",
+      "fetched_at": "2026-11-13T06:20:14Z",
+      "status": "passed",
+      "complete": true,
+      "pages": 1,
+      "row_count": 1,
+      "field_counts": {
+        "Status": {
+          "In_use": 1
+        },
+        "Type": {
+          "system": 1
+        },
+        "Category": {
+          "cloud_essd": 1
+        },
+        "DiskChargeType": {
+          "PostPaid": 1
+        },
+        "MultiAttach": {
+          "Disabled": 1
+        }
+      }
+    },
+    {
+      "account_alias": "jasperxzy",
+      "region": "ap-southeast-1",
+      "action": "DescribeEipAddresses",
+      "fetched_at": "2026-11-13T06:20:15Z",
+      "status": "passed",
+      "complete": true,
+      "pages": 1,
+      "row_count": 1,
+      "field_counts": {
+        "Status": {
+          "InUse": 1
+        },
+        "ChargeType": {
+          "PostPaid": 1
+        },
+        "InternetChargeType": {
+          "PayByTraffic": 1
+        },
+        "ServiceManaged": {
+          "0": 1
+        },
+        "BusinessStatus": {
+          "Normal": 1
+        }
+      }
+    },
+    {
+      "account_alias": "jasperxzy",
+      "region": "cn-hongkong",
+      "action": "DescribeInstances",
+      "fetched_at": "2026-11-13T06:20:16Z",
+      "status": "passed",
+      "complete": true,
+      "pages": 1,
+      "row_count": 1,
+      "field_counts": {
+        "Status": {
+          "Running": 1
+        },
+        "StoppedMode": {
+          "Not-applicable": 1
+        },
+        "InstanceChargeType": {
+          "PostPaid": 1
+        },
+        "SpotStrategy": {
+          "SpotAsPriceGo": 1
+        }
+      }
+    },
+    {
+      "account_alias": "jasperxzy",
+      "region": "cn-hongkong",
+      "action": "DescribeDisks",
+      "fetched_at": "2026-11-13T06:20:16Z",
+      "status": "passed",
+      "complete": true,
+      "pages": 1,
+      "row_count": 1,
+      "field_counts": {
+        "Status": {
+          "In_use": 1
+        },
+        "Type": {
+          "system": 1
+        },
+        "Category": {
+          "cloud_essd": 1
+        },
+        "DiskChargeType": {
+          "PostPaid": 1
+        },
+        "MultiAttach": {
+          "Disabled": 1
+        }
+      }
+    },
+    {
+      "account_alias": "jasperxzy",
+      "region": "cn-hongkong",
+      "action": "DescribeEipAddresses",
+      "fetched_at": "2026-11-13T06:20:16Z",
+      "status": "passed",
+      "complete": true,
+      "pages": 1,
+      "row_count": 1,
+      "field_counts": {
+        "Status": {
+          "InUse": 1
+        },
+        "ChargeType": {
+          "PostPaid": 1
+        },
+        "InternetChargeType": {
+          "PayByTraffic": 1
+        },
+        "ServiceManaged": {
+          "0": 1
+        },
+        "BusinessStatus": {
+          "Normal": 1
+        }
+      }
+    },
+    {
+      "account_alias": "winnemjw",
+      "region": "cn-shanghai",
+      "action": "DescribeInstances",
+      "fetched_at": "2026-11-13T06:20:12Z",
+      "status": "passed",
+      "complete": true,
+      "pages": 1,
+      "row_count": 0,
+      "field_counts": {
+        "Status": {},
+        "StoppedMode": {},
+        "InstanceChargeType": {},
+        "SpotStrategy": {}
+      }
+    },
+    {
+      "account_alias": "winnemjw",
+      "region": "cn-shanghai",
+      "action": "DescribeDisks",
+      "fetched_at": "2026-11-13T06:20:13Z",
+      "status": "passed",
+      "complete": true,
+      "pages": 1,
+      "row_count": 0,
+      "field_counts": {
+        "Status": {},
+        "Type": {},
+        "Category": {},
+        "DiskChargeType": {},
+        "MultiAttach": {}
+      }
+    },
+    {
+      "account_alias": "winnemjw",
+      "region": "cn-shanghai",
+      "action": "DescribeEipAddresses",
+      "fetched_at": "2026-11-13T06:20:13Z",
+      "status": "passed",
+      "complete": true,
+      "pages": 1,
+      "row_count": 0,
+      "field_counts": {
+        "Status": {},
+        "ChargeType": {},
+        "InternetChargeType": {},
+        "ServiceManaged": {},
+        "BusinessStatus": {}
+      }
+    }
+  ],
+  "observed_cases": {
+    "stopped_ecs": false,
+    "unbound_eip": false,
+    "multi_attach_disk": false,
+    "postpaid_standalone_disk": false,
+    "multi_page_cloud_response": false
+  }
+}

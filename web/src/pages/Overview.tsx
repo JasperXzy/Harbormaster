@@ -1,12 +1,13 @@
-// 总览：需要留意的问题、四个数字、各账号额度、共享带宽、最近通知。
+// 总览：低噪 Bento 仪表盘（可折叠待办栏 + 四大核心指标卡 + 账号配额双列网格 + 活跃实例与最近动态）。
 import { api } from "../api/client";
 import { useEvent } from "../api/events";
-import { SCOPE_SHORT, SEVERITY, SITE, SUBJECT_KIND, regionName } from "../api/labels";
+import { INSTANCE_STATUS, SCOPE_SHORT, SEVERITY, SITE, regionName } from "../api/labels";
 import type { Account, Instance, Notification, QuotaScope, QuotaStatus } from "../api/types";
-import { quotaLevel, QuotaLegend, QuotaMeter } from "../components/QuotaMeter";
-import { Async, Badge, Banner, Card, EmptyState, ErrorState, Fresh, Skeleton, type Level } from "../components/ui";
+import { ActivityIcon, ChevronRight, GlobeIcon, ServerIcon, ShieldIcon } from "../components/icons";
+import { quotaLevel, QuotaLegend, QuotaMeter, quotaUnknown, QuotaUnknownNote } from "../components/QuotaMeter";
+import { Async, Badge, Card, EmptyState, ErrorState, KpiCard, Skeleton, type Level } from "../components/ui";
 import { useShared } from "../lib/data";
-import { gb, stamp } from "../lib/format";
+import { gb, rate, stamp } from "../lib/format";
 import { Link } from "../lib/router";
 import { useResource } from "../lib/useResource";
 import { quotaPool as pool } from "../lib/usage";
@@ -18,7 +19,9 @@ export function NotificationItem({ n }: { n: Notification }) {
   const [level, text] = SEVERITY[n.severity];
   return (
     <div className="aitem">
-      <Badge level={n.kind === "recovery" ? "good" : level}>{n.kind === "recovery" ? "已恢复" : n.kind === "test" ? "测试" : text}</Badge>
+      <Badge level={n.kind === "recovery" ? "good" : level}>
+        {n.kind === "recovery" ? "恢复" : n.kind === "test" ? "测试" : text}
+      </Badge>
       <div>
         <div className="t">{n.title}</div>
         <div className="d">{n.body}</div>
@@ -31,117 +34,304 @@ export function NotificationItem({ n }: { n: Notification }) {
 export function Overview() {
   const { accounts, instances, quotas } = useShared();
   const packages = useResource(api.bandwidthPackages, [], { refreshMs: 30_000 });
-  const notes = useResource(() => api.notifications({ limit: 4 }), []);
+  const notes = useResource(() => api.notifications({ limit: 5 }), []);
   const telegram = useResource(api.telegram, []);
+  const email = useResource(api.emailChannel, []);
+  const webhook = useResource(api.webhookChannel, []);
+  const sims = useResource(api.quotaSimulations, [], { refreshMs: 30_000 });
   useEvent("notification.created", () => notes.reload());
 
   const firstError = accounts.error ?? instances.error ?? quotas.error;
-  if (firstError && !accounts.data) return <div className="card"><ErrorState error={firstError} onRetry={() => { accounts.reload(); instances.reload(); quotas.reload(); }} /></div>;
-  if (!accounts.data || !instances.data || !quotas.data)
-    return (
-      <>
-        <div className="grid g4">{[0, 1, 2, 3].map((i) => <div className="card" key={i}><Skeleton lines={2} height={18} /></div>)}</div>
-        <div className="grid g2">{[0, 1].map((i) => <div className="card" key={i}><Skeleton lines={5} /></div>)}</div>
-      </>
-    );
-
-  const accs = accounts.data, insts = instances.data.items, qs = quotas.data;
-  if (!accs.length)
+  if (firstError && !accounts.data) {
     return (
       <div className="card">
-        <EmptyState title="还没有添加阿里云账号" action={<Link className="btn primary" to="/settings">去添加账号</Link>}>
-          添加账号后，这里会显示所有机器的状态和本月免费流量还剩多少。
+        <ErrorState
+          error={firstError}
+          onRetry={() => {
+            accounts.reload();
+            instances.reload();
+            quotas.reload();
+          }}
+        />
+      </div>
+    );
+  }
+  if (!accounts.data || !instances.data || !quotas.data) {
+    return (
+      <>
+        <div className="kpi-grid">
+          {[0, 1, 2, 3].map((i) => (
+            <div className="kpi-card" key={i}>
+              <Skeleton lines={2} height={18} />
+            </div>
+          ))}
+        </div>
+        <div className="grid g2">
+          {[0, 1].map((i) => (
+            <div className="card" key={i}>
+              <Skeleton lines={5} />
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  }
+
+  const accs = accounts.data;
+  const insts = instances.data.items;
+  const qs = quotas.data;
+
+  if (!accs.length) {
+    return (
+      <div className="card">
+        <EmptyState title="欢迎使用 Harbormaster · 尚未添加阿里云账号" action={<Link className="btn primary" to="/settings">添加第一个阿里云账号</Link>}>
+          绑定只读或开关机 RAM AccessKey 后，这里将实时汇总各账号 CDT 免费流量池、实例速率与账单健康状态。
         </EmptyState>
       </div>
     );
+  }
 
-  const running = insts.filter((i) => i.status === "running").length;
-  const failing = accs.filter((a) => a.sync_status === "failing");
+  const running = insts.filter((i) => i.status === "running");
+  const failing = accs.filter((a) => a.enabled && a.sync_status === "failing");
   const worstCase = insts.filter((i) => i.realtime_protection === "worst_case");
-  const unprotected = insts.filter((i) => i.realtime_protection === "unprotected" && i.status === "running");
-  const officialDown = qs.some((q) => q.official_status === "unavailable");
-  const po = pool(qs, accs, "overseas"), pm = pool(qs, accs, "mainland");
-  const tiles: [string, string, string, string][] = [
-    ["阿里云账号", String(accs.length), "个", failing.length ? `${failing.length} 个连接失败` : "全部连接正常"],
-    ["实例", String(insts.length), "台", `运行中 ${running} · 其他 ${insts.length - running}`],
-    ["海外免费流量还剩", gb(po.left).replace(" GB", ""), po.left === null ? "" : "GB", po.left === null ? "部分用量未确认，暂不合计余量" : po.over ? `已超出 ${gb(po.over)}` : `共 ${gb(po.quota, 0)}${po.best ? ` · 剩得最多：${po.best}` : ""}`],
-    ["国内免费流量还剩", gb(pm.left).replace(" GB", ""), pm.left === null ? "" : "GB", pm.left === null ? "部分用量未确认，暂不合计余量" : pm.over ? `已超出 ${gb(pm.over)}` : `共 ${gb(pm.quota, 0)}${pm.best ? ` · 剩得最多：${pm.best}` : ""}`],
-  ];
+  const pendingConfirms = insts.filter((i) => i.pending_intent_confirmation);
+  const activeSims = sims.data ?? [];
+
+  const anyChannelConfigured =
+    (telegram.data && telegram.data.status !== "not_configured") ||
+    (email.data && email.data.status !== "not_configured") ||
+    (webhook.data && webhook.data.status !== "not_configured");
+  const channelFailing =
+    telegram.data?.status === "failing" || email.data?.status === "failing" || webhook.data?.status === "failing";
+
+  // 仅收集真正需要人工介入的事项，聚合进单一待办栏，杜绝满屏黄条轰炸
+  const alerts: { key: string; critical?: boolean; text: React.ReactNode; to: string; cta: string }[] = [];
+  for (const a of failing) {
+    alerts.push({
+      key: `fail-${a.id}`,
+      critical: true,
+      text: <>账号 <b>{a.name}</b> 同步失败（已连续 {a.consecutive_failures} 次）</>,
+      to: "/settings",
+      cta: "排查凭证",
+    });
+  }
+  for (const i of worstCase) {
+    alerts.push({
+      key: `wc-${i.id}`,
+      critical: true,
+      text: <>实例 <b>{i.name}</b> 采集 Agent 掉线，当前按历史峰值保守推算流量</>,
+      to: "/instances",
+      cta: "查看实例",
+    });
+  }
+  if (pendingConfirms.length > 0) {
+    alerts.push({
+      key: "confirm",
+      text: <>检测到 <b>{pendingConfirms.map((x) => x.name).join("、")}</b> 在面板外被关机，请确认意图</>,
+      to: "/automation",
+      cta: "立即确认",
+    });
+  }
+  if (activeSims.length > 0) {
+    alerts.push({
+      key: "sim",
+      text: <>当前有 <b>{activeSims.length} 项模拟用量演练</b>正在生效（不会真实停机）</>,
+      to: "/automation",
+      cta: "管理演练",
+    });
+  }
+  if (channelFailing) {
+    alerts.push({
+      key: "ch-fail",
+      critical: true,
+      text: <>有通知渠道投递失败，告警可能无法送达</>,
+      to: "/automation?tab=channels",
+      cta: "检查渠道",
+    });
+  } else if (telegram.data && email.data && webhook.data && !anyChannelConfigured) {
+    alerts.push({
+      key: "ch-empty",
+      text: <>尚未配置任何外部通知渠道（Telegram / 邮件 / Webhook）</>,
+      to: "/automation?tab=channels",
+      cta: "去配置",
+    });
+  }
+
+  const po = pool(qs, accs, "overseas");
+  const pm = pool(qs, accs, "mainland");
 
   return (
     <>
-      {(failing.length > 0 || worstCase.length > 0 || unprotected.length > 0 || officialDown || telegram.data?.status === "not_configured" || telegram.data?.status === "failing") && (
-        <div className="grid" style={{ gap: 8 }} aria-label="需要留意">
-          {worstCase.map((i) => (
-            <Banner key={i.id} level="critical" action={<Link className="btn sm" to="/instances">查看</Link>}>
-              <b>{i.name} 的采集程序掉线了。</b> 掉线期间按它之前的最高速度估算用量，所以数字会偏大。请登录这台机器检查 hm-agent 是否在运行。
-            </Banner>
+      {alerts.length > 0 && (
+        <div className={`attn-bar ${alerts.some((a) => a.critical) ? "critical" : ""}`} role="region" aria-label="待处理事项">
+          {alerts.map((a) => (
+            <div key={a.key} style={{ display: "flex", alignItems: "center", gap: 10, justifyContent: "space-between", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--fs-sm)" }}>
+                <Badge level={a.critical ? "critical" : "warning"}>{a.critical ? "需处理" : "待关注"}</Badge>
+                <span>{a.text}</span>
+              </div>
+              <Link className="btn sm" to={a.to}>
+                {a.cta} <ChevronRight size={13} />
+              </Link>
+            </div>
           ))}
-          {failing.map((a) => (
-            <Banner key={a.id} level="critical" action={<Link className="btn sm" to="/settings">去检查</Link>}>
-              <b>账号 {a.name} 连不上阿里云</b>（已连续失败 {a.consecutive_failures} 次）。这个账号下的数据停在 {a.last_sync_at ? stamp(a.last_sync_at) : "很久以前"}，不再更新。
-            </Banner>
-          ))}
-          {officialDown && (
-            <Banner level="warning">
-              <b>暂时取不到阿里云的官方流量数据。</b> 面板正在用上一次的官方数值加上实时增量继续估算。
-            </Banner>
-          )}
-          {unprotected.length > 0 && (
-            <Banner level="warning" action={<Link className="btn sm" to="/instances">查看实例</Link>}>
-              <b>{unprotected.map((i) => i.name).join("、")} 未受实时保护。</b> 采集数据或官方计量依据尚未完整，请核对采集程序状态和流量数据。
-            </Banner>
-          )}
-          {telegram.data?.status === "not_configured" && (
-            <Banner level="warning" action={<Link className="btn sm" to="/notify">去设置</Link>}>
-              <b>还没有设置通知。</b> 用量快到上限时不会有人提醒你。
-            </Banner>
-          )}
-          {telegram.data?.status === "failing" && (
-            <Banner level="critical" action={<Link className="btn sm" to="/notify">去检查</Link>}>
-              <b>通知发不出去。</b> 最近一次发送 Telegram 消息失败了，告警可能收不到。
-            </Banner>
-          )}
         </div>
       )}
 
-      <div className="grid g4">
-        {tiles.map(([label, value, unit, hint]) => (
-          <div className="card stat" key={label}>
-            <div className="label">{label}</div>
-            <div className="value">{value}<small>{unit}</small></div>
-            <div className="hint">{hint}</div>
-          </div>
-        ))}
+      {/* 4 个高对比 Bento 核心指标卡 */}
+      <div className="kpi-grid">
+        <KpiCard
+          label="纳管阿里云账号"
+          value={accs.filter((a) => a.enabled).length}
+          unit={accs.length > accs.filter((a) => a.enabled).length ? `/ ${accs.length} 个` : "个"}
+          icon={<ShieldIcon size={16} />}
+          foot={failing.length ? <span style={{ color: "var(--critical)" }}>{failing.length} 个同步异常</span> : "全部凭证连接正常"}
+        />
+        <KpiCard
+          label="运行中实例"
+          value={running.length}
+          unit={`/ ${insts.length} 台`}
+          icon={<ServerIcon size={16} />}
+          foot={`在线 Agent ${insts.filter((i) => i.agent.status === "online").length} 台 · 已停止 ${insts.length - running.length} 台`}
+        />
+        <KpiCard
+          label="海外免费流量池剩余"
+          value={po.left === null ? "—" : gb(po.left).replace(" GB", "")}
+          unit={po.left === null ? undefined : "GB"}
+          icon={<GlobeIcon size={16} />}
+          foot={
+            po.disabledAll
+              ? "已关闭海外流量记录"
+              : po.left === null
+                ? "按账号独立展示（见下方卡片）"
+                : po.over
+                  ? <span style={{ color: "var(--critical)" }}>已超出 {gb(po.over)}</span>
+                  : `总额度 ${gb(po.quota, 0)}${po.best ? ` · 最充裕：${po.best}` : ""}`
+          }
+        />
+        <KpiCard
+          label="国内免费流量池剩余"
+          value={pm.left === null ? "—" : gb(pm.left).replace(" GB", "")}
+          unit={pm.left === null ? undefined : "GB"}
+          icon={<ActivityIcon size={16} />}
+          foot={
+            pm.disabledAll
+              ? "已关闭国内流量记录"
+              : pm.left === null
+                ? "按账号独立展示（见下方卡片）"
+                : pm.over
+                  ? <span style={{ color: "var(--critical)" }}>已超出 {gb(pm.over)}</span>
+                  : `总额度 ${gb(pm.quota, 0)}${pm.best ? ` · 最充裕：${pm.best}` : ""}`
+          }
+        />
+      </div>
+
+      {/* 各账号配额卡片 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+        <div className="sub" style={{ fontWeight: 600 }}>各账号本月免费流量进度</div>
+        {qs.some((q) => !quotaUnknown(q)) && <QuotaLegend worstCase={qs.some((q) => q.worst_case_bytes !== null && q.worst_case_bytes > 0)} />}
       </div>
 
       <div className="grid g2">
-        {accs.map((a) => <AccountCard key={a.id} account={a} quotas={qs.filter((q) => q.account_id === a.id)} instances={insts.filter((i) => i.account_id === a.id)} />)}
+        {accs.map((a) => (
+          <AccountCard
+            key={a.id}
+            account={a}
+            quotas={qs.filter((q) => q.account_id === a.id)}
+            instances={insts.filter((i) => i.account_id === a.id)}
+          />
+        ))}
       </div>
 
-      <div className="grid g3">
-        <Async res={packages} lines={5}>
-          {(pkgs) => (
-            <>
-              {pkgs.map((p) => (
-                <Card key={p.id} title={`共享带宽 ${p.name}`} right={<Fresh at={p.updated_at} kind="realtime" />}>
-                  <dl className="kv">
-                    <dt>账号 / 地域</dt><dd>{accs.find((a) => a.id === p.account_id)?.name} · {regionName(p.region_id)}</dd>
-                    <dt>带宽上限</dt><dd>{p.bandwidth_mbps} Mbps</dd>
-                    <dt>计费方式</dt><dd>{SUBJECT_KIND[p.kind].replace("共享带宽 · ", "")}{p.settled_by_cdt === null ? " · CDT 归属待确认" : p.settled_by_cdt ? " · 计入免费额度" : ""}</dd>
-                    <dt>成员</dt><dd>{p.members.map((m) => <span key={m.eip_address}><span className="mono">{m.eip_address}</span>{m.instance_name ? `（${m.instance_name}）` : ""} </span>)}</dd>
-                    <dt>今天收 / 发</dt><dd>{p.today_rx_bytes === null ? "—" : gb(p.today_rx_bytes)} / {p.today_tx_bytes === null ? "—" : gb(p.today_tx_bytes)}</dd>
-                    <dt>今天计费流量</dt><dd><b>{p.today_metered_bytes === null ? "—" : gb(p.today_metered_bytes)}</b>{p.dominant_direction ? ` · ${p.dominant_direction === "inbound" ? "收到的" : "发出的"}更多` : ""}</dd>
-                  </dl>
-                  {p.kind === "cbwp_dominant_traffic" && <p className="note">“按主流量”的意思：每小时比较收到和发出的流量，按较大的一方计费，不是只算发出的。</p>}
-                </Card>
-              ))}
-            </>
+      {/* 下半屏 Bento：左「实例实时动态 + 共享带宽」，右「最近告警与通知」 */}
+      <div className="grid g2">
+        <Card
+          title="实例运行速览"
+          sub={`共 ${insts.length} 台机器，点击可进入实例工作区操作`}
+          right={
+            <Link className="btn sm ghost" to="/instances">
+              管理全部实例 <ChevronRight size={14} />
+            </Link>
+          }
+        >
+          {insts.length === 0 ? (
+            <EmptyState title="暂无纳管实例" />
+          ) : (
+            <div>
+              {insts.slice(0, 6).map((i) => {
+                const [sl, st] = INSTANCE_STATUS[i.status];
+                const tx = i.realtime?.tx_bytes_per_second ?? (i.cloud_network?.streams?.[0]?.egress.value != null ? i.cloud_network.streams[0].egress.value / 8 : null);
+                const rx = i.realtime?.rx_bytes_per_second ?? (i.cloud_network?.streams?.[0]?.ingress.value != null ? i.cloud_network.streams[0].ingress.value / 8 : null);
+                return (
+                  <div className="rowline" key={i.id}>
+                    <div className="grow" style={{ minWidth: 150 }}>
+                      <div className="inline" style={{ gap: 6 }}>
+                        <Link to="/instances" style={{ fontWeight: 600, color: "var(--text)" }}>
+                          {i.name}
+                        </Link>
+                        <Badge level={sl}>{st}</Badge>
+                      </div>
+                      <div className="sub" style={{ marginTop: 2 }}>
+                        {accs.find((a) => a.id === i.account_id)?.name} · {regionName(i.region_id)}
+                        {i.public_ips[0] ? ` · ${i.public_ips[0].address}` : ""}
+                      </div>
+                    </div>
+                    <div className="num" style={{ textAlign: "right", fontSize: "var(--fs-sm)" }}>
+                      {tx !== null ? (
+                        <>
+                          <div>↑ {rate(tx)}</div>
+                          <div className="sub">↓ {rate(rx ?? 0)}</div>
+                        </>
+                      ) : (
+                        <span className="sub">—</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
-        </Async>
-        <Card className={packages.data?.length ? "span2" : "span2"} title="最近通知" right={<Link className="sub" to="/notify">全部</Link>}>
+
+          {!!packages.data?.length && (
+            <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span className="sub" style={{ fontWeight: 600 }}>共享带宽包今日主流量</span>
+                <Link className="sub" to="/traffic">查看每小时明细 →</Link>
+              </div>
+              {packages.data.map((p) => (
+                <div className="rowline" key={p.id} style={{ padding: "6px 0" }}>
+                  <div className="grow">
+                    <b>{p.name}</b>
+                    <span className="sub"> · {regionName(p.region_id)}</span>
+                  </div>
+                  <b className="num">{p.today_metered_bytes === null ? "—" : gb(p.today_metered_bytes)}</b>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card
+          title="最近告警与通知"
+          sub="额度越档、连接异常与自动策略执行回执"
+          right={
+            <Link className="btn sm ghost" to="/automation?tab=history">
+              查看全部 <ChevronRight size={14} />
+            </Link>
+          }
+        >
           <Async res={notes}>
-            {(n) => (n.items.length ? <div className="alist">{n.items.map((x) => <NotificationItem key={x.id} n={x} />)}</div> : <EmptyState title="还没有通知">用量越过档位、采集程序掉线等情况发生时，会记录在这里。</EmptyState>)}
+            {(n) =>
+              n.items.length ? (
+                <div className="alist">
+                  {n.items.map((x) => (
+                    <NotificationItem key={x.id} n={x} />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState title="近期一切平静">没有任何告警或异常触发。</EmptyState>
+              )
+            }
           </Async>
         </Card>
       </div>
@@ -150,22 +340,42 @@ export function Overview() {
 }
 
 function AccountCard({ account, quotas, instances }: { account: Account; quotas: QuotaStatus[]; instances: Instance[] }) {
-  let level: Level = "good", text = "正常";
+  let level: Level = "good";
+  let text = "配额充裕";
   for (const q of quotas) {
     const [l, t] = quotaLevel(q);
-    if (worse(l, level) !== level) [level, text] = [l, `${SCOPE_SHORT[q.scope]}${t}`];
+    if (worse(l, level) !== level) [level, text] = [l, `${SCOPE_SHORT[q.scope]} · ${t}`];
   }
-  if (account.sync_status === "failing") [level, text] = ["critical", "连接失败"];
+  if (!account.enabled) [level, text] = ["neutral", "已停用"];
+  else if (account.sync_status === "failing") [level, text] = ["critical", "连接失败"];
+
   const order: QuotaScope[] = ["overseas", "mainland"];
   return (
-    <Card title={account.name} sub={`${SITE[account.site]} · ${instances.length} 台实例`} right={<Badge level={level}>{text}</Badge>}>
+    <Card
+      title={account.name}
+      sub={`${SITE[account.site]} · ${instances.length} 台实例`}
+      right={
+        <div className="inline" style={{ gap: 6 }}>
+          <Badge level={level}>{text}</Badge>
+          <Link className="btn sm ghost" to="/automation" title="配置额度保护自动停机">
+            保护策略
+          </Link>
+        </div>
+      }
+    >
       {quotas.length ? (
         <>
-          <QuotaLegend worstCase={quotas.some((q) => q.worst_case_bytes !== null && q.worst_case_bytes > 0)} />
           {order.map((s) => quotas.filter((q) => q.scope === s).map((q) => <QuotaMeter key={s} q={q} />))}
+          <QuotaUnknownNote quotas={quotas} />
         </>
       ) : (
-        <EmptyState title="还没有流量数据">{account.sync_status === "never_synced" ? "正在第一次读取这个账号，通常一两分钟内完成。" : "这个账号暂时没有可显示的额度数据。"}</EmptyState>
+        <EmptyState title="暂无此账号的流量配额视图">
+          {account.track_mainland === false && account.track_overseas === false
+            ? "已在账号设置中关闭国内与海外 CDT 流量记录。"
+            : account.sync_status === "never_synced"
+              ? "正在首次扫描云资源与账单数据，请稍候。"
+              : "当前没有可展示的配额范围。"}
+        </EmptyState>
       )}
     </Card>
   );

@@ -4,6 +4,8 @@ package devmode
 
 import (
 	"time"
+
+	"github.com/JasperXzy/harbormaster/internal/model"
 )
 
 type object = map[string]any
@@ -26,7 +28,7 @@ func makeFixtures(now time.Time, loc *time.Location) fixtures {
 	start := time.Date(local.Year(), local.Month(), 1, 0, 0, 0, 0, loc)
 	end := start.AddDate(0, 1, 0)
 	for i, id := range []string{"demo-account-1", "demo-account-2"} {
-		f.Accounts = append(f.Accounts, object{"id": id, "name": []string{"Example account A (demo)", "Example account B (demo)"}[i], "site": []string{"china", "international"}[i], "access_key_id_masked": "DEMO***ONLY", "region_ids": []string{"ap-southeast-1", "cn-hongkong", "cn-shanghai"}, "enabled": true, "quota_mainland_bytes": int64(20 << 30), "quota_overseas_bytes": int64(200 << 30), "reset_day": 1, "alert_thresholds_percent": []int{80, 90, 95}, "sync_status": "ok", "last_sync_at": stamp, "last_error": nil, "consecutive_failures": 0, "permission_check": nil, "instance_count": []int{2, 1}[i], "updated_at": stamp})
+		f.Accounts = append(f.Accounts, object{"id": id, "name": []string{"Example account A (demo)", "Example account B (demo)"}[i], "site": []string{"china", "international"}[i], "access_key_id_masked": "DEMO***ONLY", "region_ids": []string{"ap-southeast-1", "cn-hongkong", "cn-shanghai"}, "enabled": true, "track_mainland": true, "track_overseas": true, "quota_mainland_bytes": int64(20 << 30), "quota_overseas_bytes": int64(200 << 30), "reset_day": 1, "alert_thresholds_percent": []int{80, 90, 95}, "sync_status": "ok", "last_sync_at": stamp, "last_error": nil, "consecutive_failures": 0, "permission_check": nil, "instance_count": []int{2, 1}[i], "updated_at": stamp})
 		for j, scope := range []string{"mainland", "overseas"} {
 			quota := int64(20 << 30)
 			if j == 1 {
@@ -34,7 +36,7 @@ func makeFixtures(now time.Time, loc *time.Location) fixtures {
 			}
 			used := quota / 4
 			inc := int64(128 << 20)
-			f.Quotas = append(f.Quotas, object{"account_id": id, "scope": scope, "cycle_start": start.UTC().Format(time.RFC3339), "cycle_end": end.UTC().Format(time.RFC3339), "quota_bytes": quota, "official_bytes": used, "official_as_of": official, "official_status": "ok", "realtime_increment_bytes": inc, "worst_case_bytes": 0, "estimated_bytes": used + inc, "effective_bytes": used + inc, "thresholds_percent": []int{80, 90, 95}, "forecast": nil, "updated_at": stamp})
+			f.Quotas = append(f.Quotas, object{"account_id": id, "scope": scope, "cycle_start": start.UTC().Format(time.RFC3339), "cycle_end": end.UTC().Format(time.RFC3339), "quota_bytes": quota, "official_quality": "verified", "estimation": object{"mode": "aligned", "status": "ready", "basis_id": "demo-watermark", "from_at": official, "to_at": stamp, "calculated_at": stamp, "lag_window_seconds": 3600, "increment_bytes": inc, "known_increment_bytes": inc, "worst_case_bytes": 0, "estimated_bytes": used + inc, "current_rate_bytes_per_second": 80000, "qualified_for_execution": false, "reasons": []string{"demo_data"}}, "official_bytes": used, "official_as_of": official, "official_status": "ok", "realtime_increment_bytes": inc, "worst_case_bytes": 0, "estimated_bytes": used + inc, "effective_bytes": used + inc, "thresholds_percent": []int{80, 90, 95}, "forecast": nil, "updated_at": stamp})
 		}
 	}
 	for i, id := range []string{"demo-sin", "demo-hkg", "demo-sha"} {
@@ -52,7 +54,7 @@ func makeFixtures(now time.Time, loc *time.Location) fixtures {
 			packageName = []string{"sg-share (demo)", "hk-share (demo)"}[i]
 		}
 		if i == 0 {
-			agent = object{"status": "online", "version": "dev", "registered_at": stamp, "last_report_at": stamp, "offline_since": nil, "worst_case": nil}
+			agent = object{"status": "online", "version": "v0.1.0", "available_version": "v0.2.0", "update_available": true, "registered_at": stamp, "last_report_at": stamp, "offline_since": nil, "worst_case": nil}
 		}
 		protection := "unprotected"
 		if i == 0 {
@@ -77,7 +79,21 @@ func makeFixtures(now time.Time, loc *time.Location) fixtures {
 		if i <= 1 {
 			ipType = "eip"
 		}
-		f.Instances = append(f.Instances, object{"id": id, "cloud_instance_id": []string{"i-demo-sin", "i-demo-hkg", "swas-demo-sha"}[i], "name": name, "account_id": account, "kind": kind, "region_id": []string{"ap-southeast-1", "cn-hongkong", "cn-shanghai"}[i], "zone_id": nil, "spec": "example-spec", "status": "running", "public_ips": []object{{"address": ip, "type": ipType}}, "charge_type": []string{"pay_as_you_go", "pay_as_you_go", "subscription"}[i], "expires_at": nil, "billing_subject_id": "subject-" + id, "billing_subject_kind": billing, "metering_rule": rule, "bandwidth_mbps": []int{2000, 2000, 200}[i], "bandwidth_package_name": packageName, "counts_toward_cdt": counts, "cdt_scope": scope, "agent": agent, "realtime_protection": protection, "realtime": realtime, "updated_at": stamp})
+		renewal := object{"status": "not_applicable", "source": nil, "checked_at": stamp, "last_error": nil}
+		if kind == "swas" {
+			renewal["status"] = "manual_renewal"
+			renewal["source"] = "bss_query_available_instances"
+		}
+		var capacity any
+		var ipv6 any
+		if kind == "ecs" {
+			capacity = object{"source": "ecs_describe_instance_types", "checked_at": stamp, "rx_kbps": 1000000, "tx_kbps": 1000000, "public_outbound_mbps": 2000, "public_outbound_exceeds_spec": true, "last_error": nil}
+			ipv6 = object{"addresses": []string{"2001:db8::10"}, "status": "ok", "source": "ecs_instances", "checked_at": stamp, "observed_at": stamp, "last_error": nil}
+			if i == 1 {
+				ipv6 = object{"addresses": []string{"2001:db8::20"}, "status": "stale", "source": "ecs_network_interfaces", "checked_at": stamp, "observed_at": official, "last_error": object{"code": "ipv6_lookup_timeout", "message": "demo placeholder"}}
+			}
+		}
+		f.Instances = append(f.Instances, object{"id": id, "cloud_instance_id": []string{"i-demo-sin", "i-demo-hkg", "swas-demo-sha"}[i], "name": name, "account_id": account, "kind": kind, "region_id": []string{"ap-southeast-1", "cn-hongkong", "cn-shanghai"}[i], "zone_id": nil, "spec": "example-spec", "network_capacity": capacity, "ipv6": ipv6, "renewal": renewal, "status": "running", "public_ips": []object{{"address": ip, "type": ipType}}, "charge_type": []string{"pay_as_you_go", "pay_as_you_go", "subscription"}[i], "expires_at": nil, "billing_subject_id": "subject-" + id, "billing_subject_kind": billing, "metering_rule": rule, "bandwidth_mbps": []int{2000, 2000, 200}[i], "bandwidth_package_name": packageName, "counts_toward_cdt": counts, "cdt_scope": scope, "agent": agent, "realtime_protection": protection, "realtime": realtime, "updated_at": stamp})
 		var rx, tx, metered any
 		source := "none"
 		if i == 0 {
@@ -90,18 +106,36 @@ func makeFixtures(now time.Time, loc *time.Location) fixtures {
 	}
 	f.Packages = []object{{"id": "demo-package", "cloud_id": "cbwp-demo-only", "name": "sg-share (demo)", "account_id": "demo-account-1", "region_id": "ap-southeast-1", "bandwidth_mbps": 2000, "kind": "cbwp_dominant_traffic", "settled_by_cdt": true, "members": []object{{"eip_address": "192.0.2.10", "instance_id": "demo-sin", "instance_name": "sin-pro (demo)"}}, "today_rx_bytes": int64(3 << 30), "today_tx_bytes": int64(2 << 30), "today_metered_bytes": int64(3 << 30), "dominant_direction": "inbound", "updated_at": stamp}}
 	f.Packages = append(f.Packages, object{"id": "demo-package-hk", "cloud_id": "cbwp-hk-demo-only", "name": "hk-share (demo)", "account_id": "demo-account-1", "region_id": "cn-hongkong", "bandwidth_mbps": 2000, "kind": "cbwp_dominant_traffic", "settled_by_cdt": true, "members": []object{{"eip_address": "192.0.2.20", "instance_id": "demo-hkg", "instance_name": "hkg-pro (demo)"}}, "today_rx_bytes": nil, "today_tx_bytes": nil, "today_metered_bytes": nil, "dominant_direction": nil, "updated_at": nil})
-	f.Notifications = []object{{"id": "demo-notification", "created_at": stamp, "kind": "test", "severity": "info", "rule_key": nil, "title": "M0 demo placeholder", "body": "Synthetic data; no notification was sent.", "account_id": nil, "instance_id": nil, "delivery_status": "not_sent"}}
-	for _, key := range []string{"cdt_usage", "cdt_forecast_exceed", "account_api_failure", "agent_offline", "cdt_official_unavailable"} {
+	f.Notifications = []object{{"id": "demo-notification", "created_at": stamp, "kind": "test", "severity": "info", "rule_key": nil, "title": "M0 demo placeholder", "body": "Synthetic data; no notification was sent.", "account_id": nil, "instance_id": nil, "probe_plan_id": nil, "delivery_status": "not_sent"}}
+	for _, key := range []string{"cdt_usage", "cdt_forecast_exceed", "swas_traffic_usage", "cpu_credit_low", "system_event", "account_api_failure", "agent_offline", "cdt_official_unavailable", "instance_expiring", "spec_bandwidth_insufficient", "instance_public_ip_changed", "balance_low", "network_latency", "network_loss", "network_unreachable", "network_route_change", "idle_resource_detected", "cdt_estimation_deviation"} {
 		params := object{}
 		switch key {
-		case "cdt_usage":
+		case "network_latency", "network_loss", "network_unreachable":
+			params["probe_thresholds"] = []object{}
+			params["recovery_samples"] = 3
+			if key == "network_latency" {
+				params["duration_seconds"] = 600
+			}
+			if key == "network_unreachable" {
+				params["consecutive_failures"] = 3
+			}
+		case "balance_low":
+			params["balance_thresholds"] = []object{}
+		case "cdt_usage", "swas_traffic_usage":
 			params["thresholds_percent"] = []int{80, 90, 95}
+		case "cpu_credit_low":
+			params["threshold_percent"] = 20
+		case "instance_expiring":
+			params["before_days"] = 7
 		case "agent_offline":
 			params["offline_after_seconds"] = 30
 		case "account_api_failure", "cdt_official_unavailable":
 			params["consecutive_failures"] = 3
 		}
-		f.Rules = append(f.Rules, object{"key": key, "enabled": true, "params": params, "urgent": key != "account_api_failure"})
+		if key == "cdt_estimation_deviation" {
+			params = object{"consecutive_failures": 3, "recovery_samples": 3}
+		}
+		f.Rules = append(f.Rules, object{"key": key, "enabled": true, "params": params, "urgent": key != "account_api_failure" && key != "instance_expiring" && key != "spec_bandwidth_insufficient" && key != "instance_public_ip_changed" && key != "balance_low" && key != "network_route_change" && key != "idle_resource_detected" && key != "cpu_credit_low" && key != "system_event" && !model.NetworkAlertRule(key)})
 	}
 	return f
 }

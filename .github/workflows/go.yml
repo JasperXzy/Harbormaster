@@ -42,3 +42,18 @@ jobs:
           CGO_ENABLED: '0'
           GOOS: linux
           GOARCH: ${{ matrix.arch }}
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: harbormaster-server:ci
+      - run: docker compose --env-file /dev/null -f deploy/compose.yml config --quiet
+      - run: sh deploy/check-container.sh harbormaster-server:ci

@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JasperXzy/harbormaster/internal/model"
+	"github.com/JasperXzy/harbormaster/internal/rampolicy"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
 )
@@ -70,6 +72,18 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		respond(w, 200, object{"initialized": true, "password_min_length": 12})
 		return
 	}
+	if path == "/session/methods" && r.Method == "GET" {
+		respond(w, 200, map[string]bool{"password_enabled": true, "passkey_enabled": false})
+		return
+	}
+	if path == "/public/branding" && r.Method == "GET" {
+		respond(w, 200, model.PublicBranding{Name: model.DefaultBrandingName, HasLogo: false})
+		return
+	}
+	if path == "/public/branding/logo" && r.Method == "GET" {
+		failure(w, 404, "not_found")
+		return
+	}
 	if path == "/session" && r.Method == "POST" {
 		h.signIn(w, r)
 		return
@@ -99,6 +113,41 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/power") {
+		if r.Method != "POST" {
+			failure(w, 405, "method_not_allowed")
+		} else {
+			failure(w, 503, "instance_power_disabled")
+		}
+		return
+	}
+	if strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/release") {
+		if r.Method != "POST" {
+			failure(w, 405, "method_not_allowed")
+		} else {
+			failure(w, 503, "instance_release_disabled")
+		}
+		return
+	}
+	if strings.HasPrefix(path, "/instances/") && strings.HasSuffix(path, "/change-eip") {
+		if r.Method != "POST" {
+			failure(w, 405, "method_not_allowed")
+		} else {
+			failure(w, 503, "eip_manage_disabled")
+		}
+		return
+	}
+	if path == "/instances/create" {
+		if r.Method != "POST" {
+			failure(w, 405, "method_not_allowed")
+		} else {
+			failure(w, 503, "instance_create_disabled")
+		}
+		return
+	}
+	if h.systemEvents(w, r, path) {
+		return
+	}
 	if r.Method != "GET" {
 		failure(w, 501, "not_implemented")
 		return
@@ -108,17 +157,142 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
+	if demoAuditLog(w, r, path, now) {
+		return
+	}
+	if h.jobs(w, r, path, now) {
+		return
+	}
+	if h.finance(w, path, now) {
+		return
+	}
 	f := makeFixtures(now, h.loc)
+	if demoIdle(w, r, path, f, now) {
+		return
+	}
+	if demoReleasePreview(w, path, f.Instances, now) {
+		return
+	}
+	if h.networkProbes(w, r, path, f.Instances, now) || h.instanceFinance(w, path, f.Instances, now) || demoAgentHistory(w, r, path, f.Instances, now) || demoNetworkHistory(w, r, path, f.Instances, now) {
+		return
+	}
 	switch path {
 	case "/system/info":
-		respond(w, 200, object{"version": "dev-m0", "commit": "unknown", "built_at": nil, "latest_agent_version": "dev", "data_mode": "demo", "read_only": true})
+		respond(w, 200, object{"version": "dev-m0", "commit": "unknown", "built_at": nil, "latest_agent_version": "v0.2.0", "data_mode": "demo", "read_only": true, "instance_power_enabled": false, "instance_release_enabled": false, "eip_manage_enabled": false, "instance_create_enabled": false})
+	case "/system/version-center":
+		agentVer := "v0.2.0"
+		respond(w, 200, model.VersionCenter{
+			ServerVersion:       "dev-m0",
+			ServerCommit:        "unknown",
+			ServerBuildTime:     "unknown",
+			BundledAgentVersion: &agentVer,
+			DeploymentMode:      "demo",
+			UpgradeCommands: model.UpgradeCommands{
+				DockerCompose: "docker pull ghcr.io/jasperxzy/harbormaster:latest && docker compose up -d hm-server",
+				BinaryHint:    "systemctl restart harbormaster-server",
+				AgentHint:     "在实例页生成新安装命令并执行升级",
+			},
+		})
+	case "/notify/quiet-hours":
+		respond(w, 200, model.QuietHours{Start: "23:00", End: "08:00", Timezone: h.loc.String()})
+	case "/notify/telegram/control":
+		respond(w, 200, model.DefaultTelegramControlSettings())
+	case "/notify/email":
+		respond(w, 200, model.EmailChannel{Status: "not_configured", Port: 587, TLSMode: "starttls", ToAddresses: []string{}, SubjectPrefix: "[Harbormaster]"})
+	case "/notify/webhook":
+		respond(w, 200, model.WebhookChannel{Status: "not_configured"})
+	case "/notify/daily-report":
+		respond(w, 200, model.DefaultDailyReportSettings())
+	case "/settings/heartbeat":
+		respond(w, 200, model.HeartbeatSettings{IntervalSeconds: 60})
+	case "/settings/branding":
+		respond(w, 200, model.Branding{Name: model.DefaultBrandingName})
+	case "/traffic/pricing":
+		respond(w, 200, model.DefaultTrafficPricing())
+	case "/automation/schedules":
+		respond(w, 200, object{"items": []model.PowerSchedule{}})
+	case "/automation/keepalive":
+		respond(w, 200, model.DefaultKeepaliveSettings())
+	case "/automation/monthly-reset":
+		respond(w, 200, model.DefaultMonthlyResetSettings())
+	case "/automation/failovers":
+		respond(w, 200, object{"items": []model.FailoverRule{}})
+	case "/cloud/ecs-catalog":
+		respond(w, 200, model.ECSCatalog{
+			AccountID:     r.URL.Query().Get("account_id"),
+			RegionID:      r.URL.Query().Get("region_id"),
+			Zones:         []model.ECSCatalogZone{{ID: "ap-southeast-1a", Name: "新加坡 可用区 A"}},
+			Images:        []model.ECSCatalogImage{{ID: "debian_12_x64", Name: "Debian 12.8 64位"}},
+			InstanceTypes: []model.ECSCatalogInstanceType{{ID: "ecs.e-c1m1.large", CPU: 2, MemoryGiB: 2}},
+			VPCs:          []model.ECSCatalogVPC{{ID: "vpc-demo", Name: "default-vpc", CidrBlock: "172.16.0.0/12"}},
+			VSwitches:     []model.ECSCatalogVSwitch{{ID: "vsw-demo", VPCID: "vpc-demo", ZoneID: "ap-southeast-1a", Name: "default-vsw", CidrBlock: "172.16.0.0/24"}},
+		})
 	case "/settings":
-		respond(w, 200, object{"business_timezone": h.loc.String(), "collection": object{"cdt_poll_interval_seconds": 300, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": 300}})
+		respond(w, 200, object{"business_timezone": h.loc.String(), "retention": model.DefaultRetentionSettings(30), "collection": object{"cdt_poll_interval_seconds": 300, "agent_report_interval_seconds": 10, "agent_offline_after_seconds": 30, "resource_scan_interval_seconds": 300, "system_event_poll_interval_seconds": 60}})
 	case "/regions":
 		respond(w, 200, object{"items": []object{{"id": "ap-southeast-1", "mainland": false}, {"id": "cn-hongkong", "mainland": false}, {"id": "cn-shanghai", "mainland": true}}})
 	case "/accounts":
 		respond(w, 200, object{"items": f.Accounts})
+	case "/ram-policies":
+		respond(w, 200, object{"items": rampolicy.Catalog()})
+	case "/passkeys":
+		respond(w, 200, map[string]any{"items": []any{}})
+	case "/api-keys":
+		items, cursor, err := paginate([]object{{"id": "demo-key-widget", "name": "Widget (demo)", "scopes": []string{"summary:read"}, "created_at": now.Add(-time.Hour).Format(time.RFC3339), "last_used_at": nil, "revoked_at": nil}}, r)
+		if err != nil {
+			failure(w, 422, "validation_failed")
+			return
+		}
+		respond(w, 200, object{"items": items, "next_cursor": cursor})
 	case "/instances":
+		for _, item := range f.Instances {
+			item["swas_traffic_package"] = nil
+			if item["kind"] == "swas" {
+				view := model.EmptySWASTrafficPackage()
+				present := false
+				view.Status, view.EntryPresent = "ok", &present
+				view.FetchedAt, view.LastAttemptAt, view.UpdatedAt = &now, &now, &now
+				item["swas_traffic_package"] = view
+			}
+			item["desired_state"] = nil
+			item["desired_state_updated_at"] = nil
+			item["note"] = ""
+			item["group"] = nil
+			item["tags"] = []string{}
+			item["supports_stop_charging"] = item["kind"] == "ecs" && (item["charge_type"] == "pay_as_you_go" || item["charge_type"] == "spot")
+			item["pending_intent_confirmation"] = nil
+			cpu := &model.InstanceCPU{Source: "swas_describe_monitor_data", Usage: model.EmptyCPUMetric("CPU_UTILIZATION", now)}
+			value := 0.5
+			if item["kind"] == "ecs" {
+				cpu = model.NewECSCPU(now)
+				value = 12.5
+			}
+			sampled := now.Add(-time.Minute)
+			cpu.Usage.Value = &value
+			cpu.Usage.ObservedAt = &sampled
+			cpu.Usage.Status = "ok"
+			cpu.Usage.LastError = nil
+			item["cpu"] = cpu
+			networkKind, networkSource := "vpc", "cms"
+			if item["kind"] == "swas" {
+				networkKind, networkSource = "swas", "swas_describe_monitor_data"
+			}
+			inName, outName := model.NetworkMetricNames(networkKind)
+			stream := model.CloudNetworkStream{Ingress: model.EmptyNetworkRate(inName, now), Egress: model.EmptyNetworkRate(outName, now)}
+			if networkKind == "vpc" {
+				ip := item["public_ips"].([]object)[0]["address"].(string)
+				stream.IP = &ip
+			}
+			for direction, rate := range []*model.CloudNetworkRate{&stream.Ingress, &stream.Egress} {
+				v := float64(64000 * (direction + 1))
+				rate.Value = &v
+				rate.Status = "ok"
+				rate.ObservedAt = &sampled
+				rate.LastError = nil
+			}
+			item["cloud_network"] = &model.CloudNetwork{Source: networkSource, NetworkType: networkKind, TopologyComplete: true, CheckedAt: now, Streams: []model.CloudNetworkStream{stream}}
+
+		}
 		items := filter(f.Instances, "account_id", r.URL.Query().Get("account_id"))
 		items = filter(items, "kind", r.URL.Query().Get("kind"))
 		paged, cursor, err := paginate(items, r)
@@ -127,14 +301,54 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		respond(w, 200, object{"items": paged, "next_cursor": cursor, "updated_at": now.Format(time.RFC3339)})
+	case "/instance-events":
+		items := []object{
+			{"id": "demo-event-1", "account_id": "demo-account-1", "instance_id": "demo-sin", "cloud_instance_id": "i-demo-sin", "instance_kind": "ecs", "region_id": "ap-southeast-1", "instance_name": "sin-pro (demo)", "kind": "status_changed", "observed_at": now.Add(-time.Minute).Format(time.RFC3339), "before": object{"status": "starting"}, "after": object{"status": "running"}},
+			{"id": "demo-event-2", "account_id": "demo-account-1", "instance_id": "demo-sin", "cloud_instance_id": "i-demo-sin", "instance_kind": "ecs", "region_id": "ap-southeast-1", "instance_name": "sin-pro (demo)", "kind": "discovered", "observed_at": now.Add(-time.Hour).Format(time.RFC3339), "before": nil, "after": object{"present": true}},
+		}
+		items = filter(filter(items, "account_id", r.URL.Query().Get("account_id")), "instance_id", r.URL.Query().Get("instance_id"))
+		paged, cursor, err := paginate(items, r)
+		if err != nil {
+			failure(w, 422, "validation_failed")
+			return
+		}
+		respond(w, 200, object{"items": paged, "next_cursor": cursor})
+	case "/protection/status":
+		respond(w, 200, object{"power_enabled": false, "release_enabled": false, "self_identity_known": false, "self_instance_id": nil, "automatic_limit": 3, "automatic_window_seconds": 600})
+	case "/protection/rules", "/protection/simulations":
+		respond(w, 200, object{"items": []object{}})
+	case "/traffic/reconciliations", "/protection/decisions":
+		respond(w, 200, object{"items": []object{}, "next_before": nil})
+	case "/traffic/estimation-settings":
+		respond(w, 200, map[string]any{"revision": 0, "lag_window_seconds": 3600, "bandwidth_mode_instance_ids": []string{}})
 	case "/traffic/quotas":
+		if r.URL.Query().Get("account_id") == store.AggregateAccountID {
+			rows, err := demoAggregateQuotas(f, h.loc, now)
+			if err != nil {
+				failure(w, 500, "internal_error")
+			} else {
+				respond(w, 200, object{"items": rows})
+			}
+			return
+		}
 		respond(w, 200, object{"items": filter(f.Quotas, "account_id", r.URL.Query().Get("account_id"))})
+	case "/traffic/observations":
+		respond(w, 200, object{"items": []object{}, "next_cursor": nil})
 	case "/traffic/billing-subjects":
 		respond(w, 200, object{"items": filter(f.Subjects, "account_id", r.URL.Query().Get("account_id"))})
 	case "/bandwidth-packages":
 		respond(w, 200, object{"items": f.Packages})
 	case "/traffic/daily":
 		id := r.URL.Query().Get("account_id")
+		if id == store.AggregateAccountID {
+			data, err := demoAggregateDaily(f, h.loc, now)
+			if err != nil {
+				failure(w, 500, "internal_error")
+			} else {
+				respond(w, 200, data)
+			}
+			return
+		}
 		if len(filter(f.Accounts, "id", id)) == 0 || id == "" {
 			failure(w, 404, "not_found")
 			return
@@ -153,7 +367,18 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "/notify/telegram":
 		respond(w, 200, object{"bot_token_set": false, "chat_id": "", "proxy_mode": "none", "proxy_url": "", "status": "not_configured", "last_error": nil, "last_success_at": nil})
 	case "/alert-rules":
-		respond(w, 200, object{"items": f.Rules})
+		raw := r.URL.Query().Get("include_reconciliation")
+		if raw != "" && raw != "true" && raw != "false" {
+			failure(w, 422, "validation_failed")
+			return
+		}
+		items := []object{}
+		for _, rule := range f.Rules {
+			if rule["key"] != "cdt_estimation_deviation" || raw == "true" {
+				items = append(items, rule)
+			}
+		}
+		respond(w, 200, object{"items": items})
 	case "/notifications":
 		items, cursor, err := paginate(f.Notifications, r)
 		if err != nil {
@@ -271,7 +496,9 @@ func (h *handler) events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Accel-Buffering", "no")
 	send := func(event string, v any) bool {
-		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(5 * time.Second))
+		ctl := http.NewResponseController(w)
+		_ = ctl.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		defer ctl.SetWriteDeadline(time.Time{})
 		b, _ := json.Marshal(v)
 		_, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, b)
 		if err != nil {

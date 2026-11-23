@@ -11,21 +11,38 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/api"
+	"github.com/JasperXzy/harbormaster/internal/backup"
 	"github.com/JasperXzy/harbormaster/internal/buildinfo"
+	"github.com/JasperXzy/harbormaster/internal/cloud/aliyun"
+	"github.com/JasperXzy/harbormaster/internal/collect"
 	"github.com/JasperXzy/harbormaster/internal/config"
+	"github.com/JasperXzy/harbormaster/internal/devmode"
+	"github.com/JasperXzy/harbormaster/internal/estimation"
+	"github.com/JasperXzy/harbormaster/internal/ipinfo"
 	"github.com/JasperXzy/harbormaster/internal/logging"
 	"github.com/JasperXzy/harbormaster/internal/m0"
+	"github.com/JasperXzy/harbormaster/internal/m4ops"
+	"github.com/JasperXzy/harbormaster/internal/model"
+	"github.com/JasperXzy/harbormaster/internal/notify"
+	"github.com/JasperXzy/harbormaster/internal/probes"
+	"github.com/JasperXzy/harbormaster/internal/protection"
+	"github.com/JasperXzy/harbormaster/internal/retention"
 	"github.com/JasperXzy/harbormaster/internal/security"
 	"github.com/JasperXzy/harbormaster/internal/store"
+	"github.com/JasperXzy/harbormaster/internal/telegram"
+	"github.com/JasperXzy/harbormaster/internal/traceinfo"
 	"github.com/JasperXzy/harbormaster/internal/ui"
 )
 
 // Server returns a process exit code. Error output is deliberately restricted
 // to fixed local messages; SDK or transport errors may contain secrets.
 func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
+	ctx = model.WithJobTrigger(ctx, "cli")
 	log := logging.New(errOut, "info")
 	fail := func(code string) int { log.Error(code); return 1 }
 	if len(args) == 0 {
@@ -36,11 +53,11 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		return m0.Run(ctx, args[1:], in, out, errOut)
 	}
 	if command == "help" || command == "--help" || command == "-h" {
-		_, _ = io.WriteString(out, "hm-server <serve|run-once|migrate|version|healthcheck|reset-password> [--config path] [--dev] [--data-dir path] [--listen IP:port] [--frontend api|embedded]\nhm-server m0 <import|set-regions|plan|query> --account NAME (m0 --help for details)\nreset-password reads the new password from stdin; run-once performs only local M0 checks.\n")
+		_, _ = io.WriteString(out, "hm-server <serve|run-once|migrate|version|healthcheck|reset-password|import-accounts|backup|restore> [--config path] [--dev] [--data-dir path] [--listen IP:port] [--frontend api|embedded]\nhm-server m0 <import|set-regions|plan|query> --account NAME (m0 --help for details)\nimport-accounts reads the encrypted M0 vault (--source-vault / --source-key-file); no cloud queries.\nreset-password reads the new password from stdin; run-once processes due read-only jobs in production; --dev performs local checks.\nbackup --output NEW_FILE reads the backup password from stdin (hidden on a terminal); requires an existing production database and its external master key.\nrestore --input BACKUP_FILE --data-dir NEW_DIRECTORY reads the backup password from stdin and uses the target external master key; cancels unfinished work.\n")
 		return 0
 	}
 	switch command {
-	case "serve", "run-once", "migrate", "version", "healthcheck", "reset-password":
+	case "serve", "run-once", "migrate", "version", "healthcheck", "reset-password", "import-accounts", "backup", "restore":
 	default:
 		return fail("unknown_command")
 	}
@@ -51,6 +68,19 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 	dir := f.String("data-dir", "", "SQLite directory")
 	listen := f.String("listen", "", "listener")
 	frontend := f.String("frontend", "", "api or embedded")
+	var sourceVault, sourceKey string
+	var backupOutput string
+	var restoreInput string
+	if command == "restore" {
+		f.StringVar(&restoreInput, "input", "", "encrypted backup file")
+	}
+	if command == "backup" {
+		f.StringVar(&backupOutput, "output", "", "new encrypted backup file")
+	}
+	if command == "import-accounts" {
+		f.StringVar(&sourceVault, "source-vault", "", "encrypted M0 vault")
+		f.StringVar(&sourceKey, "source-key-file", "", "M0 vault key file")
+	}
 	if err := f.Parse(args[1:]); err != nil || f.NArg() != 0 {
 		return fail("invalid_arguments")
 	}
@@ -78,6 +108,18 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		return fail(err.Error())
 	}
 	log = logging.New(errOut, c.LogLevel)
+	if command == "restore" && (c.Dev || restoreInput == "") {
+		return fail("restore_requires_production_target_and_input")
+	}
+	if command == "backup" {
+		if c.Dev || backupOutput == "" {
+			return fail("backup_requires_production_database_and_output")
+		}
+		info, err := os.Stat(filepath.Join(c.DataDir, "harbormaster.db"))
+		if err != nil || !info.Mode().IsRegular() {
+			return fail("backup_source_not_found")
+		}
+	}
 	if command == "healthcheck" {
 		host, port, _ := net.SplitHostPort(c.Listen)
 		if net.ParseIP(host).IsUnspecified() {
@@ -96,26 +138,96 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		_, _ = io.WriteString(out, "ready\n")
 		return 0
 	}
+	var box *security.Box
 	if !c.Dev {
-		if _, err = security.LoadBox(c.DataDir); err != nil {
+		if box, err = security.LoadBox(c.DataDir); err != nil {
 			return fail(err.Error())
 		}
+	}
+	if command == "restore" {
+		summary, err := restoreBackup(ctx, box, in, out, restoreInput, c.DataDir)
+		if err != nil {
+			if errors.Is(err, backup.ErrPassword) || errors.Is(err, backup.ErrRestoreTargetExists) {
+				return fail(err.Error())
+			}
+			return fail("backup_restore_failed")
+		}
+		log.Info("backup_restore_complete", "sessions_revoked", true, "cancelled_jobs", summary.CancelledJobs, "cancelled_notifications", summary.CancelledNotifications, "cloud_queries", 0, "cloud_writes", 0)
+		return 0
 	}
 	s, err := store.Open(ctx, c.DataDir, c.Dev)
 	if err != nil {
 		return fail("database_initialization_failed")
 	}
 	defer s.Close()
+	if !c.Dev {
+		if err = s.BindMasterKey(ctx, box); err != nil {
+			return fail("master_key_verification_failed")
+		}
+	}
 	if c.Dev {
 		if err = s.SeedDemo(ctx); err != nil {
 			return fail("demo_seed_failed")
 		}
 	}
+	var engine *collect.Engine
+	if !c.Dev {
+		engine = &collect.Engine{Store: s, Box: box, Scanner: aliyun.Inventory{Caller: aliyun.NewClient(nil, 200*time.Millisecond)}, Workers: c.WorkerCount, Interval: time.Duration(c.ResourceScanIntervalSeconds) * time.Second, CDTInterval: time.Duration(c.CDTPollIntervalSeconds) * time.Second, SystemEventInterval: time.Duration(c.SystemEventPollIntervalSeconds) * time.Second, Log: log, Timezone: c.Timezone}
+	}
 	switch command {
+	case "backup":
+		if err := exportBackup(ctx, s, box, in, out, backupOutput); err != nil {
+			if errors.Is(err, backup.ErrPassword) || errors.Is(err, backup.ErrOutputExists) {
+				return fail(err.Error())
+			}
+			return fail("backup_failed")
+		}
+		log.Info("backup_complete", "cloud_queries", 0, "cloud_writes", 0)
+		return 0
 	case "migrate":
 		log.Info("migrations_applied")
 		return 0
+	case "import-accounts":
+		if engine == nil {
+			return fail("import_requires_production_database")
+		}
+		imported, skipped := 0, 0
+		err := m0.ImportAccounts(sourceVault, sourceKey, func(in model.AccountCreate) error {
+			_, _, err := engine.CreateAccount(ctx, in)
+			if errors.Is(err, store.ErrNameTaken) {
+				skipped++
+				return nil
+			}
+			if err == nil {
+				imported++
+			}
+			return err
+		})
+		if err != nil {
+			return fail("account_import_failed")
+		}
+		log.Info("account_import_complete", "imported", imported, "skipped_existing_names", skipped, "cloud_queries", 0, "cloud_writes", 0)
+		return 0
 	case "run-once":
+		if engine != nil {
+			if err = engine.Schedule(ctx); err != nil {
+				return fail("schedule_failed")
+			}
+			for {
+				ran, err := engine.RunOne(ctx)
+				if err != nil {
+					return fail("worker_step_failed")
+				}
+				if !ran {
+					break
+				}
+			}
+			if err = s.EvaluateAlerts(ctx, time.Now().UTC()); err != nil {
+				return fail("alert_evaluation_failed")
+			}
+			log.Info("run_once_complete", "cloud_writes", 0)
+			return 0
+		}
 		if err = s.Ready(ctx); err != nil {
 			return fail("local_check_failed")
 		}
@@ -142,10 +254,30 @@ func Server(ctx context.Context, args []string, in io.Reader, out, errOut io.Wri
 		log.Info("password_reset_complete", "sessions_revoked", true)
 		return 0
 	}
-	return serve(ctx, c, s, log)
+	if !c.Dev {
+		if c.PublicURL == "" {
+			return fail("public_url_required_for_production_serve")
+		}
+		initialized, err := s.Initialized(ctx)
+		if err != nil {
+			return fail("setup_state_unavailable")
+		}
+		if !initialized {
+			token, err := security.LoadSetupToken(c.DataDir)
+			if err != nil {
+				return fail(err.Error())
+			}
+			defer clear(token)
+			if err = s.PrepareSetup(ctx, token, time.Now()); err != nil {
+				return fail("setup_preparation_failed")
+			}
+			log.Info("setup_required", "credential_source", "external_environment_or_file")
+		}
+	}
+	return serve(ctx, c, s, engine, log)
 }
 
-func serve(ctx context.Context, c config.Config, s *store.Store, log *slog.Logger) int {
+func serve(ctx context.Context, c config.Config, s *store.Store, engine *collect.Engine, log *slog.Logger) int {
 	listener, err := net.Listen("tcp", c.Listen)
 	if err != nil {
 		log.Error("listen_failed")
@@ -155,10 +287,106 @@ func serve(ctx context.Context, c config.Config, s *store.Store, log *slog.Logge
 	if c.Frontend == "embedded" {
 		frontend = ui.Handler()
 	}
-	h := &http.Server{Handler: api.NewHandler(s, c.Dev, c.Timezone, frontend), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+	c = resolveServerIdentity(ctx, c, s)
+	powerEngine := newPowerEngine(c, s, engine, log)
+	releaseEngine := newReleaseEngine(c, s, engine, log)
+	heartbeatRunner := newHeartbeatRunner(c, s, engine, listener, log)
+	c.InstancePowerEnabled = powerEngine != nil
+	c.InstanceReleaseEnabled = releaseEngine != nil
+	c.EIPManageEnabled = !c.Dev && c.EIPManageEnabled && engine != nil && engine.Box != nil
+	c.InstanceCreateEnabled = !c.Dev && c.InstanceCreateEnabled && engine != nil && engine.Box != nil
+	var panel http.Handler
+	var ipdb *ipinfo.Manager
+	if c.Dev {
+		panel = devmode.New(s, c.Timezone)
+	} else {
+		ipdb, err = ipinfo.New(ipinfo.Options{Directory: filepath.Join(c.DataDir, "ipdb"), CityEnabled: c.IPDBCityEnabled, AutoUpdate: c.IPDBAutoUpdate})
+		if err != nil {
+			log.Warn("ipdb_unavailable")
+		} else {
+			defer ipdb.Close()
+		}
+		panel = api.NewProductionPanel(s, c, engine, ipdb)
+	}
+	if engine != nil {
+		workerCtx, cancel := context.WithCancel(ctx)
+		var workers sync.WaitGroup
+		workers.Add(7)
+		go func() { defer workers.Done(); engine.Run(workerCtx) }()
+		go func() {
+			defer workers.Done()
+			(protection.Runner{Store: s, Policy: protectionPolicy(c), Log: log}).Run(workerCtx)
+		}()
+		go func() {
+			defer workers.Done()
+			(estimation.Runner{Store: s, Timezone: c.Timezone, Log: log}).Run(workerCtx)
+		}()
+		go func() {
+			defer workers.Done()
+			(estimation.Runner{Store: s, Timezone: c.Timezone, Log: log}).RunDaily(workerCtx)
+		}()
+		go func() { defer workers.Done(); (probes.Runner{Store: s, Log: log}).Run(workerCtx) }()
+		go func() { defer workers.Done(); (notify.Evaluator{Store: s, Log: log}).Run(workerCtx) }()
+		if engine.Box != nil {
+			workers.Add(2)
+			go func() {
+				defer workers.Done()
+				(notify.Dispatcher{Channels: notify.Channels{Store: s, Box: engine.Box}, Sender: telegram.Sender{}, Log: log}).Run(workerCtx)
+			}()
+			go func() {
+				defer workers.Done()
+				(notify.BotRunner{Channels: notify.Channels{Store: s, Box: engine.Box}, Bot: telegram.Sender{}, PowerEnabled: c.InstancePowerEnabled, EIPManageEnabled: c.EIPManageEnabled, Timezone: c.Timezone, Log: log}).Run(workerCtx)
+			}()
+		}
+		go func() {
+			defer workers.Done()
+			(retention.Runner{Store: s, Days: c.ProbeHistoryRetentionDays, Log: log}).Run(workerCtx)
+		}()
+		var enrichment traceinfo.Enricher
+		if ipdb != nil {
+			enrichment.Database = ipdb
+		}
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			(traceinfo.Runner{Store: s, Log: log, Enricher: enrichment}).Run(workerCtx)
+		}()
+		if ipdb != nil {
+			workers.Add(1)
+			go func() { defer workers.Done(); ipdb.Run(workerCtx) }()
+		}
+		if heartbeatRunner != nil {
+			workers.Add(1)
+			go func() { defer workers.Done(); heartbeatRunner.Run(workerCtx) }()
+		}
+		if powerEngine != nil {
+			workers.Add(1)
+			go func() { defer workers.Done(); powerEngine.Run(workerCtx) }()
+		}
+		if releaseEngine != nil {
+			workers.Add(1)
+			go func() { defer workers.Done(); releaseEngine.Run(workerCtx) }()
+		}
+		if c.EIPManageEnabled || c.InstanceCreateEnabled {
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				(m4ops.Runner{
+					Store:                 s,
+					Box:                   engine.Box,
+					Cloud:                 aliyun.NewM4Client(nil, 200*time.Millisecond),
+					EIPManageEnabled:      c.EIPManageEnabled,
+					InstanceCreateEnabled: c.InstanceCreateEnabled,
+					Log:                   log,
+				}).Run(workerCtx)
+			}()
+		}
+		defer func() { cancel(); workers.Wait() }()
+	}
+	h := &http.Server{Handler: api.NewHandler(s, panel, frontend), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10, BaseContext: func(net.Listener) context.Context { return ctx }}
 	done := make(chan error, 1)
 	go func() { done <- h.Serve(listener) }()
-	log.Info("server_started", "listen", listener.Addr().String(), "development", c.Dev, "frontend", c.Frontend, "cloud_writes", false)
+	log.Info("server_started", "listen", listener.Addr().String(), "development", c.Dev, "frontend", c.Frontend, "cloud_writes", powerEngine != nil || releaseEngine != nil || c.EIPManageEnabled || c.InstanceCreateEnabled)
 	select {
 	case err = <-done:
 		if !errors.Is(err, http.ErrServerClosed) {

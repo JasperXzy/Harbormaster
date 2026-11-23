@@ -26,12 +26,12 @@ const usage = `hm-server m0 <import|set-regions|plan|query> --account NAME [opti
 Options:
   --vault PATH       encrypted credentials file (outside a Git repository)
   --key-file PATH    master-key file (outside the vault directory and repository)
-  --check NAME       inventory (default), billing, metrics, metric-schema or cdt
+  --check NAME       inventory (default), idle-resources, billing, instance-billing, metrics, metric-schema, ecs-metric-schema, ecs-credit-specs, swas-cpu, swas-network, event-schema, system-events, cdt-service or cdt
   --month YYYY-MM    required for billing
   --region ID        select one region already stored for this account
   --regions LIST     comma-separated list for set-regions
-  --metric-source    eip or bandwidth (metrics only)
-  --resource-id ID   cloud EIP/shared-bandwidth ID (metrics only)
+  --metric-source    ecs, ecs-network, eip or bandwidth (metrics only)
+  --resource-id ID   cloud instance/EIP/shared-bandwidth ID (metrics, swas-cpu or swas-network)
   --output PATH     write query report to a NEW private file outside repositories
 HM_MASTER_KEY / HM_MASTER_KEY_FILE override the default key source. Never pass
 AccessKey values as flags. Import/plan make no cloud requests. Query rejects DEBUG.
@@ -168,7 +168,7 @@ func Run(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer
 		return fail(err.Error())
 	}
 	if command == "plan" {
-		_ = json.NewEncoder(out).Encode(map[string]any{"account": p.Name, "access_key_id_masked": security.MaskAccessKeyID(p.AccessKeyID), "operations": ops, "notes": []string{"Inventory additionally queries traffic packages for discovered SWAS IDs; paginated reads may repeat up to 50 pages.", "CDT is an explicitly selected ListCdtInternetTraffic read probe; no DryRun or cloud-write operation is allowed."}, "cloud_requests": 0})
+		_ = json.NewEncoder(out).Encode(map[string]any{"account": p.Name, "access_key_id_masked": security.MaskAccessKeyID(p.AccessKeyID), "operations": ops, "notes": []string{"Inventory additionally queries traffic packages for discovered SWAS IDs; paginated reads may repeat up to 50 pages.", "CDT checks contain only explicitly allowlisted read probes; no DryRun or cloud-write operation is allowed."}, "cloud_requests": 0})
 		return 0
 	}
 	var destination *os.File

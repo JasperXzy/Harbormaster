@@ -1,0 +1,273 @@
+{
+  "checked_at": "2026-11-12T11:35:39.370143+00:00",
+  "cloud_writes": 0,
+  "resources": [
+    {
+      "alias": "Ali_ShangHai",
+      "results": [
+        {
+          "action": "DescribeMetricList",
+          "metric_name": "InternetInRate",
+          "region": "cn-shanghai",
+          "status": "passed",
+          "complete": true,
+          "fetched_at": "2026-11-12T11:34:43Z",
+          "sample_count": 60,
+          "has_next_token": false,
+          "empty_datapoints_string": false,
+          "point_fields": [
+            "Average",
+            "Maximum",
+            "Minimum",
+            "instanceId",
+            "timestamp",
+            "userId"
+          ],
+          "distinct_ip_count": 0,
+          "latest": {
+            "timestamp": 1794483240000,
+            "Average": 0.0,
+            "Minimum": 0.0,
+            "Maximum": 0.0
+          },
+          "average_range": [
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "action": "DescribeMetricList",
+          "metric_name": "InternetOutRate",
+          "region": "cn-shanghai",
+          "status": "passed",
+          "complete": true,
+          "fetched_at": "2026-11-12T11:34:43Z",
+          "sample_count": 60,
+          "has_next_token": false,
+          "empty_datapoints_string": false,
+          "point_fields": [
+            "Average",
+            "Maximum",
+            "Minimum",
+            "instanceId",
+            "timestamp",
+            "userId"
+          ],
+          "distinct_ip_count": 0,
+          "latest": {
+            "timestamp": 1794483240000,
+            "Average": 0.0,
+            "Minimum": 0.0,
+            "Maximum": 0.0
+          },
+          "average_range": [
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "action": "DescribeMetricList",
+          "metric_name": "InternetIn",
+          "region": "cn-shanghai",
+          "status": "passed",
+          "complete": true,
+          "fetched_at": "2026-11-12T11:34:44Z",
+          "sample_count": 60,
+          "has_next_token": false,
+          "empty_datapoints_string": false,
+          "point_fields": [
+            "Average",
+            "Maximum",
+            "Minimum",
+            "Sum",
+            "instanceId",
+            "timestamp",
+            "userId"
+          ],
+          "distinct_ip_count": 0,
+          "latest": {
+            "timestamp": 1794483240000,
+            "Average": 0.0,
+            "Minimum": 0.0,
+            "Maximum": 0.0,
+            "Sum": 0.0
+          },
+          "average_range": [
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "action": "DescribeMetricList",
+          "metric_name": "InternetOut",
+          "region": "cn-shanghai",
+          "status": "passed",
+          "complete": true,
+          "fetched_at": "2026-11-12T11:34:44Z",
+          "sample_count": 60,
+          "has_next_token": false,
+          "empty_datapoints_string": false,
+          "point_fields": [
+            "Average",
+            "Maximum",
+            "Minimum",
+            "Sum",
+            "instanceId",
+            "timestamp",
+            "userId"
+          ],
+          "distinct_ip_count": 0,
+          "latest": {
+            "timestamp": 1794483240000,
+            "Average": 0.0,
+            "Minimum": 0.0,
+            "Maximum": 0.0,
+            "Sum": 0.0
+          },
+          "average_range": [
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "action": "DescribeMetricList",
+          "metric_name": "VPC_PublicIP_InternetInRate",
+          "region": "cn-shanghai",
+          "status": "passed",
+          "complete": true,
+          "fetched_at": "2026-11-12T11:34:44Z",
+          "sample_count": 60,
+          "has_next_token": false,
+          "empty_datapoints_string": false,
+          "point_fields": [
+            "Average",
+            "Maximum",
+            "Minimum",
+            "instanceId",
+            "ip",
+            "timestamp",
+            "userId"
+          ],
+          "distinct_ip_count": 1,
+          "latest": {
+            "timestamp": 1794483240000,
+            "Average": 740.0,
+            "Minimum": 740.0,
+            "Maximum": 740.0
+          },
+          "average_range": [
+            556.0,
+            8936.0
+          ]
+        },
+        {
+          "action": "DescribeMetricList",
+          "metric_name": "VPC_PublicIP_InternetOutRate",
+          "region": "cn-shanghai",
+          "status": "passed",
+          "complete": true,
+          "fetched_at": "2026-11-12T11:34:45Z",
+          "sample_count": 60,
+          "has_next_token": false,
+          "empty_datapoints_string": false,
+          "point_fields": [
+            "Average",
+            "Maximum",
+            "Minimum",
+            "instanceId",
+            "ip",
+            "timestamp",
+            "userId"
+          ],
+          "distinct_ip_count": 1,
+          "latest": {
+            "timestamp": 1794483240000,
+            "Average": 1924.0,
+            "Minimum": 1924.0,
+            "Maximum": 1924.0
+          },
+          "average_range": [
+            1380.0,
+            16540.0
+          ]
+        }
+      ]
+    },
+    {
+      "alias": "sha-pro",
+      "results": [
+        {
+          "action": "DescribeMonitorData",
+          "metric_name": "VPC_PUBLICIP_INTERNETIN_RATE",
+          "region": "cn-shanghai",
+          "status": "passed",
+          "complete": true,
+          "fetched_at": "2026-11-12T11:34:43Z",
+          "sample_count": 15,
+          "has_next_token": false,
+          "empty_datapoints_string": false,
+          "point_fields": [
+            "Average",
+            "Maximum",
+            "Minimum",
+            "instanceId",
+            "timestamp",
+            "userId"
+          ],
+          "distinct_ip_count": 0,
+          "latest": {
+            "timestamp": 1794483240000,
+            "Average": 283712.0,
+            "Minimum": 283712.0,
+            "Maximum": 283712.0
+          },
+          "average_range": [
+            82452.0,
+            854200.0
+          ]
+        },
+        {
+          "action": "DescribeMonitorData",
+          "metric_name": "VPC_PUBLICIP_INTERNETOUT_RATE",
+          "region": "cn-shanghai",
+          "status": "passed",
+          "complete": true,
+          "fetched_at": "2026-11-12T11:34:44Z",
+          "sample_count": 15,
+          "has_next_token": false,
+          "empty_datapoints_string": false,
+          "point_fields": [
+            "Average",
+            "Maximum",
+            "Minimum",
+            "instanceId",
+            "timestamp",
+            "userId"
+          ],
+          "distinct_ip_count": 0,
+          "latest": {
+            "timestamp": 1794483240000,
+            "Average": 300400.0,
+            "Minimum": 300400.0,
+            "Maximum": 300400.0
+          },
+          "average_range": [
+            91720.0,
+            853432.0
+          ]
+        },
+        {
+          "action": "DescribeMonitorData",
+          "metric_name": "FLOW_USED",
+          "region": "cn-shanghai",
+          "status": "passed",
+          "complete": true,
+          "fetched_at": "2026-11-12T11:34:44Z",
+          "sample_count": 0,
+          "has_next_token": false,
+          "empty_datapoints_string": true
+        }
+      ]
+    }
+  ]
+}

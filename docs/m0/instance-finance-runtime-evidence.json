@@ -1,0 +1,88 @@
+{
+  "verified_date": "2026-11-12",
+  "cloud_writes": 0,
+  "migrations": 27,
+  "foreign_key_errors": 0,
+  "power_jobs": 0,
+  "accounts": [
+    {
+      "account": "jasperxzy",
+      "fetched_at": "2026-11-12T13:47:01.922845000Z",
+      "last_attempt_at": "2026-11-12T13:47:01.922845000Z",
+      "error_code": null,
+      "matches": [
+        {
+          "instance": "sg-server-nano",
+          "kind": "ecs",
+          "items": [
+            {
+              "bill_type": "PayAsYouGoBill",
+              "product_code": "ecs",
+              "pip_code": "ecs",
+              "product_name": "云服务器 ECS",
+              "currency": "CNY",
+              "pretax_amount": "0",
+              "after_discount_amount": "0.2117096354"
+            }
+          ]
+        },
+        {
+          "instance": "hk-server-nano",
+          "kind": "ecs",
+          "items": [
+            {
+              "bill_type": "PayAsYouGoBill",
+              "product_code": "ecs",
+              "pip_code": "ecs",
+              "product_name": "云服务器 ECS",
+              "currency": "CNY",
+              "pretax_amount": "0",
+              "after_discount_amount": "2.271211628"
+            }
+          ]
+        },
+        {
+          "instance": "Ali_ShangHai",
+          "kind": "ecs",
+          "items": []
+        }
+      ],
+      "account_rows": 15,
+      "billing_cycle": "2026-11"
+    },
+    {
+      "account": "winnemjw",
+      "fetched_at": "2026-11-12T13:46:53.210248000Z",
+      "last_attempt_at": "2026-11-12T13:46:53.210248000Z",
+      "error_code": null,
+      "matches": [
+        {
+          "instance": "sha-pro",
+          "kind": "swas",
+          "items": [
+            {
+              "bill_type": "SubscriptionOrder",
+              "product_code": "ace_eweb",
+              "pip_code": "swas",
+              "product_name": "轻量应用服务器",
+              "currency": "CNY",
+              "pretax_amount": "0",
+              "after_discount_amount": "270"
+            },
+            {
+              "bill_type": "SubscriptionOrder",
+              "product_code": "ace_eweb",
+              "pip_code": "swas",
+              "product_name": "轻量应用服务器",
+              "currency": "CNY",
+              "pretax_amount": "68",
+              "after_discount_amount": "68"
+            }
+          ]
+        }
+      ],
+      "account_rows": 2,
+      "billing_cycle": "2026-11"
+    }
+  ]
+}

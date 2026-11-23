@@ -1,33 +1,34 @@
-// 启动流程：是否已安装 -> 是否已登录 -> 进入面板。
+// 启动与顶层路由：收敛为 6 个高内聚工作区，并对旧路由 (/billing, /notify) 做平滑兼容重定向。
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { api, ApiError, MOCK, setReadOnly, setUnauthenticatedHandler } from "./api/client";
 import { connectEvents, disconnectEvents } from "./api/events";
 import { Shell } from "./components/Shell";
-import { ErrorState, Skeleton, ToastProvider } from "./components/ui";
+import { EmptyState, ErrorState, Skeleton, ToastProvider } from "./components/ui";
 import { DataProvider } from "./lib/data";
 import { setTimezone } from "./lib/format";
-import { navigate, usePath } from "./lib/router";
+import { Link, navigate, usePath } from "./lib/router";
 import { useTheme } from "./lib/theme";
-import { Instances } from "./pages/Instances";
 import { Login } from "./pages/Login";
-import { Notify } from "./pages/Notify";
 import { Overview } from "./pages/Overview";
-import { Settings } from "./pages/Settings";
 import { Setup } from "./pages/Setup";
-import { Traffic } from "./pages/Traffic";
-import { EmptyState } from "./components/ui";
-import { Link } from "./lib/router";
+
+const Instances = lazy(() => import("./pages/Instances").then((m) => ({ default: m.Instances })));
+const Traffic = lazy(() => import("./pages/Traffic").then((m) => ({ default: m.Traffic })));
+const Network = lazy(() => import("./pages/Network").then((m) => ({ default: m.Network })));
+const Automation = lazy(() => import("./pages/Automation").then((m) => ({ default: m.Automation })));
+const Settings = lazy(() => import("./pages/Settings").then((m) => ({ default: m.Settings })));
 
 const ScenePanel = import.meta.env.VITE_API_MODE === "mock" ? lazy(() => import("./components/ScenePanel")) : null;
 
 type Phase = "booting" | "boot_error" | "setup" | "login" | "app";
 
-const PAGES: Record<string, { title: string; el: (p: { onLogout: () => void }) => React.ReactNode }> = {
-  "/": { title: "总览", el: () => <Overview /> },
-  "/instances": { title: "实例", el: () => <Instances /> },
-  "/traffic": { title: "流量", el: () => <Traffic /> },
-  "/notify": { title: "通知", el: () => <Notify /> },
-  "/settings": { title: "设置", el: (p) => <Settings onLogout={p.onLogout} /> },
+const PAGES: Record<string, { title: string; sub: string; el: (p: { onLogout: () => void }) => React.ReactNode }> = {
+  "/": { title: "总览", sub: "多账号免费流量池、实例运行态与关键动态", el: () => <Overview /> },
+  "/instances": { title: "实例管理", sub: "云服务器与轻量应用服务器状态、实时速率与远程控制", el: () => <Instances /> },
+  "/traffic": { title: "流量与费用", sub: "CDT 免费额度、趋势预测、账户余额账单与闲置巡检", el: () => <Traffic /> },
+  "/network": { title: "网络监测", sub: "多点延迟矩阵、丢包趋势与去回程路由追踪", el: () => <Network /> },
+  "/automation": { title: "策略与通知", sub: "自动停开机、跨账号主备容灾、告警规则与多渠道投递", el: () => <Automation /> },
+  "/settings": { title: "系统设置", sub: "云账号凭证、采集程序、登录安全、API 与任务审计", el: (p) => <Settings onLogout={p.onLogout} /> },
 };
 
 export function App() {
@@ -65,25 +66,38 @@ export function App() {
     setUnauthenticatedHandler(() => setPhase((p) => (p === "app" ? "login" : p)));
   }, [boot]);
 
-  // 进入面板后：连上事件流，读取时区与版本
   useEffect(() => {
     if (phase !== "app") return;
     connectEvents();
     api.settings().then((s) => setTimezone(s.business_timezone), () => {});
-    api.systemInfo().then((i) => { setVersion(i.version); setDataMode(i.data_mode); updateReadOnly(i.read_only); setReadOnly(i.read_only); }, () => {});
+    api.systemInfo().then(
+      (i) => {
+        setVersion(i.version);
+        setDataMode(i.data_mode);
+        updateReadOnly(i.read_only);
+        setReadOnly(i.read_only);
+      },
+      () => {},
+    );
     return disconnectEvents;
   }, [phase]);
 
-  // 地址与阶段保持一致
+  // 兼容旧路由与登录态重定向
   useEffect(() => {
     if (phase === "setup" && path !== "/setup") navigate("/setup", true);
     if (phase === "login" && path !== "/login") {
-      returnTo.current = path === "/setup" ? null : path; // 登录后回到原来想去的页面
+      returnTo.current = path === "/setup" ? null : path + location.search;
       navigate("/login", true);
     }
-    if (phase === "app" && (path === "/login" || path === "/setup")) {
-      navigate(returnTo.current ?? "/", true);
-      returnTo.current = null;
+    if (phase === "app") {
+      if (path === "/login" || path === "/setup") {
+        navigate(returnTo.current ?? "/", true);
+        returnTo.current = null;
+      } else if (path === "/billing") {
+        navigate("/traffic?tab=billing", true);
+      } else if (path === "/notify") {
+        navigate("/automation?tab=channels", true);
+      }
     }
   }, [phase, path]);
 
@@ -118,13 +132,15 @@ export function App() {
     const page = PAGES[path];
     body = (
       <DataProvider>
-        <Shell title={page?.title ?? "找不到页面"} version={version} dataMode={dataMode} readOnly={readOnly}>
+        <Shell title={page?.title ?? "找不到页面"} sub={page?.sub} version={version} dataMode={dataMode} readOnly={readOnly}>
           {page ? (
-            page.el({ onLogout: logout })
+            <Suspense fallback={<div className="card"><Skeleton lines={6} /></div>}>
+              {page.el({ onLogout: logout })}
+            </Suspense>
           ) : (
             <div className="card">
               <EmptyState title="这个地址没有对应的页面" action={<Link className="btn primary" to="/">回到总览</Link>}>
-                可能是链接写错了，或者这个功能还没有上线。
+                可能是链接输入有误，或已整合进新的导航入口。
               </EmptyState>
             </div>
           )}

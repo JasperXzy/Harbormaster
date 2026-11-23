@@ -17,11 +17,33 @@ export function Setup({ minPassword, onDone }: { minPassword: number; onDone: ()
   const [step, setStep] = useState(0);
   const [account, setAccount] = useState<Account>();
   const [telegramOk, setTelegramOk] = useState(false);
+  const [brandName, setBrandName] = useState("Harbormaster");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.publicBranding().then(
+      (b) => {
+        if (b.name) {
+          setBrandName(b.name);
+          document.title = b.name;
+        }
+        if (b.has_logo && !MOCK) {
+          setLogoUrl(`/api/v1/public/branding/logo?v=${encodeURIComponent(b.updated_at ?? "1")}`);
+        }
+      },
+      () => {},
+    );
+  }, []);
 
   return (
     <div className="solo">
       <div className="solo-box wide">
-        <div className="brand"><Logo size={28} /><span>Harbormaster</span></div>
+        <div className="brand">
+          <div className="brand-mark">
+            {logoUrl ? <img src={logoUrl} alt="" width={20} height={20} style={{ borderRadius: 5, objectFit: "cover" }} /> : <Logo size={17} />}
+          </div>
+          <span>{brandName}</span>
+        </div>
         <div>
           <div className="wizard-steps" aria-hidden="true">{STEPS.map((_, i) => <span key={i} className={i <= step ? "on" : ""} />)}</div>
           <div className="sub" style={{ marginTop: 6 }}>第 {step + 1} 步，共 {STEPS.length} 步 · {STEPS[step]}</div>
@@ -61,7 +83,9 @@ function PasswordStep({ minPassword, onNext }: { minPassword: number; onNext: ()
     e.preventDefault();
     const local: Record<string, string> = {};
     if (!token.trim()) local.setup_token = "required";
-    if (pw.length < minPassword) local.password = "too_short";
+    const passwordBytes = new TextEncoder().encode(pw).length;
+    if (passwordBytes < minPassword) local.password = "too_short";
+    else if (passwordBytes > 1024) local.password = "too_long";
     if (pw !== pw2) local.password2 = "mismatch";
     setFields(local);
     setError(undefined);
@@ -86,12 +110,12 @@ function PasswordStep({ minPassword, onNext }: { minPassword: number; onNext: ()
         <label className="lbl" htmlFor="su-token">初始化 token</label>
         <input id="su-token" type="text" value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" spellCheck={false} aria-invalid={!!fields.setup_token} autoFocus />
         {fields.setup_token && <div className="field-error">{fieldErrorText(fields.setup_token)}</div>}
-        <div className="field-help">hm-server 第一次启动时会在日志里打印这串字符，用来证明你就是装这台服务的人。它只能用一次。</div>
+        <div className="field-help">部署 Harbormaster 时你自己设置的那串字符（配置项 HM_SETUP_TOKEN，或 HM_SETUP_TOKEN_FILE 指向的文件内容），用来证明你就是装这台服务的人。它只能用一次，24 小时内有效。</div>
       </div>
       <div>
         <label className="lbl" htmlFor="su-pw">管理员密码</label>
         <input id="su-pw" type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" aria-invalid={!!fields.password} />
-        {fields.password ? <div className="field-error">密码至少要 {minPassword} 位。</div> : <div className="field-help">至少 {minPassword} 位。以后登录面板就用它。</div>}
+        {fields.password ? <div className="field-error">{fields.password === "too_long" ? "密码太长了，请缩短一些。" : `密码至少要 ${minPassword} 位（一个汉字算 3 位）。`}</div> : <div className="field-help">至少 {minPassword} 位，可以用中文（一个汉字算 3 位）。以后登录面板就用它。</div>}
       </div>
       <div>
         <label className="lbl" htmlFor="su-pw2">再输入一次</label>
@@ -164,7 +188,7 @@ function TelegramStep({ onOk, onNext }: { onOk: () => void; onNext: () => void }
         {(tg) => <TelegramForm value={tg} onSaved={(v) => { res.mutate(() => v); if (v.bot_token_set) onOk(); }} />}
       </Async>
       <div className="inline" style={{ justifyContent: "flex-end" }}>
-        <button className="btn" onClick={onNext}>{res.data?.bot_token_set ? "下一步" : "先跳过"}</button>
+        <button className={`btn ${res.data?.bot_token_set ? "primary" : ""}`} onClick={onNext}>{res.data?.bot_token_set ? "下一步" : "先跳过"}</button>
       </div>
     </div>
   );

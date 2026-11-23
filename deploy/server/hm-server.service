@@ -1,0 +1,35 @@
+# Alternative to compose; run exactly one backend against the data directory.
+[Unit]
+Description=Harbormaster API server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=hm-server
+Group=hm-server
+StateDirectory=harbormaster-server
+StateDirectoryMode=0700
+LoadCredential=master-key:/etc/harbormaster/server-master.key
+LoadCredential=setup-token:/etc/harbormaster/server-setup.token
+Environment=HM_MASTER_KEY_FILE=%d/master-key
+Environment=HM_SETUP_TOKEN_FILE=%d/setup-token
+ExecStart=/usr/local/lib/harbormaster/hm-server serve --config /etc/harbormaster/server.json
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=30
+UMask=0077
+NoNewPrivileges=yes
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectControlGroups=yes
+ProtectKernelTunables=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

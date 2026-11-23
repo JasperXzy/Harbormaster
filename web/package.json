@@ -11,7 +11,7 @@
     "build:mock": "tsc --noEmit && vite build --mode mock --outDir dist-mock",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "gen:api": "openapi-typescript ../docs/api/openapi.yaml -o src/api/schema.gen.ts",
+    "gen:api": "openapi-typescript ../docs/api/openapi.yaml --default-non-nullable false -o src/api/schema.gen.ts",
     "lint:api": "redocly lint ../docs/api/openapi.yaml"
   },
   "dependencies": {

@@ -1,0 +1,12 @@
+{
+  "account_alias": "winnemjw",
+  "cache_rows": 1,
+  "entry_present": false,
+  "usage": null,
+  "fetched_at": "2026-11-13T08:23:26.876685000Z",
+  "last_attempt_at": "2026-11-13T08:23:26.876685000Z",
+  "last_error": null,
+  "billing_subject_kind": "swas_no_traffic_package",
+  "cloud_writes": 0,
+  "foreign_key_violations": 0
+}

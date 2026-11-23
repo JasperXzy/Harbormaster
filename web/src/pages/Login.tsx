@@ -3,12 +3,40 @@ import { api, ApiError, MOCK } from "../api/client";
 import { errorText } from "../api/labels";
 import { Logo } from "../components/Shell";
 import { Spinner } from "../components/ui";
+import { getPasskeyAssertion, passkeySupported } from "../lib/webauthn";
 
 export function Login({ onDone }: { onDone: () => void }) {
   const [password, setPassword] = useState("");
+  const [passwordEnabled, setPasswordEnabled] = useState(true);
+  const [passkeyEnabled, setPasskeyEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pkBusy, setPkBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [wait, setWait] = useState(0); // 登录限速的剩余秒数
+  const [brandName, setBrandName] = useState("Harbormaster");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.publicBranding().then(
+      (b) => {
+        if (b.name) {
+          setBrandName(b.name);
+          document.title = b.name;
+        }
+        if (b.has_logo && !MOCK) {
+          setLogoUrl(`/api/v1/public/branding/logo?v=${encodeURIComponent(b.updated_at ?? "1")}`);
+        }
+      },
+      () => {},
+    );
+    api.loginMethods().then(
+      (m) => {
+        setPasswordEnabled(m.password_enabled);
+        setPasskeyEnabled(m.passkey_enabled);
+      },
+      () => {},
+    );
+  }, []);
 
   useEffect(() => {
     if (wait <= 0) return;
@@ -33,22 +61,70 @@ export function Login({ onDone }: { onDone: () => void }) {
     }
   };
 
+  const loginWithPasskey = async () => {
+    if (!passkeySupported()) {
+      setError("当前浏览器不支持 Passkey，请改用密码登录或更换浏览器。");
+      return;
+    }
+    setPkBusy(true);
+    setError(undefined);
+    try {
+      const begin = await api.beginPasskeyLogin();
+      const assertion = await getPasskeyAssertion(begin.options);
+      await api.finishPasskeyLogin(begin.ceremony_id, assertion);
+      onDone();
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "NotAllowedError") {
+        setError("已取消 Passkey 验证。");
+      } else {
+        const code = err instanceof ApiError ? err.code : "invalid_passkey";
+        setError(errorText(code));
+        if (err instanceof ApiError && err.retryAfterSeconds) setWait(err.retryAfterSeconds);
+      }
+    } finally {
+      setPkBusy(false);
+    }
+  };
+
   return (
     <div className="solo">
       <div className="solo-box">
-        <div className="brand"><Logo size={28} /><span>Harbormaster</span></div>
-        <form className="card stack" onSubmit={submit} noValidate>
-          <div>
-            <label className="lbl" htmlFor="login-pw">管理员密码</label>
-            <input id="login-pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoFocus aria-invalid={!!error} />
-            {error && <div className="field-error" role="alert">{error}{wait > 0 ? ` 请在 ${wait} 秒后再试。` : ""}</div>}
+        <div className="brand">
+          <div className="brand-mark">
+            {logoUrl ? <img src={logoUrl} alt="" width={20} height={20} style={{ borderRadius: 5, objectFit: "cover" }} /> : <Logo size={17} />}
           </div>
-          <button className="btn primary block" disabled={busy || wait > 0}>{busy && <Spinner />} 登录</button>
-          <p className="note" style={{ margin: 0 }}>
-            忘记密码？网页上不能重置。请登录运行 Harbormaster 的服务器，执行 <span className="mono">hm-server reset-password</span>。
-          </p>
-        </form>
-        {MOCK && <p className="note" style={{ textAlign: "center", margin: 0 }}>模拟模式：随便输入 4 位以上的密码即可登录；输入 wrong 可以看到出错的样子。</p>}
+          <span>{brandName}</span>
+        </div>
+        <div className="card stack">
+          {passkeyEnabled && (
+            <button type="button" className={`btn ${passwordEnabled ? "" : "primary"} block`} disabled={pkBusy || busy || wait > 0} onClick={loginWithPasskey}>
+              {pkBusy && <Spinner />} 使用 Passkey 指纹 / 安全密钥登录
+            </button>
+          )}
+
+          {passwordEnabled ? (
+            <form className="stack" onSubmit={submit} noValidate>
+              <div>
+                <label className="lbl" htmlFor="login-pw">管理员密码</label>
+                <input id="login-pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" autoFocus aria-invalid={!!error} />
+              </div>
+              {error && <div className="field-error" role="alert">{error}{wait > 0 ? ` 请在 ${wait} 秒后再试。` : ""}</div>}
+              <button className="btn primary block" disabled={busy || pkBusy || wait > 0}>{busy && <Spinner />} 密码登录</button>
+            </form>
+          ) : (
+            <>
+              {error && <div className="field-error" role="alert">{error}{wait > 0 ? ` 请在 ${wait} 秒后再试。` : ""}</div>}
+              <p className="sub" style={{ margin: 0 }}>已关闭密码登录。若安全密钥丢失，请登录服务器执行 <span className="mono">hm-server reset-password</span> 恢复密码登录。</p>
+            </>
+          )}
+
+          {passwordEnabled && (
+            <p className="note" style={{ margin: 0 }}>
+              忘记密码？网页上不能重置。请登录运行 Harbormaster 的服务器，执行 <span className="mono">hm-server reset-password</span>。
+            </p>
+          )}
+        </div>
+        {MOCK && <p className="note" style={{ textAlign: "center", margin: 0 }}>模拟模式：随便输入 4 位以上的密码或点击 Passkey 即可登录；输入 wrong 可以看到出错的样子。</p>}
       </div>
     </div>
   );

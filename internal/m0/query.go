@@ -34,8 +34,19 @@ type definition struct{ product, version, params string }
 
 // Exact allowlist, deliberately no arbitrary RPC command or endpoint flags.
 var allowed = map[string]definition{
+	"DescribeInstanceTypes":         {"ecs", "2014-05-26", "MaxResults NextToken InstanceTypes.1 InstanceTypes.2 InstanceTypes.3 InstanceTypes.4"},
+	"DescribeDisks":                 {"ecs", "2014-05-26", "RegionId MaxResults NextToken"},
+	"DescribeInstanceHistoryEvents": {"ecs", "2014-05-26", "RegionId ResourceType PageNumber PageSize InstanceEventCycleStatus.1 InstanceEventCycleStatus.2 InstanceEventCycleStatus.3 InstanceEventCycleStatus.4 InstanceEventCycleStatus.5 InstanceEventCycleStatus.6 InstanceEventCycleStatus.7"},
+	"DescribeSystemEventAttribute":  {"cms", "2019-01-01", "Product Name StartTime EndTime PageNumber PageSize"},
+	"DescribeSystemEventMetaList":   {"cms", "2019-01-01", ""},
+	"DescribeMonitorData":           {"swas", "2020-06-01", "RegionId InstanceId MetricName Period StartTime EndTime Length"},
 	// ActionTrail documents this read; the request shape comes from the PRD reference project.
-	"ListCdtInternetTraffic":          {"cdt", "2021-08-13", "RegionId"},
+	"ListCdtInternetTraffic": {"cdt", "2021-08-13", "RegionId"},
+	// These additional reads are listed in the official CDT ActionTrail catalog.
+	// Keep them isolated from production until their response semantics are verified.
+	"ListCdtTrafficTiers":             {"cdt", "2021-08-13", "RegionId BusinessRegionId"},
+	"GetCdtInternetServiceStatus":     {"cdt", "2021-08-13", "RegionId"},
+	"ListSwitchedCdtProducts":         {"cdt", "2021-08-13", "RegionId BusinessRegionId"},
 	"DescribeRegions":                 {"ecs", "2014-05-26", ""},
 	"DescribeInstances":               {"ecs", "2014-05-26", "RegionId PageNumber PageSize"},
 	"DescribeNetworkInterfaces":       {"ecs", "2014-05-26", "RegionId PageNumber PageSize"},
@@ -45,6 +56,7 @@ var allowed = map[string]definition{
 	"ListInstancesTrafficPackages":    {"swas", "2020-06-01", "RegionId InstanceIds"},
 	"QueryAccountBalance":             {"bss", "2017-12-14", ""},
 	"QueryBillOverview":               {"bss", "2017-12-14", "BillingCycle"},
+	"DescribeInstanceBill":            {"bss", "2017-12-14", "BillingCycle Granularity IsBillingItem MaxResults NextToken"},
 	"QueryInstanceBill":               {"bss", "2017-12-14", "BillingCycle Granularity IsBillingItem PageNum PageSize"},
 	"DescribeMetricList":              {"cms", "2019-01-01", "Namespace MetricName Dimensions StartTime EndTime Period"},
 	"DescribeMetricMetaList":          {"cms", "2019-01-01", "Namespace MetricName PageNumber PageSize"},
@@ -103,6 +115,15 @@ func (o operation) validate(p profile) error {
 	if r, ok := o.Query["RegionId"]; ok && r != o.Region {
 		return errors.New("region_mismatch")
 	}
+	if region, exists := o.Query["BusinessRegionId"]; exists {
+		found := false
+		for _, enabled := range p.Regions {
+			found = found || region == enabled
+		}
+		if !found {
+			return errors.New("business_region_not_enabled")
+		}
+	}
 	return nil
 }
 
@@ -114,6 +135,51 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 	}
 	ops := []operation{}
 	switch options.Check {
+	case "cdt-service":
+		if p.Site != "china" {
+			return nil, errors.New("cdt_international_endpoint_unverified")
+		}
+		ops = append(ops, newOperation(p, "GetCdtInternetServiceStatus", "cn-hongkong", map[string]string{"RegionId": "cn-hongkong"}, "", ""))
+		for _, region := range p.Regions {
+			for _, action := range []string{"ListCdtTrafficTiers", "ListSwitchedCdtProducts"} {
+				ops = append(ops, newOperation(p, action, "cn-hongkong", map[string]string{"RegionId": "cn-hongkong", "BusinessRegionId": region}, "", ""))
+			}
+		}
+	case "idle-resources":
+		// Capture state/billing evidence only. No pricing, detach or release call
+		// is implied by this probe, and regions remain the imported read scope.
+		for _, region := range p.Regions {
+			ops = append(ops,
+				newOperation(p, "DescribeInstances", region, map[string]string{"RegionId": region, "PageNumber": "1", "PageSize": "100"}, "PageNumber", "Instances.Instance"),
+				newOperation(p, "DescribeDisks", region, map[string]string{"RegionId": region, "MaxResults": "100"}, "NextToken", "Disks.Disk"),
+				newOperation(p, "DescribeEipAddresses", region, map[string]string{"RegionId": region, "PageNumber": "1", "PageSize": "100"}, "PageNumber", "EipAddresses.EipAddress"),
+			)
+		}
+	case "ecs-credit-specs":
+		if len(p.Regions) != 1 {
+			return nil, errors.New("credit_specs_require_one_selected_region")
+		}
+		// Public catalog reads only. No burstable instance is created to test credits.
+		q := map[string]string{"MaxResults": "100"}
+		for i, id := range []string{"ecs.t5-lc2m1.nano", "ecs.t5-c1m1.large", "ecs.t6-c2m1.large", "ecs.t6-c1m1.large"} {
+			q["InstanceTypes."+strconv.Itoa(i+1)] = id
+		}
+		ops = append(ops, newOperation(p, "DescribeInstanceTypes", p.Regions[0], q, "NextToken", "InstanceTypes.InstanceType"))
+	case "system-events":
+		end := time.Now().UTC()
+		for _, region := range p.Regions {
+			q := map[string]string{"RegionId": region, "ResourceType": "instance", "PageNumber": "1", "PageSize": "100"}
+			for n, state := range []string{"Scheduled", "Executing", "Inquiring", "Executed", "Canceled", "Avoided", "Failed"} {
+				q["InstanceEventCycleStatus."+strconv.Itoa(n+1)] = state
+			}
+			ops = append(ops, newOperation(p, "DescribeInstanceHistoryEvents", region, q, "PageNumber", "InstanceSystemEventSet.InstanceSystemEventType"))
+			ops = append(ops, newOperation(p, "DescribeSystemEventAttribute", region, map[string]string{"Product": "ECS", "Name": "Instance:PreemptibleInstanceInterruption", "StartTime": strconv.FormatInt(end.Add(-24*time.Hour).UnixMilli(), 10), "EndTime": strconv.FormatInt(end.UnixMilli(), 10), "PageNumber": "1", "PageSize": "100"}, "PageNumber", "SystemEvents.SystemEvent"))
+		}
+
+	case "event-schema":
+		ops = append(ops, newOperation(p, "DescribeSystemEventMetaList", p.Regions[0], map[string]string{}, "", ""))
+	case "ecs-metric-schema":
+		ops = append(ops, newOperation(p, "DescribeMetricMetaList", p.Regions[0], map[string]string{"Namespace": "acs_ecs_dashboard", "PageNumber": "1", "PageSize": "30"}, "PageNumber", "Resources.Resource"))
 	case "metric-schema":
 		for _, metric := range [][2]string{{"acs_vpc_eip", "net.rx"}, {"acs_vpc_eip", "net.tx"}, {"acs_bandwidth_package", "net_rx.rate"}, {"acs_bandwidth_package", "net_tx.rate"}} {
 			ops = append(ops, newOperation(p, "DescribeMetricMetaList", p.Regions[0], map[string]string{"Namespace": metric[0], "MetricName": metric[1], "PageNumber": "1", "PageSize": "100"}, "", ""))
@@ -134,11 +200,31 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 				ops = append(ops, newOperation(p, item[0], region, map[string]string{"RegionId": region, "PageNumber": "1", "PageSize": size}, "PageNumber", item[1]))
 			}
 		}
+	case "instance-billing":
+		if _, err := time.Parse("2006-01", options.Month); err != nil {
+			return nil, errors.New("billing_month_required_yyyy_mm")
+		}
+		ops = append(ops, newOperation(p, "DescribeInstanceBill", p.Regions[0], map[string]string{"BillingCycle": options.Month, "Granularity": "MONTHLY", "IsBillingItem": "false", "MaxResults": "300"}, "NextToken", "Data.Items"))
 	case "billing":
 		if _, err := time.Parse("2006-01", options.Month); err != nil {
 			return nil, errors.New("billing_month_required_yyyy_mm")
 		}
 		ops = append(ops, newOperation(p, "QueryAccountBalance", p.Regions[0], map[string]string{}, "", ""), newOperation(p, "QueryBillOverview", p.Regions[0], map[string]string{"BillingCycle": options.Month}, "", ""), newOperation(p, "QueryInstanceBill", p.Regions[0], map[string]string{"BillingCycle": options.Month, "Granularity": "MONTHLY", "IsBillingItem": "true", "PageNum": "1", "PageSize": "100"}, "PageNum", "Data.Items.Item"))
+	case "swas-cpu", "swas-network":
+		if !regexp.MustCompile(`^[a-zA-Z0-9-]{1,128}$`).MatchString(options.ResourceID) {
+			return nil, errors.New("metric_resource_id_required")
+		}
+		if len(p.Regions) != 1 {
+			return nil, errors.New("metrics_require_one_selected_region")
+		}
+		end := time.Now().UTC()
+		names := []string{"CPU_UTILIZATION"}
+		if options.Check == "swas-network" {
+			names = []string{"VPC_PUBLICIP_INTERNETIN_RATE", "VPC_PUBLICIP_INTERNETOUT_RATE", "FLOW_USED"}
+		}
+		for _, name := range names {
+			ops = append(ops, newOperation(p, "DescribeMonitorData", p.Regions[0], map[string]string{"RegionId": p.Regions[0], "InstanceId": options.ResourceID, "MetricName": name, "Period": "60", "StartTime": end.Add(-15 * time.Minute).Format(time.RFC3339), "EndTime": end.Format(time.RFC3339), "Length": "1440"}, "", ""))
+		}
 	case "metrics":
 		if !regexp.MustCompile(`^[a-zA-Z0-9-]{1,128}$`).MatchString(options.ResourceID) {
 			return nil, errors.New("metric_resource_id_required")
@@ -146,6 +232,12 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 		var ns string
 		var names []string
 		switch options.MetricSource {
+		case "ecs":
+			ns = "acs_ecs_dashboard"
+			names = []string{"CPUUtilization", "TotalCredit"}
+		case "ecs-network":
+			ns = "acs_ecs_dashboard"
+			names = []string{"InternetInRate", "InternetOutRate", "InternetIn", "InternetOut", "VPC_PublicIP_InternetInRate", "VPC_PublicIP_InternetOutRate"}
 		case "eip":
 			ns = "acs_vpc_eip"
 			names = []string{"net.rx", "net.tx"}
@@ -153,7 +245,7 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			ns = "acs_bandwidth_package"
 			names = []string{"net_rx.rate", "net_tx.rate"}
 		default:
-			return nil, errors.New("metric_source_must_be_eip_or_bandwidth")
+			return nil, errors.New("metric_source_must_be_ecs_ecs_network_eip_or_bandwidth")
 		}
 		// One resource belongs to one region; do not silently try it in all regions.
 		if len(p.Regions) != 1 {
@@ -165,7 +257,7 @@ func plan(p profile, options queryOptions) ([]operation, error) {
 			ops = append(ops, newOperation(p, "DescribeMetricList", p.Regions[0], map[string]string{"Namespace": ns, "MetricName": name, "Dimensions": string(dim), "StartTime": end.Add(-time.Hour).Format(time.RFC3339), "EndTime": end.Format(time.RFC3339), "Period": "60"}, "", ""))
 		}
 	default:
-		return nil, errors.New("check_must_be_inventory_billing_metrics_metric_schema_or_cdt")
+		return nil, errors.New("check_must_be_inventory_billing_instance_billing_metrics_metric_schema_ecs_metric_schema_ecs_credit_specs_swas_cpu_swas_network_event_schema_system_events_or_cdt")
 	}
 	return ops, nil
 }
@@ -233,7 +325,11 @@ func (s sdkCaller) call(ctx context.Context, p profile, o operation) (map[string
 	for k, v := range o.Query {
 		q[k] = dara.String(v)
 	}
-	params := &openapi.Params{Action: dara.String(o.Action), Version: dara.String(o.Version), Protocol: dara.String("HTTPS"), Pathname: dara.String("/"), Method: dara.String(methodFor(o)), AuthType: dara.String("AK"), Style: dara.String("RPC"), ReqBodyType: dara.String("formData"), BodyType: dara.String("json")}
+	bodyType := "json"
+	if o.Product == "bss" {
+		bodyType = "string"
+	}
+	params := &openapi.Params{Action: dara.String(o.Action), Version: dara.String(o.Version), Protocol: dara.String("HTTPS"), Pathname: dara.String("/"), Method: dara.String(methodFor(o)), AuthType: dara.String("AK"), Style: dara.String("RPC"), ReqBodyType: dara.String("formData"), BodyType: dara.String(bodyType)}
 	callCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	result, err := c.CallApiWithCtx(callCtx, params, &openapi.OpenApiRequest{Query: q}, &dara.RuntimeOptions{Autoretry: dara.Bool(false), MaxAttempts: dara.Int(1)})
@@ -248,6 +344,18 @@ func (s sdkCaller) call(ctx context.Context, p profile, o operation) (map[string
 		return nil, "request_failed"
 	}
 	body, ok := result["body"].(map[string]any)
+	if o.Product == "bss" {
+		raw, valid := result["body"].(string)
+		if !valid {
+			return nil, "invalid_response"
+		}
+		decoder := json.NewDecoder(strings.NewReader(raw))
+		decoder.UseNumber()
+		if decoder.Decode(&body) != nil || body == nil || decoder.Decode(new(any)) != io.EOF {
+			return nil, "invalid_response"
+		}
+		ok = true
+	}
 	if !ok {
 		return nil, "invalid_response"
 	}
@@ -265,10 +373,25 @@ func (s sdkCaller) call(ctx context.Context, p profile, o operation) (map[string
 			}
 			return nil, "api_reported_failure"
 		}
-		_, direct := body["TrafficDetails"]
-		_, nested := atPath(body, "Data.TrafficDetails")
-		if !direct && !nested {
-			return nil, "cdt_response_shape_unknown"
+		switch o.Action {
+		case "ListCdtInternetTraffic":
+			_, direct := body["TrafficDetails"]
+			_, nested := atPath(body, "Data.TrafficDetails")
+			if !direct && !nested {
+				return nil, "cdt_response_shape_unknown"
+			}
+		case "GetCdtInternetServiceStatus":
+			if _, ok := body["Enabled"].(bool); !ok {
+				return nil, "cdt_service_response_shape_unknown"
+			}
+		case "ListCdtTrafficTiers", "ListSwitchedCdtProducts":
+			key := "TrafficTiers"
+			if o.Action == "ListSwitchedCdtProducts" {
+				key = "CdtProducts"
+			}
+			if _, ok := body[key].([]any); !ok {
+				return nil, "cdt_service_response_shape_unknown"
+			}
 		}
 	}
 	return body, ""
@@ -277,14 +400,15 @@ func (s sdkCaller) call(ctx context.Context, p profile, o operation) (map[string
 var safeCode = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 
 type queryResult struct {
-	Action     string `json:"action"`
-	MetricName string `json:"metric_name,omitempty"`
-	Region     string `json:"region"`
-	Status     string `json:"status"`
-	ErrorCode  string `json:"error_code,omitempty"`
-	Complete   bool   `json:"complete"`
-	FetchedAt  string `json:"fetched_at"`
-	Pages      []any  `json:"pages"`
+	Action         string `json:"action"`
+	MetricName     string `json:"metric_name,omitempty"`
+	Region         string `json:"region"`
+	BusinessRegion string `json:"business_region,omitempty"`
+	Status         string `json:"status"`
+	ErrorCode      string `json:"error_code,omitempty"`
+	Complete       bool   `json:"complete"`
+	FetchedAt      string `json:"fetched_at"`
+	Pages          []any  `json:"pages"`
 }
 type report struct {
 	Account           string        `json:"account"`
@@ -314,10 +438,11 @@ func execute(ctx context.Context, p profile, ops []operation, call callFunc, int
 	results := []queryResult{}
 	for index := 0; index < len(ops); index++ {
 		o := ops[index]
-		r := queryResult{Action: o.Action, MetricName: o.Query["MetricName"], Region: o.Region, Status: "passed", Complete: false, Pages: []any{}}
+		r := queryResult{Action: o.Action, MetricName: o.Query["MetricName"], Region: o.Region, BusinessRegion: o.Query["BusinessRegionId"], Status: "passed", Complete: false, Pages: []any{}}
 		seen := 0
+		tokens := map[string]bool{}
 		for page := 1; page <= 50; page++ {
-			if o.PageKey != "" {
+			if o.PageKey != "" && o.PageKey != "NextToken" {
 				o.Query[o.PageKey] = strconv.Itoa(page)
 			}
 			if interval > 0 {
@@ -369,6 +494,39 @@ func execute(ctx context.Context, p profile, ops []operation, call callFunc, int
 				r.ErrorCode = "pagination_shape_unknown"
 				break
 			}
+			if o.PageKey == "NextToken" {
+				seen += len(list)
+				tokenPath := "Data.NextToken" // BSS places its cursor inside Data.
+				if o.Action == "DescribeInstanceTypes" || o.Action == "DescribeDisks" {
+					tokenPath = "NextToken"
+				}
+				raw, exists := atPath(body, tokenPath)
+				token, valid := raw.(string)
+				if exists && !valid && raw != nil || len(token) > 8192 {
+					r.ErrorCode = "pagination_shape_unknown"
+					break
+				}
+				if token == "" {
+					// DescribeDisks explicitly declares TotalCount invalid when
+					// MaxResults/NextToken are used, including the final page.
+					if total, hasTotal := totalCount(body); o.Action != "DescribeDisks" && hasTotal && seen != total {
+						r.ErrorCode = "pagination_incomplete"
+						break
+					}
+					r.Complete = true
+					break
+				}
+				if tokens[token] {
+					r.ErrorCode = "pagination_token_repeated"
+					break
+				}
+				tokens[token] = true
+				o.Query["NextToken"] = token
+				if page == 50 {
+					r.ErrorCode = "page_limit_reached"
+				}
+				continue
+			}
 			seen += len(list)
 			total, hasTotal := totalCount(body)
 			if hasTotal && seen < total && len(list) == 0 {
@@ -419,6 +577,9 @@ func totalCount(body map[string]any) (int, bool) {
 		if n >= 0 {
 			return n, true
 		}
+	case json.Number:
+		i, e := strconv.Atoi(string(n))
+		return i, e == nil && i >= 0
 	case string:
 		i, e := strconv.Atoi(n)
 		return i, e == nil && i >= 0

@@ -1,0 +1,65 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeInstances",
+        "ecs:DescribeDisks",
+        "ecs:DescribeNetworkInterfaces",
+        "ecs:DescribeInstanceAutoRenewAttribute",
+        "ecs:DescribeInstanceHistoryEvents",
+        "vpc:DescribeEipAddresses",
+        "vpc:DescribeCommonBandwidthPackages",
+        "swas-open:ListInstances",
+        "swas-open:ListInstancesTrafficPackages",
+        "swas-open:DescribeMonitorData",
+        "cms:QueryMetricList",
+        "cms:DescribeSystemEventAttribute",
+        "bss:DescribeAcccount",
+        "bss:DescribeBillList",
+        "bss:DescribeInstances",
+        "bssapi:DescribeInstanceBill"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:StartInstance",
+        "ecs:StopInstance",
+        "ecs:RebootInstance"
+      ],
+      "Resource": "acs:ecs:*:*:instance/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "swas-open:StartInstance",
+        "swas-open:StopInstance",
+        "swas-open:RebootInstance"
+      ],
+      "Resource": "acs:swas-open:*:*:instance/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DeleteInstance"
+      ],
+      "Resource": "acs:ecs:*:*:instance/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:RunInstances",
+        "vpc:AllocateEipAddress",
+        "vpc:AssociateEipAddress",
+        "vpc:UnassociateEipAddress",
+        "vpc:ReleaseEipAddress",
+        "vpc:CreateVpc",
+        "vpc:CreateVSwitch"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

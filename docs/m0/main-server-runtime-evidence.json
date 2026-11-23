@@ -1,0 +1,121 @@
+{
+  "date": "2026-11-17",
+  "host": "main-server",
+  "url": "https://cdt.jasperxzy.com",
+  "release": "20261117-nzs6aj96",
+  "backend": {
+    "commit": "103f3a9a3856dd678ea8fbe8ce5716306e27d32d",
+    "image": "harbormaster-server:trial-103f3a9",
+    "image_id": "sha256:da2335aa44304cf56dd6ffdc07450ca7ac4df7821d70660b3912c2598e7e0319",
+    "health": "healthy",
+    "frontend_mode": "api",
+    "cloud_writes": false,
+    "instance_power_enabled": false,
+    "instance_release_enabled": false
+  },
+  "frontend": {
+    "source_manifest_sha256": "a811db871c6012db34bff78f160b8896390dbe2b2ed51ca7c7455d6a21a980ee",
+    "artifacts": [
+      {
+        "path": "assets/index-Dlr7PrdD.css",
+        "sha256": "b877a0aa254dc8b70768ef90203a0efcdbd1cb06037664e5b23fc44e5f761afa"
+      },
+      {
+        "path": "assets/index-Dm1wZtDu.js",
+        "sha256": "22c8e7b8e70b866c0dd435fd329f251a940aa65dbf80390cd7b5f46258338c02"
+      },
+      {
+        "path": "favicon.svg",
+        "sha256": "93299fa72ce7b4754623ce3cc4b447dacbea63b7fd1592ef9645fb9a7055759f"
+      },
+      {
+        "path": "index.html",
+        "sha256": "315a2bfa6f0c124d75c0be61ec88fc512b78c7d39be4a4f23548d9ac0a69cdbe"
+      }
+    ],
+    "browser_observation": "Harbormaster setup page; initialization token and password fields; no production initialization submitted"
+  },
+  "public_checks": {
+    "public_tls_verified": true,
+    "origin_tls_verified": true,
+    "origin_index_exact": true,
+    "public_html_only_cloudflare_beacon_added": true,
+    "static_asset_hashes_match": true,
+    "checks": [
+      {
+        "path": "/",
+        "status": 200,
+        "cache": "DYNAMIC"
+      },
+      {
+        "path": "/instances",
+        "status": 200,
+        "cache": "DYNAMIC"
+      },
+      {
+        "path": "/settings",
+        "status": 200,
+        "cache": "DYNAMIC"
+      },
+      {
+        "path": "/healthz",
+        "status": 200,
+        "cache": "DYNAMIC"
+      },
+      {
+        "path": "/readyz",
+        "status": 200,
+        "cache": "DYNAMIC"
+      },
+      {
+        "path": "/api/v1/setup/status",
+        "status": 200,
+        "cache": "DYNAMIC"
+      },
+      {
+        "path": "/api/v1/session",
+        "status": 401,
+        "cache": "DYNAMIC"
+      },
+      {
+        "path": "/assets/not-present.js",
+        "status": 404,
+        "cache": "MISS"
+      },
+      {
+        "path": "/api/v1/not-a-route",
+        "status": 401
+      },
+      {
+        "path": "/.git/config",
+        "status": 404
+      }
+    ]
+  },
+  "retirement": {
+    "old_container_removed": true,
+    "old_project_removed": true,
+    "old_proxy_removed": true,
+    "archive": "/var/backups/harbormaster/20261117-nzs6aj96/cdt-monitor.tar.gz.aesgcm",
+    "archive_key": "/etc/harbormaster/cdt-archive.key",
+    "archive_cipher": "AES-256-GCM",
+    "archive_authenticated_restore_verified": true,
+    "archive_member_count": 7,
+    "archive_sha256": "11fa7e1c658cc03ab2f3b9a5fa780659d071a0f5bb5b837730e05a447c377bb2",
+    "archive_bytes": 1555744,
+    "old_image_id": "sha256:5891c01d64ba86e014d92fa94bd5a33934eee2f234897580d389b0c2c180ac4a"
+  },
+  "production_state_at_verification": {
+    "administrator_count": 0,
+    "account_count": 0,
+    "schema_migrations": 45,
+    "foreign_key_errors": 0,
+    "log_secret_matches": 0
+  },
+  "not_enabled": [
+    "cloud_write_actions",
+    "telegram_dispatch",
+    "agent_installation",
+    "quota_protection"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-18",
+  "timezone": "Asia/Singapore",
+  "commit": "c4cf7c4e0a4c43896e893d2efdc3941af9f9f8b8",
+  "image": "harbormaster-server:trial-c4cf7c4",
+  "version": "0.1.0-trial.20261118.1",
+  "build_time": "2026-11-17T17:41:04Z",
+  "image_id": "sha256:30763dba0a59f5ee16870eca50e4e828f4b14ce572cbbe926c386f8b725cf6d7",
+  "linux_privilege_test": "passed",
+  "container_smoke": "passed",
+  "previous_image": "harbormaster-server:trial-103f3a9",
+  "replaced_at": "2026-11-17T17:44:16.030175+00:00",
+  "health": "healthy",
+  "cloud_write_flags_disabled": true,
+  "agent_identity_unchanged": true,
+  "sg_fresh_report_after_update": true,
+  "sg_last_report_at": "2026-11-17T17:44:22.253394641Z",
+  "sqlite_migrations": 45,
+  "production_grants_issued": 0,
+  "agent_packages_changed": false,
+  "frontend_changed": false,
+  "rollback_used": false,
+  "public_checks": {
+    "/": 200,
+    "/readyz": 200,
+    "/api/v1/setup/status": 200
+  }
+}

@@ -75,7 +75,7 @@ export function LineChart({ labels, series, unit, digits = 1, height = 230, aria
               d += `${pen ? "L" : "M"}${x(i)},${y(v)} `;
               pen = true;
             });
-            return <path key={s.name} d={d} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={s.dashed ? "5 4" : undefined} opacity={s.dashed ? 0.75 : 1} />;
+            return <g key={s.name}><path d={d} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" strokeDasharray={s.dashed ? "5 4" : undefined} opacity={s.dashed ? 0.75 : 1} />{s.data.map((v,i)=>v!==null&&s.data[i-1]==null&&s.data[i+1]==null?<circle key={i} cx={x(i)} cy={y(v)} r={3} fill={s.color} />:null)}</g>;
           })}
           {ends.map((e, k) => (
             <g key={e.s.name}>

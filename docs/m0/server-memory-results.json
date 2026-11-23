@@ -1,0 +1,68 @@
+{
+  "platform": "macOS arm64",
+  "go_version": "go1.27.1",
+  "cgo_enabled": false,
+  "binary_commit": "9ac1aa9",
+  "profiles": [
+    {
+      "scenario": "production-empty-after-setup-and-login-country",
+      "binary_commit": "9ac1aa9",
+      "sample_count": 66,
+      "ready_seconds": 0.263,
+      "before_setup_rss_median_bytes": 75497472,
+      "after_setup_rss_bytes": 142934016,
+      "after_login_rss_min_bytes": 203046912,
+      "after_login_rss_max_bytes": 210206720,
+      "stable_rss_median_bytes": 210206720,
+      "stable_rss_max_bytes": 210206720,
+      "sampled_stable_cpu_percent": 0.523,
+      "child_peak_rss_bytes": 210206720,
+      "ipdb_go_heap_at_first_read_bytes": 153767280,
+      "ipdb_asn_edition": "2026-11",
+      "ipdb_country_edition": "2026-11",
+      "counts": {
+        "account": 0,
+        "credential": 1,
+        "job": 0,
+        "network_trace_run": 0,
+        "trace_snapshot_run": 0,
+        "administrator": 1
+      },
+      "credential_kind": "encrypted master-key verifier only",
+      "exit_code": 0,
+      "generated_secrets_in_logs": false,
+      "artifact_directory_name": "hm-production-memory-4tixc82f",
+      "gomemlimit_environment": "unset"
+    },
+    {
+      "scenario": "production-empty-after-setup-and-login-country",
+      "binary_commit": "9ac1aa9",
+      "gomemlimit_environment": "80MiB",
+      "sample_count": 66,
+      "ready_seconds": 0.19,
+      "before_setup_rss_median_bytes": 79101952,
+      "after_setup_rss_bytes": 146685952,
+      "after_login_rss_min_bytes": 146784256,
+      "after_login_rss_max_bytes": 146833408,
+      "stable_rss_median_bytes": 146833408,
+      "stable_rss_max_bytes": 146833408,
+      "sampled_stable_cpu_percent": 0.503,
+      "child_peak_rss_bytes": 146849792,
+      "ipdb_go_heap_at_first_read_bytes": 19499672,
+      "ipdb_asn_edition": "2026-11",
+      "ipdb_country_edition": "2026-11",
+      "counts": {
+        "account": 0,
+        "credential": 1,
+        "job": 0,
+        "network_trace_run": 0,
+        "trace_snapshot_run": 0,
+        "administrator": 1
+      },
+      "credential_kind": "encrypted master-key verifier only",
+      "exit_code": 0,
+      "generated_secrets_in_logs": false,
+      "artifact_directory_name": "hm-production-memory-3xesmlrv"
+    }
+  ]
+}

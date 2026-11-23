@@ -6,6 +6,8 @@
 
 2026-11-11 对照[国内站产品说明](https://help.aliyun.com/zh/cdt/product-overview/what-is-cdt/)与[国际站公网计费说明](https://www.alibabacloud.com/help/en/cdt/internet-data-transfers)。两站均为账号级每月中国内地 20GB、非内地 200GB；自然月每月 1 日刷新，不结转。国际站说明也区分 BGP（多线）免费额度与不适用免费额度的精品线路。国内说明明确 ECS 等产品需升级至 CDT，不能只看按流量计费属性。
 
+2026-11-13 实测补充：两个已导入账号的 GetCdtInternetServiceStatus 均返回 Enabled=true；四个业务地域的 ListSwitchedCdtProducts 都为空。这里只确认返回的服务布尔状态，没有把空列表或布尔值转成实例的免费额度资格。单位和水位仍未获得，详见[CDT 服务读取验证](cdt-service-reads.md)。下文“未查询账号状态”保留为 11 日最初核对步骤的范围描述。
+
 ## 结论
 
 PRD 的 20/200 数字正确，但 CDT 官方周期不是用户任选重置日；配额适用资格还取决于产品升级和线路。这里确认的是公开规则，未查询两个账号的实际权益、站点、升级状态或账单。

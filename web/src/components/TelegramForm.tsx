@@ -12,11 +12,15 @@ export function TelegramForm({ value, onSaved }: { value: TelegramChannel; onSav
   const [chat, setChat] = useState(value.chat_id);
   const [mode, setMode] = useState(value.proxy_mode);
   const [url, setUrl] = useState(value.proxy_url);
+  const [proxyUser, setProxyUser] = useState("");
+  const [proxyPass, setProxyPass] = useState("");
   const [busy, setBusy] = useState<"save" | "test" | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [error, setError] = useState<string>();
   const fe = (k: string) => (fields[k] ? <div className="field-error">{fieldErrorText(fields[k])}</div> : null);
-  const dirty = token !== "" || chat !== value.chat_id || mode !== value.proxy_mode || url !== value.proxy_url;
+  const dirty = token !== "" || chat !== value.chat_id || mode !== value.proxy_mode || url !== value.proxy_url || proxyUser !== "" || proxyPass !== "";
+  // 后端规则：代理模式和地址都没变时，留空的认证保留；任一变化就清除旧认证。
+  const authKept = value.proxy_auth_set && mode === value.proxy_mode && url.trim() === value.proxy_url;
 
   const save = async (e?: FormEvent) => {
     e?.preventDefault();
@@ -24,8 +28,11 @@ export function TelegramForm({ value, onSaved }: { value: TelegramChannel; onSav
     setError(undefined);
     setFields({});
     try {
-      const saved = await api.updateTelegram({ ...(token ? { bot_token: token } : {}), chat_id: chat.trim(), proxy_mode: mode, proxy_url: mode === "none" ? "" : url.trim() });
+      const auth = mode !== "none" && (proxyUser || proxyPass) ? { proxy_username: proxyUser, proxy_password: proxyPass } : {};
+      const saved = await api.updateTelegram({ ...(token ? { bot_token: token } : {}), chat_id: chat.trim(), proxy_mode: mode, proxy_url: mode === "none" ? "" : url.trim(), ...auth });
       setToken("");
+      setProxyUser("");
+      setProxyPass("");
       onSaved(saved);
       toast("Telegram 设置已保存");
       return true;
@@ -85,6 +92,16 @@ export function TelegramForm({ value, onSaved }: { value: TelegramChannel; onSav
           <div>
             <input id="tg-url" type="text" value={url} onChange={(e) => setUrl(e.target.value)} placeholder={mode === "socks5" ? "socks5://127.0.0.1:1080" : "https://tg.example.com"} aria-invalid={!!fields.proxy_url} autoComplete="off" />
             {fe("proxy_url")}
+          </div>
+          <label htmlFor="tg-proxy-user">代理认证</label>
+          <div>
+            <div className="inline">
+              <input id="tg-proxy-user" type="text" value={proxyUser} onChange={(e) => setProxyUser(e.target.value)} placeholder={authKept ? "已保存（留空不修改）" : "用户名（可不填）"} aria-label="代理用户名" aria-invalid={!!fields.proxy_username} autoComplete="off" />
+              <input id="tg-proxy-pass" type="password" value={proxyPass} onChange={(e) => setProxyPass(e.target.value)} placeholder={authKept ? "已保存（留空不修改）" : "密码"} aria-label="代理密码" aria-invalid={!!fields.proxy_password} autoComplete="new-password" />
+            </div>
+            {fe("proxy_username")}
+            {fe("proxy_password")}
+            {value.proxy_auth_set && !authKept && <div className="field-help">代理地址改了，保存后会清除之前的用户名和密码。</div>}
           </div>
         </>
       )}

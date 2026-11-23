@@ -14,17 +14,18 @@ export function PermissionList({ check, pending }: { check: PermissionCheck | nu
       </span>
     );
   if (!check) return <span className="sub">还没有测试过</span>;
+  // 只列出有问题的项；全部通过时一句话带过
+  const issues = check.items.filter((it) => it.result !== "passed");
+  const passed = check.items.length - issues.length;
+  const passedNames = check.items.filter((it) => it.result === "passed").map((it) => PERMISSION[it.key]).join("、");
+  if (!issues.length) return <div className="perm"><Badge level="good" title={passedNames}>{passed} 项权限都通过</Badge></div>;
   return (
     <div className="perm">
-      {check.items.map((it) => {
+      {issues.map((it) => {
         const [level, text] = PERMISSION_RESULT[it.result];
-        return (
-          <Badge key={it.key} level={level} title={text}>
-            {PERMISSION[it.key]}
-            {it.result === "passed" ? "" : ` · ${text}`}
-          </Badge>
-        );
+        return <Badge key={it.key} level={level}>{PERMISSION[it.key]} · {text}</Badge>;
       })}
+      {passed > 0 && <span className="sub" title={passedNames} style={{ alignSelf: "center" }}>其余 {passed} 项通过</span>}
     </div>
   );
 }
@@ -45,6 +46,8 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
   const [akSecret, setAkSecret] = useState("");
   const [regions, setRegions] = useState<string[]>(account?.region_ids ?? []);
   const [all, setAll] = useState<Region[]>();
+  const [trackOverseas, setTrackOverseas] = useState(account?.track_overseas ?? true);
+  const [trackMainland, setTrackMainland] = useState(account?.track_mainland ?? true);
   const [mainland, setMainland] = useState(String((account?.quota_mainland_bytes ?? 20 * GB) / GB));
   const [overseas, setOverseas] = useState(String((account?.quota_overseas_bytes ?? 200 * GB) / GB));
   const [thresholds, setThresholds] = useState((account?.alert_thresholds_percent ?? [80, 90, 95]).join(", "));
@@ -81,6 +84,7 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
     if (Object.keys(local).length) return;
     const common = {
       name: name.trim(), region_ids: regions,
+      track_mainland: trackMainland, track_overseas: trackOverseas,
       quota_mainland_bytes: Math.round(Number(mainland) * GB), quota_overseas_bytes: Math.round(Number(overseas) * GB),
       reset_day: 1 as const, alert_thresholds_percent: [...th].sort((a, b) => a - b),
     };
@@ -154,26 +158,41 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
         {fe("region_ids")}
         <div className="field-help">只勾选你有机器的地域，扫描会更快。</div>
       </div>
+      <div>
+        <span className="lbl" style={{ display: "block", fontSize: "var(--fs-md)", color: "var(--text-2)", marginBottom: 4 }}>要记录的 CDT 流量范围</span>
+        <div className="checks">
+          <label className={`check ${trackOverseas ? "on" : ""}`}>
+            <input type="checkbox" checked={trackOverseas} onChange={(e) => setTrackOverseas(e.target.checked)} />
+            海外流量（非中国内地）
+          </label>
+          <label className={`check ${trackMainland ? "on" : ""}`}>
+            <input type="checkbox" checked={trackMainland} onChange={(e) => setTrackMainland(e.target.checked)} />
+            国内流量（中国内地）
+          </label>
+        </div>
+        <div className="field-help">如果某范围没有走 CDT 计费的机器（例如只有轻量固定带宽），取消勾选即可不记录该范围流量，也不会提示覆盖不完整。</div>
+      </div>
       <details open={edit}>
         <summary className="sub" style={{ cursor: "pointer" }}>免费额度与告警（一般不用改）</summary>
         <div className="stack" style={{ marginTop: 12 }}>
+          <p className="note" style={{ margin: 0 }}>面板按这里的数字计算“还剩多少”并发告警。改它不会改变阿里云实际给你的免费额度。1 GB 按 1024³ 字节算。</p>
           <div className="grid g2" style={{ gap: 12 }}>
             <div>
               <label className="lbl" htmlFor="acc-qo">海外免费额度（GB / 月）</label>
-              <input id="acc-qo" type="number" min="0" value={overseas} onChange={(e) => setOverseas(e.target.value)} aria-invalid={!!fields.quota_overseas_bytes} />
+              <input id="acc-qo" type="number" min="0" value={overseas} disabled={!trackOverseas} onChange={(e) => setOverseas(e.target.value)} aria-invalid={!!fields.quota_overseas_bytes} />
               {fe("quota_overseas_bytes")}
             </div>
             <div>
               <label className="lbl" htmlFor="acc-qm">国内免费额度（GB / 月）</label>
-              <input id="acc-qm" type="number" min="0" value={mainland} onChange={(e) => setMainland(e.target.value)} aria-invalid={!!fields.quota_mainland_bytes} />
+              <input id="acc-qm" type="number" min="0" value={mainland} disabled={!trackMainland} onChange={(e) => setMainland(e.target.value)} aria-invalid={!!fields.quota_mainland_bytes} />
               {fe("quota_mainland_bytes")}
             </div>
           </div>
           <div className="grid g2" style={{ gap: 12 }}>
             <div>
-              <label className="lbl" htmlFor="acc-rd">官方额度重置日</label>
-              <input id="acc-rd" value="每月 1 日（自然月）" readOnly />
-              <div className="field-help">CDT 官方周期固定，修改面板时区不会改变计费周期。</div>
+              <span className="lbl" style={{ display: "block", fontSize: "var(--fs-md)", color: "var(--text-2)", marginBottom: 4 }}>每月几号重新计算</span>
+              <div style={{ padding: "8px 0" }}>每月 1 号（不能修改）</div>
+              <div className="field-help">阿里云固定按自然月计算，改面板的时区不会影响它。</div>
             </div>
             <div>
               <label className="lbl" htmlFor="acc-th">用到百分之几时通知</label>

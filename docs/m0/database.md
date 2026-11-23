@@ -16,8 +16,10 @@ M0 使用 modernc.org/sqlite（纯 Go），无需 CGO，文件 `harbormaster.db`
 | agent | 实例唯一绑定、32-byte token_hash、撤销时间、版本、最后接收时间 |
 | traffic_sample | agent/epoch/sequence 联合主键，累计双向字节非负；按 agent+sampled_at 查询、received_at 清理索引 |
 | cdt_snapshot | 官方用量、period_start、可空 covered_until、fetched_at、来源与质量；未知水位不能填抓取时间 |
-| administrator | M0 示例单管理员，Argon2id PHC 字符串；正式首次设置尚未实现 |
+| administrator | 单管理员，Argon2id PHC 字符串；生产首次设置与 demo 预置使用隔离数据库 |
 | session | 随机会话 token 的哈希和有效期；reset-password 同事务清空会话 |
+| setup_credential | 一次性初始化凭证哈希与 24 小时有效期，创建管理员的事务中消耗 |
+| auth_attempt | 来源 IP 与全局登录/初始化尝试窗口，跨重启保留限速 |
 
 迁移文件位于 `internal/store/migrations/`，通过 go:embed 编入二进制。启动或 migrate 在立即写事务中创建迁移记录、顺序执行未执行文件；失败回滚，不半建库。后续只追加迁移，不修改已应用的 001。不提供破坏性自动 down migration。
 
@@ -36,4 +38,16 @@ AccessKey Secret、Telegram Token 等需要可逆使用的值放 credential；ag
 - M2：规则、期望状态变更原因/确认状态、豁免期限、审计和动作记录；outbox 与业务事件同事务，外部 Telegram 发送仍可能成功但 ACK 丢失，不能承诺网络意义上的 exactly-once。
 - M3：probe/route 相关表，测速样本默认 30 天。
 
-不在 M0 预建全部后续表或宣称已实现持久任务/自动停机。删除账号的历史保留策略待用户决定；目前外键不自动级联删除历史，API 删除未开放。SQLite ≤1GB 和常驻内存目标尚未做长期负载验收。
+不在 M0 预建全部后续表或宣称已实现持久任务/自动停机。2026-11-12 用户确认账号停用并保留历史；外键不自动级联删除历史，生产账号写 API 尚未开放。SQLite ≤1GB 和常驻内存目标尚未做长期负载验收。
+
+2026-11-13 增量：迁移 040 增加 panel_branding 单行配置，保存名称、共享修订、规范化 PNG BLOB/尺寸与 UTC 更新时间；名称/图片和固定字段审计同事务提交，加密备份保留本表。[设计与验证](branding.md)。上文是最初 M0 结构，完整功能现状以[后端状态记录](backend-status.md)和各后续迁移为准。
+
+2026-11-13 增量：迁移 041 增加 swas_traffic_cache，按实例/凭据版本/套餐 ID 保存轻量流量包最近成功值、列表成员证据、抓取/尝试时间及错误码，与实例发现同事务更新。旧身份记录保留但不参与当前读取。[数据边界与验证](swas-traffic-package.md)。
+
+2026-11-13 增量：迁移 042 增加 release_inventory，按账号/凭据版本/地域保存完整 ECS 和磁盘影响字段、成功/尝试时间及稳定错误。账号/任务租约与实例快照同事务校验；失败保留原内容和成功时间，旧尝试不覆盖新结果；换凭据后隐藏旧缓存。管理员预览只读取本表，没有释放任务或执行入口。[边界与验证](ecs-release-preview.md)。
+
+2026-11-13 增量：迁移 043 扩展固定任务类型，保持外键开启、验证全部关联后恢复立即检查；旧任务/SSE/审计/清理触发器及公开序号保留。新增 instance_release_job / instance_release_request 保存确认影响、一次发送边界、结果与长期事件键；恢复取消旧任务而不重放。[设计与迁移验证](ecs-release-queue.md)。
+
+2026-11-14 增量：迁移 044 增加 idle_resource_source / idle_resource_candidate，按账号/凭据版本/地域/资源类型保存闲置状态候选、来源数量/时间/错误及逐条保留标记；未知字段保留原证据，完整已知变化才移除。与发现同事务、GET 为一致只读事务、换凭据隐藏旧缓存。[数据边界与验证](idle-resource-candidates.md)。
+
+2026-11-17 增量：迁移 045 增加非紧急 idle_resource_detected 规则及 idle_alert_target 逻辑资源表，notification 增加可空 resource_id 外键。候选、目标、alert_state 和 outbox 在发现事务内共同提交；明确非候选才恢复，未知保留，资源不可见或监控取消静默结束。逻辑问题跨凭据轮换去重，候选证据继续隔离。[证据与验证](idle-resource-alerts.md)。

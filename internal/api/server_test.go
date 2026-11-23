@@ -28,7 +28,7 @@ func TestHealthAndRouting(t *testing.T) {
 			t.Errorf("%s: %d %s", c.path, w.Code, w.Header())
 		}
 	}
-	embedded := NewHandler(s, false, "Asia/Shanghai", ui.Handler())
+	embedded := NewHandler(s, nil, ui.Handler())
 	page := httptest.NewRecorder()
 	embedded.ServeHTTP(page, httptest.NewRequest("GET", "/instances/unknown", nil))
 	if page.Code != 200 || !strings.Contains(page.Header().Get("Content-Type"), "text/html") {

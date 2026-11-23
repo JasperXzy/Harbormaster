@@ -1,0 +1,228 @@
+{
+  "at": "2026-11-18T12:15:33.57349207Z",
+  "daily": {
+    "aggregation": {
+      "account_count": 2
+    },
+    "account_id": "all",
+    "cycle_start": "2026-10-31T16:00:00Z",
+    "cycle_end": "2026-11-30T16:00:00Z",
+    "data_timezone": "Asia/Shanghai",
+    "days": [
+      {
+        "date": "2026-11-17",
+        "mainland_bytes": null,
+        "overseas_bytes": null,
+        "provisional": true,
+        "scopes": {
+          "mainland": {
+            "bytes": null,
+            "known_bytes": 0,
+            "has_data": false,
+            "source": "unavailable",
+            "status": "unavailable",
+            "is_complete_day": false,
+            "from_at": "2026-11-16T16:00:00Z",
+            "until_at": "2026-11-17T16:00:00Z",
+            "observed_from": null,
+            "observed_until": null,
+            "reasons": [
+              "account_aggregation",
+              "account_data_incomplete"
+            ]
+          },
+          "overseas": {
+            "bytes": null,
+            "known_bytes": 0,
+            "has_data": false,
+            "source": "unavailable",
+            "status": "unavailable",
+            "is_complete_day": false,
+            "from_at": "2026-11-16T16:00:00Z",
+            "until_at": "2026-11-17T16:00:00Z",
+            "observed_from": null,
+            "observed_until": null,
+            "reasons": [
+              "account_aggregation",
+              "account_data_incomplete"
+            ]
+          }
+        }
+      },
+      {
+        "date": "2026-11-18",
+        "mainland_bytes": null,
+        "overseas_bytes": null,
+        "provisional": true,
+        "scopes": {
+          "mainland": {
+            "bytes": null,
+            "known_bytes": 0,
+            "has_data": true,
+            "source": "agent_estimate",
+            "status": "partial",
+            "is_complete_day": false,
+            "from_at": "2026-11-17T16:00:00Z",
+            "until_at": "2026-11-18T12:15:33.57349207Z",
+            "observed_from": null,
+            "observed_until": null,
+            "reasons": [
+              "account_aggregation",
+              "account_data_incomplete"
+            ]
+          },
+          "overseas": {
+            "bytes": null,
+            "known_bytes": 2629717279,
+            "has_data": true,
+            "source": "agent_estimate",
+            "status": "partial",
+            "is_complete_day": false,
+            "from_at": "2026-11-17T16:00:00Z",
+            "until_at": "2026-11-18T12:15:33.57349207Z",
+            "observed_from": "2026-11-17T20:27:17.837126485Z",
+            "observed_until": "2026-11-18T12:15:12.013828486Z",
+            "reasons": [
+              "account_aggregation",
+              "account_data_incomplete"
+            ]
+          }
+        }
+      }
+    ],
+    "updated_at": "2026-11-18T12:15:15.308667177Z",
+    "source_status": "partial",
+    "official_points": {
+      "mainland": [],
+      "overseas": [
+        {
+          "at": "2026-11-18T12:12:21.770862107Z",
+          "date": "2026-11-18",
+          "bytes": 124832166570
+        }
+      ]
+    }
+  },
+  "history_days_count": 18,
+  "quotas": [
+    {
+      "aggregation": {
+        "account_count": 2,
+        "official_accounts": 1,
+        "estimated_accounts": 0,
+        "forecast_accounts": 0,
+        "known_official_bytes": 1745430210,
+        "known_estimated_bytes": 0,
+        "known_forecast_bytes": 0,
+        "forecast_sample_days_min": 0,
+        "forecast_sample_days_max": 0,
+        "forecast_exceeding_accounts": 0
+      },
+      "reconciliation": null,
+      "estimation": {
+        "mode": "unverified",
+        "status": "incomplete",
+        "basis_id": "",
+        "from_at": null,
+        "to_at": "2026-11-18T12:15:33.57349207Z",
+        "calculated_at": "2026-11-18T12:15:33.57349207Z",
+        "lag_window_seconds": 0,
+        "increment_bytes": null,
+        "known_increment_bytes": 0,
+        "worst_case_bytes": null,
+        "estimated_bytes": null,
+        "current_rate_bytes_per_second": null,
+        "qualified_for_execution": false,
+        "reasons": [
+          "account_aggregation",
+          "independent_account_windows",
+          "account_data_incomplete"
+        ]
+      },
+      "account_id": "all",
+      "scope": "mainland",
+      "cycle_start": "2026-10-31T16:00:00Z",
+      "cycle_end": "2026-11-30T16:00:00Z",
+      "quota_bytes": 42949672960,
+      "official_bytes": null,
+      "official_as_of": null,
+      "official_status": "unavailable",
+      "official_quality": "inferred",
+      "fetched_at": null,
+      "realtime_increment_bytes": null,
+      "worst_case_bytes": null,
+      "estimated_bytes": null,
+      "effective_bytes": null,
+      "thresholds_percent": [],
+      "forecast": null,
+      "forecast_status": "insufficient_data",
+      "updated_at": "2026-11-18T12:12:00.191446133Z"
+    },
+    {
+      "aggregation": {
+        "account_count": 2,
+        "official_accounts": 2,
+        "estimated_accounts": 1,
+        "forecast_accounts": 0,
+        "known_official_bytes": 124832166570,
+        "known_estimated_bytes": 126296336483,
+        "known_forecast_bytes": 0,
+        "forecast_sample_days_min": 0,
+        "forecast_sample_days_max": 0,
+        "forecast_exceeding_accounts": 0
+      },
+      "reconciliation": null,
+      "estimation": {
+        "mode": "unverified",
+        "status": "incomplete",
+        "basis_id": "",
+        "from_at": null,
+        "to_at": "2026-11-18T12:15:33.57349207Z",
+        "calculated_at": "2026-11-18T12:15:33.57349207Z",
+        "lag_window_seconds": 0,
+        "increment_bytes": null,
+        "known_increment_bytes": 1464169913,
+        "worst_case_bytes": null,
+        "estimated_bytes": null,
+        "current_rate_bytes_per_second": null,
+        "qualified_for_execution": false,
+        "reasons": [
+          "account_aggregation",
+          "independent_account_windows",
+          "account_data_incomplete"
+        ]
+      },
+      "account_id": "all",
+      "scope": "overseas",
+      "cycle_start": "2026-10-31T16:00:00Z",
+      "cycle_end": "2026-11-30T16:00:00Z",
+      "quota_bytes": 429496729600,
+      "official_bytes": 124832166570,
+      "official_as_of": null,
+      "official_status": "cutoff_unknown",
+      "official_quality": "inferred",
+      "fetched_at": "2026-11-18T12:12:00.191446133Z",
+      "realtime_increment_bytes": null,
+      "worst_case_bytes": null,
+      "estimated_bytes": null,
+      "effective_bytes": null,
+      "thresholds_percent": [],
+      "forecast": null,
+      "forecast_status": "insufficient_data",
+      "updated_at": "2026-11-18T12:12:00.191446133Z"
+    }
+  ],
+  "deployment": {
+    "backend_commit": "dd24027",
+    "frontend_commit": "3cf68af",
+    "version": "0.1.0-trial.20261118.5",
+    "healthz": 200,
+    "readyz": 200,
+    "power_enabled": false,
+    "release_enabled": false,
+    "power_sends": 0,
+    "release_sends": 0,
+    "automatic_actions": 0,
+    "active_agents": 2
+  }
+}

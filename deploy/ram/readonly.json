@@ -1,0 +1,27 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeInstances",
+        "ecs:DescribeDisks",
+        "ecs:DescribeNetworkInterfaces",
+        "ecs:DescribeInstanceAutoRenewAttribute",
+        "ecs:DescribeInstanceHistoryEvents",
+        "vpc:DescribeEipAddresses",
+        "vpc:DescribeCommonBandwidthPackages",
+        "swas-open:ListInstances",
+        "swas-open:ListInstancesTrafficPackages",
+        "swas-open:DescribeMonitorData",
+        "cms:QueryMetricList",
+        "cms:DescribeSystemEventAttribute",
+        "bss:DescribeAcccount",
+        "bss:DescribeBillList",
+        "bss:DescribeInstances",
+        "bssapi:DescribeInstanceBill"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

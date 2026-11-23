@@ -1,8 +1,10 @@
 # M0 验证与工程搭建
 
-日期：2026-11-11。基准 PRD v0.5、WORK_SPLIT。工作分支 `be/m0-foundation`；未提交、未推送、未合并。初始搭建之后，已完成首轮真实账号只读查询和机器只读检查，未执行云资源写操作。用户已允许生成 go.sum，以及构建时将前端产物复制到 internal 后嵌入。
+**当前状态入口：[后端实现与验收台账](backend-status.md)。** M1 整体验收尚未通过；不要把下文的 M0 初始范围当作当前功能清单。
 
-后续工具已补齐：`hm-server m0 import/set-regions/plan/query`，见[凭据导入与只读查询](credentials-and-queries.md)。账号文件 AES-256-GCM 加密、主密钥独立保存。最新真实环境结果见[首轮实测](live-verification-2026-11-11.md)，下表已同步。
+初始记录日期：2026-11-11，状态入口更新于 2026-11-12。基准 PRD v0.5、WORK_SPLIT。工作分支 `be/m0-foundation`；各阶段已按用户授权提交，未推送、未合并。初始搭建之后，已完成首轮真实账号只读查询和机器只读检查，未执行云资源写操作。用户已允许生成 go.sum，以及构建时将前端产物复制到 internal 后嵌入。
+
+后续工具已补齐：`hm-server m0 import/set-regions/plan/query`，见[凭据导入与只读查询](credentials-and-queries.md)。账号文件 AES-256-GCM 加密、主密钥独立保存。首轮真实环境结果见[首轮实测](live-verification-2026-11-11.md)，下表已同步。
 
 ## 验证状态
 
@@ -20,7 +22,7 @@
 
 每项记录均包含方法、实际结果、结论、PRD 修订建议与所需条件。PRD 原文未修改。V2/V4 的“与 PRD 不符”不表示已完成真实账号验收；表内同时说明已确认的文档部分与未验证部分。
 
-## 本轮实现
+## 初始 M0 实现（历史范围）
 
 - 两个 Go 程序、配置（JSON + HM_ 环境变量 + CLI 覆盖）、JSON 日志、SQLite WAL 与嵌入式事务迁移、AES-256-GCM 辅助和主密钥校验。
 - hm-server 的 serve、run-once、migrate、version、healthcheck、reset-password；run-once 只做 M0 本地检查，明确输出云查询/云写入为零。密码重置更新已存在管理员并撤销会话，不替代正式首次设置。
@@ -48,7 +50,7 @@ sh deploy/dev.sh api
 ./deploy/bin/hm-server run-once --dev --data-dir /tmp/harbormaster-separated-dev
 ```
 
-开发 API 只供只读页面和会话联调，写入口暂返回 `501 not_implemented`，不会接受并保存真实 AccessKey/Telegram Token。demo 的业务数据是合成快照，agent 上报落库的验证与面板 fixture 分开，尚无真实计费估算。正式认证、初始设置、云采集、Telegram 发送、任务引擎、自动化和真实 agent 采集均未交付。
+开发 API 只供只读页面和会话联调，写入口暂返回 `501 not_implemented`，不会接受并保存真实 AccessKey/Telegram Token。demo 的业务数据是合成快照，agent 上报落库的验证与面板 fixture 分开，尚无真实计费估算。2026-11-12 已补齐[生产认证](production-auth.md)、[生产账号、任务及只读资源发现](production-discovery.md)和[CDT 累计记录与页面](production-cdt.md)。生产账号 API 可加密保存真实 AccessKey；CDT 暂按字节展示且明确标为待核实，尚无跨源实时估算。生产 agent 采集、费用、续费、API Key 管理和本地告警记录等后续进展见状态台账；真实 agent 安装验收、Telegram 发送和自动化尚未完成。
 
 reset-password 从 stdin 读取新密码，12–1024 字节，不支持明文命令行参数；开发库已有示例管理员，生产空库返回 administrator_not_initialized。生产模式须先通过仓库外的环境/密钥文件提供 HM_MASTER_KEY，配置示例见 `deploy/config.example.json`。数据库模式互斥，不把开发库改为生产库。
 
@@ -60,10 +62,12 @@ reset-password 从 stdin 读取新密码，12–1024 字节，不支持明文命
 
 - [agent 协议](agent-protocol.md)、[数据库](database.md)、[契约评审 B1–B21](contract-review.md)。契约仍是草稿；前端现已重新生成类型并处理 null 与 cutoff_unknown。
 - 两账号凭据已导入并通过实测；已使用本机已有 SSH 配置完成 sin-pro/sha-pro 只读检查，无需重新提供凭据。下一步仍需确定 V7 计数安装与 24 小时观察窗口。
-- 用户在 M1 前确认：是否永久单管理员；删除账号是否删除历史；“最近峰值”是否继续称为“最坏上界”；无官方 cutoff 时的对齐策略。轻量预绑定方案已获同意，尚未实现注册。
+- 用户已确认单管理员；账号停用保留历史；无官方 cutoff 时估算保持待确认，暂不启用依赖精确对齐的保护。“最近峰值”是否继续称为“最坏上界”仍待后续保护阶段确认。轻量预绑定服务端注册已实现，尚未在 sha-pro 安装 agent。
 - 前端：确认上述契约修改，补齐 Telegram 文案模板；多出口实例表示与代理认证字段更新语义需在冻结前解决。
 - V9 等真实写操作需要独立的具体授权；当前只读凭据/SSH 的提供不构成开关机授权。
 
 Go 驱动、JSON 配置、标准库命令行、单写连接、AES 密文版本、内部协议字段为后端工程选择；1 小时会话与示例初始密码只用于 M0 本机 demo，不代表替用户决定生产产品规则。
 
 实际命令与输出见 [validation.txt](validation.txt)，运行检查范围见 [运行验证](validation.md)。
+
+2026-11-12 后续：已实现 [agent 接收端](production-agent-ingestion.md)和 [Linux 客户端](production-agent-client.md)，包括注册/撤销、加密缓存与实际 nftables 采集代码；目前只完成本机测试及交叉编译，真实主机安装和 V7 验收仍未执行。

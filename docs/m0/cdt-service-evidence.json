@@ -1,0 +1,189 @@
+{
+  "checked_on": "2026-11-13",
+  "method": "fixed cdt-service signed read probe; official ActionTrail read catalog, private API parameters confirmed by response",
+  "cloud_writes": 0,
+  "production_collector_changed": false,
+  "unit_statement_present": false,
+  "official_cutoff_present": false,
+  "scopes": [
+    {
+      "action": "GetCdtInternetServiceStatus",
+      "region": "cn-hongkong",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-13T06:31:01Z",
+      "account_alias": "jasperxzy",
+      "response_fields": [
+        "Enabled"
+      ],
+      "enabled": true
+    },
+    {
+      "action": "ListCdtTrafficTiers",
+      "region": "cn-hongkong",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-13T06:31:01Z",
+      "account_alias": "jasperxzy",
+      "business_region": "cn-shanghai",
+      "response_fields": [
+        "TrafficTiers"
+      ],
+      "tier_count": 10
+    },
+    {
+      "action": "ListSwitchedCdtProducts",
+      "region": "cn-hongkong",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-13T06:31:01Z",
+      "account_alias": "jasperxzy",
+      "business_region": "cn-shanghai",
+      "response_fields": [
+        "CdtProducts"
+      ],
+      "product_count": 0
+    },
+    {
+      "action": "ListCdtTrafficTiers",
+      "region": "cn-hongkong",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-13T06:31:02Z",
+      "account_alias": "jasperxzy",
+      "business_region": "ap-southeast-1",
+      "response_fields": [
+        "TrafficTiers"
+      ],
+      "tier_count": 10
+    },
+    {
+      "action": "ListSwitchedCdtProducts",
+      "region": "cn-hongkong",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-13T06:31:02Z",
+      "account_alias": "jasperxzy",
+      "business_region": "ap-southeast-1",
+      "response_fields": [
+        "CdtProducts"
+      ],
+      "product_count": 0
+    },
+    {
+      "action": "ListCdtTrafficTiers",
+      "region": "cn-hongkong",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-13T06:31:02Z",
+      "account_alias": "jasperxzy",
+      "business_region": "cn-hongkong",
+      "response_fields": [
+        "TrafficTiers"
+      ],
+      "tier_count": 10
+    },
+    {
+      "action": "ListSwitchedCdtProducts",
+      "region": "cn-hongkong",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-13T06:31:03Z",
+      "account_alias": "jasperxzy",
+      "business_region": "cn-hongkong",
+      "response_fields": [
+        "CdtProducts"
+      ],
+      "product_count": 0
+    },
+    {
+      "action": "GetCdtInternetServiceStatus",
+      "region": "cn-hongkong",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-13T06:31:01Z",
+      "account_alias": "winnemjw",
+      "response_fields": [
+        "Enabled"
+      ],
+      "enabled": true
+    },
+    {
+      "action": "ListCdtTrafficTiers",
+      "region": "cn-hongkong",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-13T06:31:01Z",
+      "account_alias": "winnemjw",
+      "business_region": "cn-shanghai",
+      "response_fields": [
+        "TrafficTiers"
+      ],
+      "tier_count": 10
+    },
+    {
+      "action": "ListSwitchedCdtProducts",
+      "region": "cn-hongkong",
+      "status": "passed",
+      "complete": true,
+      "fetched_at": "2026-11-13T06:31:01Z",
+      "account_alias": "winnemjw",
+      "business_region": "cn-shanghai",
+      "response_fields": [
+        "CdtProducts"
+      ],
+      "product_count": 0
+    }
+  ],
+  "common_tiers": [
+    {
+      "Tier": 1,
+      "LowestTraffic": 0,
+      "HighestTraffic": 10995116277760
+    },
+    {
+      "Tier": 2,
+      "LowestTraffic": 10995116277760,
+      "HighestTraffic": 54975581388800
+    },
+    {
+      "Tier": 3,
+      "LowestTraffic": 54975581388800,
+      "HighestTraffic": 164926744166400
+    },
+    {
+      "Tier": 4,
+      "LowestTraffic": 164926744166400,
+      "HighestTraffic": 329853488332800
+    },
+    {
+      "Tier": 5,
+      "LowestTraffic": 329853488332800,
+      "HighestTraffic": 549755813888000
+    },
+    {
+      "Tier": 6,
+      "LowestTraffic": 549755813888000,
+      "HighestTraffic": 1125899906842624
+    },
+    {
+      "Tier": 7,
+      "LowestTraffic": 1125899906842624,
+      "HighestTraffic": 5629499534213120
+    },
+    {
+      "Tier": 8,
+      "LowestTraffic": 5629499534213120,
+      "HighestTraffic": 11258999068426240
+    },
+    {
+      "Tier": 9,
+      "LowestTraffic": 11258999068426240,
+      "HighestTraffic": 22517998136852480
+    },
+    {
+      "Tier": 10,
+      "LowestTraffic": 22517998136852480
+    }
+  ]
+}

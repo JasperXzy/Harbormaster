@@ -1,0 +1,81 @@
+2026-11-12 Asia/Singapore. Account management, durable jobs, read-only discovery.
+
+$ go build ./...
+(no output; exit 0)
+$ go test -race ./...
+ok github.com/JasperXzy/harbormaster/internal/api 22.037s
+ok github.com/JasperXzy/harbormaster/internal/cli 2.865s
+ok github.com/JasperXzy/harbormaster/internal/cloud/aliyun 1.750s
+ok github.com/JasperXzy/harbormaster/internal/collect 1.984s
+ok github.com/JasperXzy/harbormaster/internal/config 1.699s
+ok github.com/JasperXzy/harbormaster/internal/devmode 5.712s
+ok github.com/JasperXzy/harbormaster/internal/logging (cached)
+ok github.com/JasperXzy/harbormaster/internal/m0 1.810s
+ok github.com/JasperXzy/harbormaster/internal/security (cached)
+ok github.com/JasperXzy/harbormaster/internal/store 4.900s
+ok github.com/JasperXzy/harbormaster/internal/ui/prepare (cached)
+Other packages reported [no test files]. Exit 0.
+$ go vet ./...
+(no output; exit 0)
+$ git diff --check
+(no output; exit 0)
+$ gofmt -l cmd internal
+(no output; exit 0)
+
+In web/:
+$ npm run gen:api
+openapi-typescript 7.13.0 generated src/api/schema.gen.ts
+$ npm run lint:api
+../docs/api/openapi.yaml: validated in 17ms
+Your API description is valid.
+$ npm test
+tests 3; pass 3; fail 0
+$ npm run build
+tsc --noEmit && vite build
+44 modules transformed; built in 77ms
+dist/index.html 0.80 kB
+dist/assets/index-DnQxLSy5.css 20.18 kB
+dist/assets/index-BF5Gd28M.js 327.17 kB
+$ npm run build:mock
+47 modules transformed; built in 69ms
+dist-mock/index.html 0.80 kB
+dist-mock/assets/index-DnQxLSy5.css 20.18 kB
+dist-mock/assets/ScenePanel-MmM_ODi8.js 0.49 kB
+dist-mock/assets/server-CD7iZCLg.js 23.25 kB
+dist-mock/assets/index-CNM-ISH8.js 328.99 kB
+All frontend commands exited 0.
+
+Live read-only acceptance (key contents never printed):
+$ sh deploy/build-backend.sh
+(exit 0)
+$ HM_MASTER_KEY_FILE=<external destination key file> ./deploy/bin/hm-server import-accounts --data-dir <isolated external data directory>
+{"time":"2026-11-11T17:07:12.729Z","level":"INFO","msg":"account_import_complete","imported":2,"skipped_existing_names":0,"cloud_queries":0,"cloud_writes":0}
+$ HM_MASTER_KEY_FILE=<external destination key file> ./deploy/bin/hm-server run-once --data-dir <isolated external data directory>
+{"time":"2026-11-11T17:08:27.857Z","level":"INFO","msg":"run_once_complete","cloud_writes":0}
+$ HM_TEST_COLLECTED_DATA_DIR=<isolated external data directory> go test ./internal/collect -run TestCollectedLiveInventory -count=1 -v
+account=jasperxzy enabled=true sync=ok instances=3 error=
+ecs_read=passed swas_read=passed cdt_read=passed cms_read=passed vpc_read=passed bss_read=passed
+instance_power=not_verified eip_manage=not_verified
+instance=sg-server-nano kind=ecs region=ap-southeast-1 billing=cbwp_dominant_traffic protection=unprotected
+instance=hk-server-nano kind=ecs region=cn-hongkong billing=cbwp_dominant_traffic protection=unprotected
+instance=Ali_ShangHai kind=ecs region=cn-shanghai billing=ecs_fixed_bandwidth protection=not_applicable
+account=winnemjw enabled=true sync=ok instances=1 error=
+ecs_read=passed swas_read=passed cdt_read=passed cms_read=not_verified vpc_read=passed bss_read=passed
+instance_power=not_verified eip_manage=not_verified
+instance=sha-pro kind=swas region=cn-shanghai billing=swas_no_traffic_package protection=not_applicable
+--- PASS: TestCollectedLiveInventory (0.00s)
+PASS
+ok github.com/JasperXzy/harbormaster/internal/collect 0.169s
+
+Local acceptance data directory:
+/Users/jasperxzy/.local/share/harbormaster-m0/production-discovery-4z0pnqrt
+Destination key remains outside that directory, under ~/.config/harbormaster/keys/.
+No source or destination secret, plaintext credential file, or raw credential
+value was written to this repository, output, or commit.
+
+Earlier validation observations:
+- First import failed because the source-key loader inherited the destination
+  environment key. Fixed and covered by TestPromotionKeepsSourceAndDestinationKeysSeparate.
+- A snapshot check run before run-once had finished correctly saw never_synced;
+  the acceptance check above was rerun after the collector exited and passed.
+- No cloud write, cloud assistant, real agent installation or public deployment.

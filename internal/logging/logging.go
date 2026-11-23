@@ -13,7 +13,7 @@ func New(w io.Writer, level string) *slog.Logger {
 	_ = l.UnmarshalText([]byte(level))
 	return slog.New(slog.NewJSONHandler(w, &slog.HandlerOptions{Level: l, ReplaceAttr: func(_ []string, a slog.Attr) slog.Attr {
 		k := strings.ToLower(a.Key)
-		for _, s := range []string{"secret", "token", "password", "authorization", "cookie", "master_key", "access_key", "accesskey"} {
+		for _, s := range []string{"secret", "token", "password", "authorization", "cookie", "master_key", "access_key", "accesskey", "api_key"} {
 			if strings.Contains(k, s) {
 				return slog.String(a.Key, "[redacted]")
 			}
