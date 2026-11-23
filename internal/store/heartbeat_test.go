@@ -14,11 +14,7 @@ import (
 
 func heartbeatStore(t *testing.T) (*Store, *security.Box, model.HeartbeatSettings) {
 	t.Helper()
-	s, err := Open(context.Background(), t.TempDir(), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
+	s := openSeededTestStore(t)
 	box, _ := security.NewBox(bytes.Repeat([]byte{5}, 32))
 	cipher, err := box.Encrypt([]byte("https://monitor.example/private-test-token"), model.HeartbeatCredentialOwner)
 	if err != nil {

@@ -13,12 +13,7 @@ import (
 
 func notificationStore(t *testing.T) *Store {
 	t.Helper()
-	s, err := Open(context.Background(), t.TempDir(), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { s.Close() })
-	return s
+	return openSeededTestStore(t)
 }
 func channelFixture(t *testing.T, s *Store, revision int64, now time.Time) {
 	t.Helper()

@@ -10,7 +10,10 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -22,13 +25,56 @@ import (
 const testSetupToken = "test-bootstrap-token-not-a-real-secret-0001"
 const testPassword = "test-password-not-a-real-secret"
 
-func testPanel(t *testing.T) *productionPanel {
+var (
+	seededPanelOnce sync.Once
+	seededPanelRaw  []byte
+	seededPanelErr  error
+)
+
+func openSeededAPIStore(t *testing.T) *store.Store {
 	t.Helper()
-	s, err := store.Open(context.Background(), t.TempDir(), false)
+	seededPanelOnce.Do(func() {
+		tmp, err := os.MkdirTemp("", "hm-api-seed-*")
+		if err != nil {
+			seededPanelErr = err
+			return
+		}
+		defer os.RemoveAll(tmp)
+		s, err := store.Open(context.Background(), tmp, false)
+		if err != nil {
+			seededPanelErr = err
+			return
+		}
+		var mode string
+		if err := s.DB.QueryRow("PRAGMA journal_mode=DELETE").Scan(&mode); err != nil {
+			_ = s.Close()
+			seededPanelErr = err
+			return
+		}
+		if err := s.Close(); err != nil {
+			seededPanelErr = err
+			return
+		}
+		seededPanelRaw, seededPanelErr = os.ReadFile(filepath.Join(tmp, "harbormaster.db"))
+	})
+	if seededPanelErr != nil {
+		t.Fatal(seededPanelErr)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "harbormaster.db"), seededPanelRaw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := store.Open(context.Background(), dir, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
+	return s
+}
+
+func testPanel(t *testing.T) *productionPanel {
+	t.Helper()
+	s := openSeededAPIStore(t)
 	p := NewProductionPanel(s, config.Config{PublicURL: "https://panel.example", Timezone: "Asia/Shanghai", SessionTTLSeconds: 43200}, nil).(*productionPanel)
 	if err := s.PrepareSetup(context.Background(), []byte(testSetupToken), p.now()); err != nil {
 		t.Fatal(err)

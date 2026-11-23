@@ -3,20 +3,67 @@ package store
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/JasperXzy/harbormaster/internal/agentproto"
 )
 
-func agentStore(t *testing.T) *Store {
+var (
+	seededDBOnce sync.Once
+	seededDBRaw  []byte
+	seededDBErr  error
+)
+
+func openSeededTestStore(t *testing.T) *Store {
 	t.Helper()
-	s, err := Open(context.Background(), t.TempDir(), false)
+	seededDBOnce.Do(func() {
+		tmp, err := os.MkdirTemp("", "hm-store-seed-*")
+		if err != nil {
+			seededDBErr = err
+			return
+		}
+		defer os.RemoveAll(tmp)
+		s, err := Open(context.Background(), tmp, false)
+		if err != nil {
+			seededDBErr = err
+			return
+		}
+		var mode string
+		if err := s.DB.QueryRow("PRAGMA journal_mode=DELETE").Scan(&mode); err != nil {
+			_ = s.Close()
+			seededDBErr = err
+			return
+		}
+		if err := s.Close(); err != nil {
+			seededDBErr = err
+			return
+		}
+		seededDBRaw, seededDBErr = os.ReadFile(filepath.Join(tmp, "harbormaster.db"))
+	})
+	if seededDBErr != nil {
+		t.Fatal(seededDBErr)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "harbormaster.db"), seededDBRaw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(context.Background(), dir, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
+	return s
+}
+
+func agentStore(t *testing.T) *Store {
+	t.Helper()
+	s := openSeededTestStore(t)
+	var err error
 	for _, query := range []string{
 		"INSERT INTO account VALUES('a','account','china','now')",
 		"INSERT INTO account_settings(account_id,config_json,enabled) VALUES('a','{}',1)",
