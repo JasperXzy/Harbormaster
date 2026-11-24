@@ -378,6 +378,15 @@ func calculateEstimateAt(ctx context.Context, tx *sql.Tx, a model.Account, scope
 						return v, e
 					}
 				}
+			} else if m.Offline && m.Status == "stopped" {
+				// Cloud discovery confirmed the instance is powered off; it emits
+				// zero public traffic after its final agent sample.
+				if m.At.Before(v.To) {
+					zero := metering.Rate{}
+					if e = acc.Add(id, metering.Interval{Start: m.At, End: v.To, Projection: &zero}); e != nil {
+						return v, e
+					}
+				}
 			} else if last != nil && !last.Gap && last.End.Equal(m.At) {
 				duration := last.DurationMS
 				if duration <= 0 {

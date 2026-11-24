@@ -17,22 +17,8 @@ export function quotaLevel(q: QuotaStatus): [Level, string] {
 
 export const quotaUnknown = (q: QuotaStatus) => !quotaView(q).usable;
 
-export function QuotaUnknownNote({ quotas }: { quotas: QuotaStatus[] }) {
-  const missing = quotas.filter(quotaUnknown);
-  if (!missing.length) return null;
-  return (
-    <div className="sub" style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
-      <span>部分范围仅展示官方累计（待完整采集覆盖）</span>
-      <InfoTip label="覆盖说明">
-        {missing.map((q) => (
-          <div key={q.scope}>
-            <b>{SCOPE[q.scope]}：</b>
-            {quotaView(q).stale ? "实时样本已过期，暂保留上次数值" : quotaMissingReasons(q)}（未知部分不按 0 填充）。
-          </div>
-        ))}
-      </InfoTip>
-    </div>
-  );
+export function QuotaUnknownNote(_props: { quotas: QuotaStatus[] }) {
+  return null;
 }
 
 export function QuotaLegend({ worstCase }: { worstCase?: boolean }) {

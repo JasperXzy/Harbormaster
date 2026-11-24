@@ -286,7 +286,7 @@ button, input, select, textarea { font: inherit; }
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .card-head-titles { display: grid; gap: 2px; min-width: 0; }
 
-.kpi-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
 .kpi-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -551,7 +551,7 @@ input[aria-invalid="true"] { border-color: var(--critical); }
 
 /* ---------- Lists, Accordions & Summary Cards ---------- */
 .alist { display: grid; }
-.aitem { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: start; padding: 11px 2px; border-bottom: 1px solid var(--border); }
+.aitem { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 10px 2px; border-bottom: 1px solid var(--border); }
 .aitem:last-child { border-bottom: 0; }
 .aitem .t { font-weight: 600; font-size: var(--fs-md); }
 .aitem .d { color: var(--text-2); font-size: var(--fs-sm); margin-top: 2px; overflow-wrap: anywhere; }

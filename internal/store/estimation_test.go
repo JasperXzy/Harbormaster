@@ -325,3 +325,27 @@ func TestManualCDTConfirmationClearsUnknownAndRespectsExclusion(t *testing.T) {
 		t.Fatalf("expected excluded subject increment 0, got %+v", v)
 	}
 }
+
+func TestStoppedInstanceCoversWindowWithZeroTraffic(t *testing.T) {
+	s, _, _, base := estimateFixture(t)
+	ctx := context.Background()
+	// Mark instance stopped after its last sample at base+120s, and advance clock 2 hours later
+	// with a fresh official observation so the entire 1h lag window falls after the stop time.
+	later := base.Add(2 * time.Hour)
+	if _, err := s.DB.Exec("UPDATE instance SET status='stopped' WHERE id='ecs'"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.Exec("INSERT INTO cdt_observation(account_id,credential_version,job_id,attempt,fetched_at,mainland_bytes,details_json) SELECT account_id,credential_version,job_id,2,?,5000,'[]' FROM cdt_observation LIMIT 1", timestamp(later)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DB.Exec("UPDATE metering_topology SET last_seen=?", timestamp(later)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RefreshEstimates(ctx, time.UTC, later); err != nil {
+		t.Fatal(err)
+	}
+	v := estimateRow(t, s, later)
+	if v.Status != "ready" || v.Increment == nil || *v.Increment != 0 || v.Estimated == nil || *v.Estimated != 5000 || v.CurrentRate == nil || *v.CurrentRate != 0 {
+		t.Fatalf("expected stopped instance to produce ready 0-increment estimate, got %+v", v)
+	}
+}

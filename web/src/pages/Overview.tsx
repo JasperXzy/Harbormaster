@@ -28,14 +28,11 @@ const worse = (a: Level, b: Level) => (ORDER.indexOf(a) >= ORDER.indexOf(b) ? a 
 export function NotificationItem({ n }: { n: Notification }) {
   const [level, text] = SEVERITY[n.severity];
   return (
-    <div className="aitem">
+    <div className="aitem" title={n.body || undefined}>
       <Badge level={n.kind === "recovery" ? "good" : level}>
         {n.kind === "recovery" ? "恢复" : n.kind === "test" ? "测试" : text}
       </Badge>
-      <div>
-        <div className="t">{n.title}</div>
-        <div className="d">{n.body}</div>
-      </div>
+      <div className="t">{n.title}</div>
       <div className="when">{stamp(n.created_at)}</div>
     </div>
   );
@@ -193,52 +190,56 @@ export function Overview() {
         </div>
       )}
 
-      {/* 4 个高对比 Bento 核心指标卡 */}
+      {/* 核心指标卡：自动隐藏未启用的国内/海外流量池，不展示无意义的空卡片与多余小字 */}
       <div className="kpi-grid">
         <KpiCard
           label="纳管阿里云账号"
           value={accs.filter((a) => a.enabled).length}
           unit={accs.length > accs.filter((a) => a.enabled).length ? `/ ${accs.length} 个` : "个"}
           icon={<ShieldIcon size={16} />}
-          foot={failing.length ? <span style={{ color: "var(--critical)" }}>{failing.length} 个同步异常</span> : "全部凭证连接正常"}
+          foot={failing.length ? <span style={{ color: "var(--critical)" }}>{failing.length} 个同步异常</span> : undefined}
         />
         <KpiCard
           label="运行中实例"
           value={running.length}
           unit={`/ ${insts.length} 台`}
           icon={<ServerIcon size={16} />}
-          foot={`在线 Agent ${insts.filter((i) => i.agent.status === "online").length} 台 · 已停止 ${insts.length - running.length} 台`}
-        />
-        <KpiCard
-          label="海外免费流量池剩余"
-          value={po.left === null ? "—" : gb(po.left).replace(" GB", "")}
-          unit={po.left === null ? undefined : "GB"}
-          icon={<GlobeIcon size={16} />}
           foot={
-            po.disabledAll
-              ? "已关闭海外流量记录"
-              : po.left === null
-                ? "按账号独立展示（见下方卡片）"
-                : po.over
-                  ? <span style={{ color: "var(--critical)" }}>已超出 {gb(po.over)}</span>
-                  : `总额度 ${gb(po.quota, 0)}${po.best ? ` · 最充裕：${po.best}` : ""}`
+            insts.length - running.length > 0
+              ? `在线 Agent ${insts.filter((i) => i.agent.status === "online").length} 台 · 已停止 ${insts.length - running.length} 台`
+              : `在线 Agent ${insts.filter((i) => i.agent.status === "online").length} 台`
           }
         />
-        <KpiCard
-          label="国内免费流量池剩余"
-          value={pm.left === null ? "—" : gb(pm.left).replace(" GB", "")}
-          unit={pm.left === null ? undefined : "GB"}
-          icon={<ActivityIcon size={16} />}
-          foot={
-            pm.disabledAll
-              ? "已关闭国内流量记录"
-              : pm.left === null
-                ? "按账号独立展示（见下方卡片）"
-                : pm.over
-                  ? <span style={{ color: "var(--critical)" }}>已超出 {gb(pm.over)}</span>
-                  : `总额度 ${gb(pm.quota, 0)}${pm.best ? ` · 最充裕：${pm.best}` : ""}`
-          }
-        />
+        {!po.disabledAll && (
+          <KpiCard
+            label="海外免费流量池剩余"
+            value={po.left === null ? "—" : gb(po.left).replace(" GB", "")}
+            unit={po.left === null ? undefined : "GB"}
+            icon={<GlobeIcon size={16} />}
+            foot={
+              po.over
+                ? <span style={{ color: "var(--critical)" }}>已超出 {gb(po.over)}</span>
+                : po.left !== null
+                  ? `总额度 ${gb(po.quota, 0)}`
+                  : undefined
+            }
+          />
+        )}
+        {!pm.disabledAll && (
+          <KpiCard
+            label="国内免费流量池剩余"
+            value={pm.left === null ? "—" : gb(pm.left).replace(" GB", "")}
+            unit={pm.left === null ? undefined : "GB"}
+            icon={<ActivityIcon size={16} />}
+            foot={
+              pm.over
+                ? <span style={{ color: "var(--critical)" }}>已超出 {gb(pm.over)}</span>
+                : pm.left !== null
+                  ? `总额度 ${gb(pm.quota, 0)}`
+                  : undefined
+            }
+          />
+        )}
       </div>
 
       {/* 各账号配额卡片 */}

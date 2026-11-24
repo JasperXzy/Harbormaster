@@ -149,14 +149,13 @@ export function InfoTip({ children, label = "说明" }: { children: ReactNode; l
   );
 }
 
-export function Card({ title, sub, right, children, className = "" }: { title?: ReactNode; sub?: ReactNode; right?: ReactNode; children: ReactNode; className?: string }) {
+export function Card({ title, right, children, className = "" }: { title?: ReactNode; sub?: ReactNode; right?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={`card ${className}`}>
       {(title || right) && (
         <div className="card-head">
           <div className="card-head-titles">
             {title && <h2>{title}</h2>}
-            {sub && <span className="sub">{sub}</span>}
           </div>
           <div className="spacer" />
           {right}

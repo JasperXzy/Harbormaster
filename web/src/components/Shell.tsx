@@ -74,7 +74,6 @@ export const NAV: NavItem[] = [
 
 export function Shell({
   title,
-  sub,
   version,
   children,
   dataMode,
@@ -198,7 +197,6 @@ export function Shell({
         <header className="top">
           <div className="top-title-group">
             <h1>{title}</h1>
-            {sub && <span className="top-sub hide-sm">{sub}</span>}
           </div>
           {dataMode === "demo" && <span className="chip">演示数据</span>}
           <div className="spacer" />
