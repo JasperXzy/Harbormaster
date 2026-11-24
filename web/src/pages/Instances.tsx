@@ -6,7 +6,7 @@ import { AGENT, CHARGE, errorText, INSTANCE_EVENT, INSTANCE_STATUS, KIND, protec
 import type { Account, AgentInstallCommand, Instance, InstanceEvent, SystemEvent, SystemInfo } from "../api/types";
 import { LineChart } from "../components/charts/LineChart";
 import { PlusIcon, PowerIcon } from "../components/icons";
-import { Async, Badge, Banner, Card, Confirm, CopyButton, Drawer, EmptyState, ErrorState, errMsg, Fresh, InfoTip, Modal, SegToggle, Skeleton, Spinner, SubTabs, Switch, useToast } from "../components/ui";
+import { Async, Badge, Banner, Card, Confirm, CopyButton, Drawer, EmptyState, ErrorState, errMsg, Fresh, InfoTip, Modal, SegToggle, Select, Skeleton, Spinner, SubTabs, Switch, useToast } from "../components/ui";
 import { useShared } from "../lib/data";
 import { ago, duration, gb, gbValue, num, rate, stamp, time, ver, ymd } from "../lib/format";
 import { INSTANCE_SORT_OPTIONS, sortInstances, useInstanceSort, type InstanceSortKey } from "../lib/instanceSort";
@@ -16,6 +16,7 @@ import { useNow, useResource } from "../lib/useResource";
 const canInstall = (i: Instance) => i.agent.status === "not_installed";
 
 function RateCell({ i }: { i: Instance }) {
+  if (i.status === "stopped") return <span className="sub">—</span>;
   if (i.realtime) {
     return (
       <span className="num" style={{ fontSize: "var(--fs-sm)" }}>
@@ -270,49 +271,50 @@ export function Instances() {
               onChange={(e) => setQ(e.target.value)}
               aria-label="搜索实例"
             />
-            <select value={account} onChange={(e) => setAccount(e.target.value)} aria-label="按账号筛选">
-              <option value="">全部账号</option>
-              {accs.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <Select
+              value={account}
+              onChange={setAccount}
+              ariaLabel="按账号筛选"
+              options={[{ value: "", label: "全部账号" }, ...accs.map((a) => ({ value: a.id, label: a.name }))]}
+            />
             {groups.length > 0 && (
-              <select value={group} onChange={(e) => setGroup(e.target.value)} aria-label="按分组筛选">
-                <option value="">全部分组</option>
-                {groups.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </select>
+              <Select
+                value={group}
+                onChange={setGroup}
+                ariaLabel="按分组筛选"
+                options={[{ value: "", label: "全部分组" }, ...groups.map((g) => ({ value: g, label: g }))]}
+              />
             )}
             {tags.length > 0 && (
-              <select value={tag} onChange={(e) => setTag(e.target.value)} aria-label="按标签筛选">
-                <option value="">全部标签</option>
-                {tags.map((t) => (
-                  <option key={t} value={t}>#{t}</option>
-                ))}
-              </select>
+              <Select
+                value={tag}
+                onChange={setTag}
+                ariaLabel="按标签筛选"
+                options={[{ value: "", label: "全部标签" }, ...tags.map((t) => ({ value: t, label: `#${t}` }))]}
+              />
             )}
-            <label className={`check ${only ? "on" : ""}`}>
-              <input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} />
-              需关注{needsCount > 0 ? ` (${needsCount})` : ""}
-            </label>
-            <div className="inline" style={{ gap: 4 }}>
-              <select
+            <button
+              type="button"
+              className={`filter-btn ${only ? "on" : ""}`}
+              aria-pressed={only}
+              onClick={() => setOnly((v) => !v)}
+            >
+              <span>需关注</span>
+              {needsCount > 0 && <span className="filter-count">{needsCount}</span>}
+            </button>
+            <div className="control-group">
+              <Select<InstanceSortKey>
                 value={sort.key}
-                onChange={(e) => {
-                  const key = e.target.value as InstanceSortKey;
+                onChange={(key) => {
                   const defDir = INSTANCE_SORT_OPTIONS.find(([k]) => k === key)?.[2] ?? "asc";
                   updateSort(key, defDir);
                 }}
-                aria-label="排序字段"
-              >
-                {INSTANCE_SORT_OPTIONS.map(([key, label]) => (
-                  <option key={key} value={key}>按{label}排序</option>
-                ))}
-              </select>
+                ariaLabel="排序字段"
+                options={INSTANCE_SORT_OPTIONS.map(([value, label]) => ({ value, label: `按${label}排序` }))}
+              />
               <button
                 type="button"
-                className="btn sm ghost"
+                className="sort-dir-btn"
                 onClick={() => updateSort(sort.key, sort.dir === "asc" ? "desc" : "asc")}
                 title={sort.dir === "asc" ? "当前升序，点击切换为降序" : "当前降序，点击切换为升序"}
                 aria-label="切换升降序"
@@ -532,11 +534,11 @@ function EventsWorkspace({ instances, accounts }: { instances: Instance[]; accou
         </Async>
       </Card>
 
-      <Card title="阿里云计划维护与抢占回收" sub="ECS 系统维护时间窗与 Spot 回收预警">
+      <Card title="阿里云计划维护与抢占回收">
         <Async res={sysRes} lines={5}>
           {(p) =>
             !p.items.length ? (
-              <EmptyState title="近期无云端维护或回收预警">所有实例当前未收到计划维护或抢占中断事件。</EmptyState>
+              <EmptyState title="近期无云端维护或回收预警" />
             ) : (
               <div className="alist">
                 {p.items.map((ev: SystemEvent) => (
@@ -787,7 +789,6 @@ function InstanceDetailDrawer({
               <div className="rowline" style={{ paddingTop: 0 }}>
                 <div className="grow">
                   <b>临时豁免自动关机</b>
-                  <div className="sub">在豁免窗口内，即使账号触发额度保护线也跳过本实例</div>
                 </div>
                 {exemptActive ? (
                   <div className="inline">
@@ -807,7 +808,6 @@ function InstanceDetailDrawer({
                 <div className="rowline" style={{ paddingBottom: 0 }}>
                   <div className="grow">
                     <b>弹性公网 IP 与生命周期</b>
-                    <div className="sub">安全轮换受管 EIP，或在停机后释放按量 / 抢占式实例</div>
                   </div>
                   <div className="inline">
                     <button className="btn sm" onClick={() => setShowChangeEIP(true)}>更换弹性 IP</button>
@@ -1082,16 +1082,16 @@ function InstanceMetaTab({ i }: { i: Instance }) {
   return (
     <form className="card compact stack" onSubmit={submit}>
       <div>
-        <label className="lbl" htmlFor="im-group">分组（单选归类，如：出口节点、核心业务）</label>
-        <input id="im-group" type="text" value={group} onChange={(e) => setGroup(e.target.value)} maxLength={40} placeholder="留空表示不分组" />
+        <label className="lbl" htmlFor="im-group">分组</label>
+        <input id="im-group" type="text" value={group} onChange={(e) => setGroup(e.target.value)} maxLength={40} placeholder="如：出口节点、核心业务" />
       </div>
       <div>
-        <label className="lbl" htmlFor="im-tags">标签（逗号分隔，最多 10 个）</label>
-        <input id="im-tags" type="text" value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} placeholder="例如：主力, 香港, 晚高峰" />
+        <label className="lbl" htmlFor="im-tags">标签</label>
+        <input id="im-tags" type="text" value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} placeholder="逗号分隔，如：主力, 香港" />
       </div>
       <div>
         <label className="lbl" htmlFor="im-note">本地备注</label>
-        <textarea id="im-note" rows={4} value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="记录机器用途或端口说明，仅保存在本地面板数据库，不会写回阿里云。" />
+        <textarea id="im-note" rows={4} value={note} onChange={(e) => setNote(e.target.value)} maxLength={1000} placeholder="仅保存在本地面板，不会写回阿里云" />
       </div>
       <div className="inline" style={{ justifyContent: "flex-end" }}>
         <button className="btn primary" disabled={busy}>{busy && <Spinner />} 保存备注</button>
@@ -1232,10 +1232,15 @@ function ChangeEIPModal({ i, enabled, onClose, onDone }: { i: Instance; enabled:
         <div className="grid g2">
           <div>
             <label className="lbl">计费方式</label>
-            <select value={chargeType} onChange={(e) => setChargeType(e.target.value as "PayByTraffic" | "PayByBandwidth")}>
-              <option value="PayByTraffic">按使用流量（PayByTraffic）</option>
-              <option value="PayByBandwidth">按固定带宽（PayByBandwidth）</option>
-            </select>
+            <Select<"PayByTraffic" | "PayByBandwidth">
+              value={chargeType}
+              onChange={setChargeType}
+              ariaLabel="计费方式"
+              options={[
+                { value: "PayByTraffic", label: "按使用流量（PayByTraffic）" },
+                { value: "PayByBandwidth", label: "按固定带宽（PayByBandwidth）" },
+              ]}
+            />
           </div>
           <div>
             <label className="lbl">峰值带宽（Mbps）</label>
@@ -1423,27 +1428,26 @@ function CreateECSModal({
         <div className="grid g2">
           <div>
             <label className="lbl">云账号</label>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-              {enabledAccs.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <Select
+              value={accountId}
+              onChange={setAccountId}
+              ariaLabel="云账号"
+              options={enabledAccs.map((a) => ({ value: a.id, label: a.name }))}
+            />
           </div>
           <div>
             <label className="lbl">地域</label>
-            <select
+            <Select
               value={regionId}
-              onChange={(e) => {
-                setRegionId(e.target.value);
+              onChange={(val) => {
+                setRegionId(val);
                 setZoneId("");
                 setInstanceType("");
                 setImageId("");
               }}
-            >
-              {(curAcc?.region_ids ?? []).map((r) => (
-                <option key={r} value={r}>{regionName(r)} ({r})</option>
-              ))}
-            </select>
+              ariaLabel="地域"
+              options={(curAcc?.region_ids ?? []).map((r) => ({ value: r, label: `${regionName(r)} (${r})` }))}
+            />
           </div>
         </div>
 
@@ -1454,27 +1458,30 @@ function CreateECSModal({
                 <div className="grid g3">
                   <div>
                     <label className="lbl">可用区</label>
-                    <select value={zoneId} onChange={(e) => setZoneId(e.target.value)}>
-                      {cat.zones.map((z) => (
-                        <option key={z.id} value={z.id}>{z.name || z.id}</option>
-                      ))}
-                    </select>
+                    <Select
+                      value={zoneId}
+                      onChange={setZoneId}
+                      ariaLabel="可用区"
+                      options={cat.zones.map((z) => ({ value: z.id, label: z.name || z.id }))}
+                    />
                   </div>
                   <div>
                     <label className="lbl">实例规格</label>
-                    <select value={instanceType} onChange={(e) => setInstanceType(e.target.value)}>
-                      {cat.instance_types.map((t) => (
-                        <option key={t.id} value={t.id}>{t.id} ({t.cpu}C / {t.memory_gib}G)</option>
-                      ))}
-                    </select>
+                    <Select
+                      value={instanceType}
+                      onChange={setInstanceType}
+                      ariaLabel="实例规格"
+                      options={cat.instance_types.map((t) => ({ value: t.id, label: `${t.id} (${t.cpu}C / ${t.memory_gib}G)` }))}
+                    />
                   </div>
                   <div>
                     <label className="lbl">系统镜像</label>
-                    <select value={imageId} onChange={(e) => setImageId(e.target.value)}>
-                      {cat.images.map((im) => (
-                        <option key={im.id} value={im.id}>{im.name}</option>
-                      ))}
-                    </select>
+                    <Select
+                      value={imageId}
+                      onChange={setImageId}
+                      ariaLabel="系统镜像"
+                      options={cat.images.map((im) => ({ value: im.id, label: im.name }))}
+                    />
                   </div>
                 </div>
                 <div className="grid g3">
@@ -1484,10 +1491,15 @@ function CreateECSModal({
                   </div>
                   <div>
                     <label className="lbl">计费模式</label>
-                    <select value={chargeType} onChange={(e) => setChargeType(e.target.value as "PostPaid" | "Spot")}>
-                      <option value="PostPaid">按量付费（PostPaid）</option>
-                      <option value="Spot">抢占式实例（Spot）</option>
-                    </select>
+                    <Select<"PostPaid" | "Spot">
+                      value={chargeType}
+                      onChange={setChargeType}
+                      ariaLabel="计费模式"
+                      options={[
+                        { value: "PostPaid", label: "按量付费（PostPaid）" },
+                        { value: "Spot", label: "抢占式实例（Spot）" },
+                      ]}
+                    />
                   </div>
                   <div>
                     <label className="lbl">系统盘（GiB）</label>
@@ -1497,10 +1509,15 @@ function CreateECSModal({
                 <div className="grid g2">
                   <div>
                     <label className="lbl">公网带宽计费</label>
-                    <select value={netCharge} onChange={(e) => setNetCharge(e.target.value as "PayByTraffic" | "PayByBandwidth")}>
-                      <option value="PayByTraffic">按使用流量</option>
-                      <option value="PayByBandwidth">按固定带宽</option>
-                    </select>
+                    <Select<"PayByTraffic" | "PayByBandwidth">
+                      value={netCharge}
+                      onChange={setNetCharge}
+                      ariaLabel="公网带宽计费"
+                      options={[
+                        { value: "PayByTraffic", label: "按使用流量" },
+                        { value: "PayByBandwidth", label: "按固定带宽" },
+                      ]}
+                    />
                   </div>
                   <div>
                     <label className="lbl">公网出带宽峰值（0–200 Mbps）</label>
@@ -1515,19 +1532,23 @@ function CreateECSModal({
                   <div className="grid g2">
                     <div>
                       <label className="lbl">已有 VPC</label>
-                      <select value={vpcId} onChange={(e) => setVpcId(e.target.value)}>
-                        {cat.vpcs.map((v) => (
-                          <option key={v.id} value={v.id}>{v.name || v.id} ({v.cidr_block})</option>
-                        ))}
-                      </select>
+                      <Select
+                        value={vpcId}
+                        onChange={setVpcId}
+                        ariaLabel="已有 VPC"
+                        options={cat.vpcs.map((v) => ({ value: v.id, label: `${v.name || v.id} (${v.cidr_block})` }))}
+                      />
                     </div>
                     <div>
                       <label className="lbl">已有交换机</label>
-                      <select value={vswId} onChange={(e) => setVswId(e.target.value)}>
-                        {cat.vswitches.filter((s) => !vpcId || s.vpc_id === vpcId).map((s) => (
-                          <option key={s.id} value={s.id}>{s.name || s.id} ({s.zone_id})</option>
-                        ))}
-                      </select>
+                      <Select
+                        value={vswId}
+                        onChange={setVswId}
+                        ariaLabel="已有交换机"
+                        options={cat.vswitches
+                          .filter((s) => !vpcId || s.vpc_id === vpcId)
+                          .map((s) => ({ value: s.id, label: `${s.name || s.id} (${s.zone_id})` }))}
+                      />
                     </div>
                   </div>
                 )}

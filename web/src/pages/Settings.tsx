@@ -6,7 +6,7 @@ import { AGENT, API_SCOPE, AUDIT_ACTOR, errorText, JOB_STATUS, JOB_TRIGGER, JOB_
 import type { Account, APIKey, APIKeyScope, HeartbeatSettings, Instance, JobStatus, JobType, Passkey } from "../api/types";
 import { AccountForm, PermissionList } from "../components/AccountForm";
 import { ActivityIcon, GlobeIcon, MonitorIcon, PlusIcon, ServerIcon, ShieldIcon, ZapIcon } from "../components/icons";
-import { Async, Badge, Card, Confirm, CopyButton, Drawer, EmptyState, ErrorState, errMsg, Modal, SegToggle, Skeleton, Spinner, Switch, useToast, type Level } from "../components/ui";
+import { Async, Badge, Card, Confirm, CopyButton, Drawer, EmptyState, ErrorState, errMsg, Modal, SegToggle, Select, Skeleton, Spinner, Switch, useToast, type Level } from "../components/ui";
 import { useShared } from "../lib/data";
 import { ago, duration, gb, setTimezone, stamp, ver } from "../lib/format";
 import { Link, useQueryTab } from "../lib/router";
@@ -222,7 +222,6 @@ function AccountsSection() {
         <Drawer
           wide
           title={drawer.account ? `编辑云账号：${drawer.account.name}` : "添加阿里云账号"}
-          sub="建议使用遵循最小权限原则的阿里云 RAM 子账号密钥"
           onClose={() => setDrawer(null)}
         >
           <AccountForm
@@ -310,9 +309,7 @@ function AgentsCard() {
       ) : !instances.data ? (
         <Skeleton lines={4} />
       ) : !list.length ? (
-        <EmptyState title="尚未在任何实例安装采集程序" action={<Link className="btn primary" to="/instances">去实例页生成安装命令</Link>}>
-          为计入免费额度的实例安装 hm-agent 后，可获得 10 秒级实时流量保护与多节点网络延迟探测能力。
-        </EmptyState>
+        <EmptyState title="尚未在任何实例安装采集程序" action={<Link className="btn primary" to="/instances">去实例页生成安装命令</Link>} />
       ) : (
         <div className="table-wrap">
           <table>
@@ -435,7 +432,7 @@ function SecuritySection({ onLogout }: { onLogout: () => void }) {
         <Async res={keys}>
           {(list) =>
             !list.length ? (
-              <EmptyState title="尚未绑定 Passkey">通过正式 HTTPS 域名访问面板时，可绑定设备生物识别密钥。</EmptyState>
+              <EmptyState title="尚未绑定 Passkey" />
             ) : (
               <div>
                 {list.map((k) => (
@@ -501,7 +498,6 @@ function SecuritySection({ onLogout }: { onLogout: () => void }) {
               <div className="rowline">
                 <div className="grow">
                   <b>当前浏览器会话</b>
-                  <div className="sub">立即吊销当前会话 Cookie 并返回登录界面</div>
                 </div>
                 <button className="btn sm" onClick={onLogout}>退出登录</button>
               </div>
@@ -669,15 +665,10 @@ function WidgetSummaryCard() {
   const origin = typeof location !== "undefined" ? location.origin : "https://example.com";
   const curl = `curl -H "Authorization: Bearer <API_KEY>" ${origin}/api/v1/integrations/summary`;
   return (
-    <Card title="手机小组件与状态栏接口" sub="只读汇总接口（需 summary:read 权限）">
-      <div className="stack">
-        <p className="sub" style={{ margin: 0 }}>
-          在 Scriptable、快捷指令或个人状态页轮询多账号 CDT 流量余量与在线实例数。
-        </p>
-        <div className="codebox">
-          <code>{curl}</code>
-          <CopyButton text={curl} className="btn" />
-        </div>
+    <Card title="手机小组件与状态栏接口">
+      <div className="codebox">
+        <code>{curl}</code>
+        <CopyButton text={curl} className="btn" />
       </div>
     </Card>
   );
@@ -687,15 +678,10 @@ function UrlCronCard() {
   const origin = typeof location !== "undefined" ? location.origin : "https://example.com";
   const curl = `curl -X POST -H "Authorization: Bearer <API_KEY>" ${origin}/api/v1/integrations/cron/run`;
   return (
-    <Card title="外部 URL Cron 定时触发" sub="供外部调度器驱动刷新与巡检（需 cron:run 权限）">
-      <div className="stack">
-        <p className="sub" style={{ margin: 0 }}>
-          可通过 Cloudflare Cron、GitHub Actions 或外部定时器主动触发一轮同步与保护评估。
-        </p>
-        <div className="codebox">
-          <code>{curl}</code>
-          <CopyButton text={curl} className="btn" />
-        </div>
+    <Card title="外部 URL Cron 定时触发">
+      <div className="codebox">
+        <code>{curl}</code>
+        <CopyButton text={curl} className="btn" />
       </div>
     </Card>
   );
@@ -789,11 +775,15 @@ function GeneralCard() {
               <div>
                 <label className="lbl" htmlFor="set-tz">业务时区</label>
                 <div className="inline">
-                  <select id="set-tz" value={s.business_timezone} onChange={(e) => change(e.target.value)} disabled={saving} style={{ maxWidth: 260 }}>
-                    {zones.map((z) => (
-                      <option key={z} value={z}>{z}</option>
-                    ))}
-                  </select>
+                  <Select
+                    id="set-tz"
+                    value={s.business_timezone}
+                    onChange={change}
+                    disabled={saving}
+                    ariaLabel="业务时区"
+                    style={{ width: 220 }}
+                    options={zones.map((z) => ({ value: z, label: z }))}
+                  />
                   {saving && <Spinner />}
                 </div>
               </div>
@@ -1178,8 +1168,6 @@ function ActivityCenter({ initialKind }: { initialKind: "jobs" | "audit" }) {
             ["audit", "配置与操作审计日志"],
           ]}
         />
-        <div className="spacer" />
-        <span className="sub">所有敏感密钥与密码均经过脱敏处理，永不落入任务或审计日志</span>
       </div>
 
       {kind === "jobs" ? <JobsTableCard /> : <AuditLogCard />}
@@ -1206,28 +1194,39 @@ function JobsTableCard() {
   return (
     <Card
       title="后台任务执行记录"
-      sub="资源同步、权限检测、实例启停、EIP 轮换及各渠道测试任务的执行轨迹"
       right={
         <div className="filters">
-          <select value={type} onChange={(e) => { setType(e.target.value as JobType | ""); setCursor(undefined); }} aria-label="按任务类型筛选">
-            <option value="">全部任务类型</option>
-            {(Object.keys(JOB_TYPE) as JobType[]).map((k) => (
-              <option key={k} value={k}>{JOB_TYPE[k]}</option>
-            ))}
-          </select>
-          <select value={status} onChange={(e) => { setStatus(e.target.value as JobStatus | ""); setCursor(undefined); }} aria-label="按状态筛选">
-            <option value="">全部状态</option>
-            {(Object.keys(JOB_STATUS) as JobStatus[]).map((k) => (
-              <option key={k} value={k}>{JOB_STATUS[k][1]}</option>
-            ))}
-          </select>
+          <Select<JobType | "">
+            size="sm"
+            value={type}
+            onChange={(val) => { setType(val); setCursor(undefined); }}
+            ariaLabel="按任务类型筛选"
+            options={[
+              { value: "", label: "全部任务类型" },
+              ...(Object.keys(JOB_TYPE) as JobType[]).map((k) => ({ value: k, label: JOB_TYPE[k] })),
+            ]}
+          />
+          <Select<JobStatus | "">
+            size="sm"
+            value={status}
+            onChange={(val) => { setStatus(val); setCursor(undefined); }}
+            ariaLabel="按状态筛选"
+            options={[
+              { value: "", label: "全部状态" },
+              ...(Object.keys(JOB_STATUS) as JobStatus[]).map((k) => ({ value: k, label: JOB_STATUS[k][1] })),
+            ]}
+          />
           {accs.length > 0 && (
-            <select value={accountId} onChange={(e) => { setAccountId(e.target.value); setCursor(undefined); }} aria-label="按账号筛选">
-              <option value="">全部账号</option>
-              {accs.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <Select
+              size="sm"
+              value={accountId}
+              onChange={(val) => { setAccountId(val); setCursor(undefined); }}
+              ariaLabel="按账号筛选"
+              options={[
+                { value: "", label: "全部账号" },
+                ...accs.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+            />
           )}
         </div>
       }
@@ -1298,22 +1297,29 @@ function AuditLogCard() {
   return (
     <Card
       title="操作审计日志"
-      sub="所有配置修改、远程开关机、API Key 生命周期与 Telegram 指令均完整留痕"
       right={
         <div className="filters">
-          <select value={actor} onChange={(e) => { setActor(e.target.value); setCursor(undefined); }} aria-label="按操作来源筛选">
-            <option value="">全部操作来源</option>
-            {(Object.keys(AUDIT_ACTOR) as (keyof typeof AUDIT_ACTOR)[]).map((k) => (
-              <option key={k} value={k}>{AUDIT_ACTOR[k]}</option>
-            ))}
-          </select>
+          <Select
+            size="sm"
+            value={actor}
+            onChange={(val) => { setActor(val); setCursor(undefined); }}
+            ariaLabel="按操作来源筛选"
+            options={[
+              { value: "", label: "全部操作来源" },
+              ...(Object.keys(AUDIT_ACTOR) as (keyof typeof AUDIT_ACTOR)[]).map((k) => ({ value: k, label: AUDIT_ACTOR[k] })),
+            ]}
+          />
           {(accounts.data?.length ?? 0) > 0 && (
-            <select value={accountId} onChange={(e) => { setAccountId(e.target.value); setCursor(undefined); }} aria-label="按账号筛选">
-              <option value="">全部账号</option>
-              {accounts.data!.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <Select
+              size="sm"
+              value={accountId}
+              onChange={(val) => { setAccountId(val); setCursor(undefined); }}
+              ariaLabel="按账号筛选"
+              options={[
+                { value: "", label: "全部账号" },
+                ...accounts.data!.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+            />
           )}
         </div>
       }

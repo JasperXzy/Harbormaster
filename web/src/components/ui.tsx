@@ -1,11 +1,12 @@
-// Modern Cloud Console Primitives: Tinted Badges, Slide-over Drawers, InfoTip Popovers, SubTabs, KPI Cards, Modals & Toasts.
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+// Modern Cloud Console Primitives: Tinted Badges, Custom Select, Slide-over Drawers, Viewport-Safe InfoTip Popovers, SubTabs, KPI Cards, Modals & Toasts.
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ApiError } from "../api/client";
 import { errorText } from "../api/labels";
 import { isStale, type FreshKind } from "../lib/freshness";
 import { ago, stamp } from "../lib/format";
 import { useNow } from "../lib/useResource";
-import { CheckIcon, CloseIcon, CopyIcon, InfoIcon } from "./icons";
+import { CheckIcon, ChevronDown, CloseIcon, CopyIcon, InfoIcon } from "./icons";
 
 export type Level = "good" | "warning" | "serious" | "critical" | "neutral";
 
@@ -125,26 +126,323 @@ export function KpiCard({ label, value, unit, foot, icon }: { label: string; val
   );
 }
 
+export interface SelectOption<V extends string = string> {
+  value: V;
+  label: string;
+  disabled?: boolean;
+}
+
+export function Select<V extends string = string>({
+  value,
+  onChange,
+  options,
+  id,
+  ariaLabel,
+  size = "md",
+  disabled = false,
+  placeholder = "请选择",
+  className = "",
+  style,
+}: {
+  value: V;
+  onChange: (value: V) => void;
+  options: SelectOption<V>[];
+  id?: string;
+  ariaLabel?: string;
+  size?: "sm" | "md";
+  disabled?: boolean;
+  placeholder?: string;
+  className?: string;
+  style?: CSSProperties;
+}) {
+  const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const [pos, setPos] = useState<{ top: number; left: number; minWidth: number; maxHeight: number; ready: boolean }>({
+    top: 0,
+    left: 0,
+    minWidth: 140,
+    maxHeight: 280,
+    ready: false,
+  });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const selected = options.find((o) => o.value === value);
+
+  const updatePos = useCallback(() => {
+    const btn = btnRef.current;
+    const menu = menuRef.current;
+    if (!btn) return;
+    const r = btn.getBoundingClientRect();
+    const pad = 10;
+    const gap = 6;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const minW = Math.max(r.width, size === "sm" ? 136 : 156);
+    const mw = menu ? Math.max(menu.offsetWidth, minW) : minW;
+    const mh = menu ? menu.scrollHeight : 220;
+    const spaceBelow = vh - r.bottom - pad - gap;
+    const spaceAbove = r.top - pad - gap;
+    const openUp = spaceBelow < Math.min(mh, 220) && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(120, Math.min(280, openUp ? spaceAbove : spaceBelow));
+    const renderedH = Math.min(mh, maxHeight);
+    const top = openUp ? Math.max(pad, r.top - gap - renderedH) : Math.min(vh - pad - renderedH, r.bottom + gap);
+    const left = Math.max(pad, Math.min(r.left, vw - pad - mw));
+    setPos({ top, left, minWidth: minW, maxHeight, ready: true });
+  }, [size]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos((p) => (p.ready ? { ...p, ready: false } : p));
+      return;
+    }
+    updatePos();
+    const onReflow = () => updatePos();
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (btnRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        btnRef.current?.focus();
+      }
+    };
+    window.addEventListener("resize", onReflow);
+    window.addEventListener("scroll", onReflow, true);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, updatePos]);
+
+  const moveActive = (delta: number) => {
+    if (!options.length) return;
+    let idx = activeIdx;
+    for (let step = 0; step < options.length; step++) {
+      idx = (idx + delta + options.length) % options.length;
+      if (!options[idx].disabled) {
+        setActiveIdx(idx);
+        return;
+      }
+    }
+  };
+
+  const toggleOpen = () => {
+    if (disabled) return;
+    setOpen((was) => {
+      if (!was) {
+        const cur = options.findIndex((o) => o.value === value && !o.disabled);
+        setActiveIdx(cur >= 0 ? cur : options.findIndex((o) => !o.disabled));
+      }
+      return !was;
+    });
+  };
+
+  const onButtonKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (disabled) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!open) {
+        const cur = options.findIndex((o) => o.value === value && !o.disabled);
+        setActiveIdx(cur >= 0 ? cur : options.findIndex((o) => !o.disabled));
+        setOpen(true);
+      } else {
+        moveActive(e.key === "ArrowDown" ? 1 : -1);
+      }
+    } else if ((e.key === "Enter" || e.key === " ") && open) {
+      e.preventDefault();
+      const opt = options[activeIdx];
+      if (opt && !opt.disabled) {
+        onChange(opt.value);
+        setOpen(false);
+      }
+    }
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        id={id}
+        type="button"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        className={`select-btn ${size === "sm" ? "sm" : ""} ${open ? "open" : ""} ${className}`}
+        style={style}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleOpen();
+        }}
+        onKeyDown={onButtonKeyDown}
+      >
+        <span className="select-label">{selected?.label ?? placeholder}</span>
+        <ChevronDown size={size === "sm" ? 13 : 14} className="select-caret" />
+      </button>
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="select-menu"
+            role="listbox"
+            aria-label={ariaLabel}
+            style={{
+              position: "fixed",
+              top: pos.top,
+              left: pos.left,
+              minWidth: pos.minWidth,
+              maxHeight: pos.maxHeight,
+              visibility: pos.ready ? "visible" : "hidden",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {options.map((opt, idx) => {
+              const isSel = opt.value === value;
+              const isAct = idx === activeIdx;
+              return (
+                <button
+                  key={`${opt.value}-${idx}`}
+                  type="button"
+                  role="option"
+                  aria-selected={isSel}
+                  disabled={opt.disabled}
+                  className={`select-opt ${isSel ? "selected" : ""} ${isAct ? "active" : ""}`}
+                  onMouseEnter={() => !opt.disabled && setActiveIdx(idx)}
+                  onClick={() => {
+                    if (opt.disabled) return;
+                    onChange(opt.value);
+                    setOpen(false);
+                    btnRef.current?.focus();
+                  }}
+                >
+                  <span className="select-opt-text">{opt.label}</span>
+                  {isSel && <CheckIcon size={13} className="select-opt-check" />}
+                </button>
+              );
+            })}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
 export function InfoTip({ children, label = "说明" }: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; ready: boolean }>({ top: 0, left: 0, ready: false });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const closeTimer = useRef<number | null>(null);
+
+  const cancelClose = () => {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = window.setTimeout(() => setOpen(false), 120);
+  };
+
+  const updatePos = useCallback(() => {
+    const btn = btnRef.current;
+    const pop = popRef.current;
+    if (!btn || !pop) return;
+    const r = btn.getBoundingClientRect();
+    const pr = pop.getBoundingClientRect();
+    const pad = 12;
+    const gap = 8;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const aboveTop = r.top - pr.height - gap;
+    const belowTop = r.bottom + gap;
+    const top = aboveTop >= pad ? aboveTop : Math.min(vh - pr.height - pad, belowTop);
+    const idealLeft = r.left + r.width / 2 - pr.width / 2;
+    const left = Math.max(pad, Math.min(idealLeft, vw - pr.width - pad));
+    setPos({ top: Math.max(pad, top), left, ready: true });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos((p) => (p.ready ? { ...p, ready: false } : p));
+      return;
+    }
+    updatePos();
+    const onReflow = () => updatePos();
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (btnRef.current?.contains(target) || popRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("resize", onReflow);
+    window.addEventListener("scroll", onReflow, true);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, updatePos]);
+
+  useEffect(() => () => cancelClose(), []);
+
   return (
     <span
       className="infotip-wrap"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={() => {
+        cancelClose();
+        setOpen(true);
+      }}
+      onMouseLeave={scheduleClose}
     >
       <button
+        ref={btnRef}
         type="button"
         className="infotip-btn"
         aria-label={label}
+        aria-expanded={open}
         onClick={(e) => {
           e.stopPropagation();
+          cancelClose();
           setOpen((v) => !v);
         }}
       >
         <InfoIcon size={14} />
       </button>
-      {open && <span className="infotip-pop" role="tooltip">{children}</span>}
+      {open &&
+        createPortal(
+          <div
+            ref={popRef}
+            className="infotip-pop"
+            role="tooltip"
+            style={{
+              position: "fixed",
+              top: pos.top,
+              left: pos.left,
+              visibility: pos.ready ? "visible" : "hidden",
+            }}
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {children}
+          </div>,
+          document.body,
+        )}
     </span>
   );
 }

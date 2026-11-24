@@ -172,18 +172,18 @@ export function AccountForm({ account, submitText, onSaved, onCancel, cancelText
             国内流量（中国内地）
           </label>
         </div>
-        <div className="field-help">如果某范围没有走 CDT 计费的机器（例如只有轻量固定带宽），取消勾选即可不记录该范围流量，也不会提示覆盖不完整。</div>
+        <div className="field-help">未勾选的范围将跳过统计。</div>
       </div>
       <div>
         <span className="lbl" style={{ display: "block", fontSize: "var(--fs-md)", color: "var(--text-2)", marginBottom: 4 }}>CDT 计费归属确认</span>
         <div className="checks">
           <label className={`check ${cdtConfirmed ? "on" : ""}`}>
             <input type="checkbox" checked={cdtConfirmed} onChange={(e) => setCdtConfirmed(e.target.checked)} />
-            已开通阿里云 CDT（默认将按流量 / 共享带宽对象计入 CDT 额度池）
+            已开通阿里云 CDT（按流量 / 共享带宽默认计入 CDT）
           </label>
         </div>
         <div className="field-help">
-          阿里云 API 无法自动判断账号是否已开通 CDT。勾选后，该账号下按流量计费的 ECS / EIP 及共享带宽包默认归入 CDT 额度（消除「归属待确认」并计算池内占比），仍可在「流量与费用 → 公网出口流量归因」按单个对象单独覆盖。固定带宽与轻量服务器始终不计入 CDT。
+          可在「流量与费用 → 公网出口流量归因」按对象单独覆盖。
         </div>
       </div>
       <details open={edit}>

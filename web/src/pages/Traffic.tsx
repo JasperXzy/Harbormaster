@@ -7,7 +7,7 @@ import { TipRow } from "../components/charts/common";
 import { DailyBars } from "../components/charts/DailyBars";
 import { LineChart } from "../components/charts/LineChart";
 import { QuotaMeter, QuotaUnknownNote } from "../components/QuotaMeter";
-import { Async, Badge, Banner, Card, EmptyState, ErrorState, errMsg, Fresh, InfoTip, Modal, SegToggle, Skeleton, Spinner, SubTabs, Switch, useToast } from "../components/ui";
+import { Async, Badge, Banner, Card, EmptyState, ErrorState, errMsg, Fresh, InfoTip, Modal, SegToggle, Select, Skeleton, Spinner, SubTabs, Switch, useToast } from "../components/ui";
 import { dailyValue, forecastNote, usageTimeline } from "../lib/daily";
 import { useShared } from "../lib/data";
 import { bytes, gb, gbValue, num, shortDate, stamp, time, ymd } from "../lib/format";
@@ -75,25 +75,26 @@ export function Traffic() {
       {tab === "quota" && (
         <>
           <div className="toolbar">
-            <span className="sub" style={{ fontWeight: 500 }}>查看维度</span>
             {accs.length <= 5 ? (
-              <div className="checks">
-                <button type="button" className={`check ${all ? "on" : ""}`} onClick={() => setAccountId("all")}>
-                  全部启用账号 ({enabledAccounts.length})
-                </button>
-                {accs.map((a) => (
-                  <button key={a.id} type="button" className={`check ${accountId === a.id ? "on" : ""}`} onClick={() => setAccountId(a.id)}>
-                    {a.name}{!a.enabled ? " (已停用)" : ""}
-                  </button>
-                ))}
-              </div>
+              <SegToggle
+                label="查看维度"
+                value={accountId}
+                onChange={setAccountId}
+                options={[
+                  ["all", `全部启用账号 (${enabledAccounts.length})`],
+                  ...accs.map((a): [string, string] => [a.id, `${a.name}${!a.enabled ? " (已停用)" : ""}`]),
+                ]}
+              />
             ) : (
-              <select value={accountId} onChange={(e) => setAccountId(e.target.value)} aria-label="选择账号">
-                <option value="all">全部启用账号合计 ({enabledAccounts.length})</option>
-                {accs.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
-              </select>
+              <Select
+                value={accountId}
+                onChange={setAccountId}
+                ariaLabel="选择账号"
+                options={[
+                  { value: "all", label: `全部启用账号合计 (${enabledAccounts.length})` },
+                  ...accs.map((a) => ({ value: a.id, label: a.name })),
+                ]}
+              />
             )}
             {all && (
               <InfoTip label="合计口径说明">
@@ -134,14 +135,15 @@ export function Traffic() {
         <>
           <div className="toolbar">
             <span className="sub" style={{ fontWeight: 500 }}>核对账号</span>
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)} aria-label="选择核对账号">
-              <option value="all">全部启用账号</option>
-              {accs.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-            <div className="spacer" />
-            <span className="sub">对比阿里云 CDT 官方累计接口与本地 hm-agent 采集增量的一致性</span>
+            <Select
+              value={accountId}
+              onChange={setAccountId}
+              ariaLabel="选择核对账号"
+              options={[
+                { value: "all", label: "全部启用账号" },
+                ...accs.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+            />
           </div>
           {all
             ? enabledAccounts.map((a) => <ObservationsCard key={a.id} accountId={a.id} accountName={a.name} />)
@@ -524,17 +526,18 @@ function Subjects({ accountId, instName, accounts, onCDTChanged }: { accountId: 
                               <span className="sub">不计入</span>
                             )}
                             {canConfigureCDT && (
-                              <select
-                                aria-label={`设置 ${s.name} 的 CDT 归属`}
+                              <Select<"auto" | "include" | "exclude">
+                                size="sm"
+                                ariaLabel={`设置 ${s.name} 的 CDT 归属`}
                                 value={mode}
                                 disabled={savingId === s.id}
-                                onChange={(e) => setOverride(s.id, s.name, s.account_id, e.target.value as "auto" | "include" | "exclude")}
-                                style={{ padding: "3px 8px", fontSize: "var(--fs-sm)", width: "auto" }}
-                              >
-                                <option value="auto">跟随账号（{acc?.cdt_confirmed ? "已确认" : "待确认"}）</option>
-                                <option value="include">确认计入 CDT</option>
-                                <option value="exclude">排除不计入</option>
-                              </select>
+                                onChange={(val) => setOverride(s.id, s.name, s.account_id, val)}
+                                options={[
+                                  { value: "auto", label: `跟随账号（${acc?.cdt_confirmed ? "已确认" : "待确认"}）` },
+                                  { value: "include", label: "确认计入 CDT" },
+                                  { value: "exclude", label: "排除不计入" },
+                                ]}
+                              />
                             )}
                           </div>
                         </td>
@@ -576,7 +579,7 @@ function PackageHourly({ p, accountName }: { p: BandwidthPackage; accountName?: 
           const done = open ? h.periods.slice(0, -1) : h.periods;
           const labels = done.map((x) => time(x.start));
           if (view === "chart" && done.length < 2) {
-            return <EmptyState title="已完成整点不足 2 个，暂无法绘制曲线">可先切换至表格查看当前小时数据。</EmptyState>;
+            return <EmptyState title="已完成整点不足 2 个，暂无法绘制曲线" />;
           }
           return view === "chart" ? (
             <>
@@ -644,7 +647,6 @@ function BillingSubWorkspace({ accounts, instances }: { accounts: Account[]; ins
         <div className="toolbar">
           <Switch on={balanceRule.enabled} onChange={toggleGlobalBalanceRule} label="启用账户低余额告警" />
           <span><b>低余额告警推送</b></span>
-          <span className="sub">在下方各账号卡片直接填写提醒阈值，低于设定金额时将自动通过已配置的通知渠道告警</span>
           <div className="spacer" />
           <Link className="btn sm ghost" to="/automation?tab=channels">通知渠道配置 →</Link>
         </div>
@@ -810,15 +812,14 @@ function InstanceMonthlyCostCard({ instances, accounts }: { instances: Instance[
   return (
     <Card
       title="单实例当月费用归集"
-      sub="来自阿里云账单中心按实例 ID 归集的原始扣费明细"
       right={
-        <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} aria-label="选择实例查看当月账单">
-          {instances.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.name} · {accName(i.account_id)}
-            </option>
-          ))}
-        </select>
+        <Select
+          size="sm"
+          value={selectedId}
+          onChange={setSelectedId}
+          ariaLabel="选择实例查看当月账单"
+          options={instances.map((i) => ({ value: i.id, label: `${i.name} · ${accName(i.account_id)}` }))}
+        />
       }
     >
       <Async res={finRes} lines={3}>
@@ -829,7 +830,7 @@ function InstanceMonthlyCostCard({ instances, accounts }: { instances: Instance[
             return <div className="field-error">读取失败：{errorText(fin.bill.last_error?.code ?? "internal_error")}</div>;
           }
           if (!rows.length) {
-            return <EmptyState title={`${fin.billing_cycle} 账期暂无独立扣费项`}>包年包月往期已结清或处于免费额度内的按量项目不产生当月扣费记录。</EmptyState>;
+            return <EmptyState title={`${fin.billing_cycle} 账期暂无独立扣费项`} />;
           }
           return (
             <div className="table-wrap">
@@ -886,11 +887,11 @@ function IdleAndRenewalSubWorkspace({ accounts, instances }: { accounts: Account
 
   return (
     <div className="stack">
-      <Card title="包年包月到期与续费状态" sub="自动追踪预付费 ECS 与轻量应用服务器的到期倒计时">
+      <Card title="包年包月到期与续费状态">
         {!instances ? (
           <Skeleton lines={3} />
         ) : !subRows.length ? (
-          <EmptyState title="当前无包年包月实例">按量付费与抢占式实例无固定到期日。</EmptyState>
+          <EmptyState title="当前无包年包月实例" />
         ) : (
           <div className="table-wrap">
             <table>
@@ -936,11 +937,11 @@ function IdleAndRenewalSubWorkspace({ accounts, instances }: { accounts: Account
         )}
       </Card>
 
-      <Card title="闲置计费资源巡检" sub="识别未绑定 EIP、未挂载云盘及普通停机未省钱的按量实例">
+      <Card title="闲置计费资源巡检">
         <Async res={idleRes} lines={4}>
           {(page) =>
             !page.items.length ? (
-              <EmptyState title="未发现闲置浪费资源">各账号下的弹性公网 IP、云盘与停机实例均处于正常使用或免计费状态。</EmptyState>
+              <EmptyState title="未发现闲置资源" />
             ) : (
               <div className="table-wrap">
                 <table>
@@ -1056,11 +1057,11 @@ function ReconciliationsCard({ accountId, accounts }: { accountId?: string; acco
   const accName = (id: string) => accounts.find((a) => a.id === id)?.name ?? id;
 
   return (
-    <Card title="官方累计与采集估算对账记录" sub="在同一统计截止时刻下验证本地采集增量与阿里云账单流量的一致性">
+    <Card title="官方累计与采集估算对账记录">
       <Async res={res} lines={4}>
         {(p) =>
           !p.items.length ? (
-            <EmptyState title="暂无可比对的对账记录">当阿里云返回明确截止时刻且该时段采集完整覆盖时自动生成核对结果。</EmptyState>
+            <EmptyState title="暂无可比对的对账记录" />
           ) : (
             <div className="table-wrap">
               <table>

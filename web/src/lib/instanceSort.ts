@@ -36,6 +36,7 @@ const STATUS_RANK: Record<Instance["status"], number> = {
 export const naturalCmp = new Intl.Collator("zh-CN", { numeric: true, sensitivity: "base" }).compare;
 
 export function totalRateBps(i: Instance): number {
+  if (i.status === "stopped") return -1;
   if (i.realtime) return i.realtime.tx_bytes_per_second + i.realtime.rx_bytes_per_second;
   const stream = i.cloud_network?.streams?.[0];
   if (stream && (stream.egress.value != null || stream.ingress.value != null)) {

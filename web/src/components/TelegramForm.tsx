@@ -4,7 +4,7 @@ import { api, ApiError } from "../api/client";
 import { waitForJob } from "../api/jobs";
 import { errorText, fieldErrorText } from "../api/labels";
 import type { TelegramChannel } from "../api/types";
-import { Spinner, useToast } from "./ui";
+import { Select, Spinner, useToast } from "./ui";
 
 export function TelegramForm({ value, onSaved }: { value: TelegramChannel; onSaved: (v: TelegramChannel) => void }) {
   const toast = useToast();
@@ -79,12 +79,17 @@ export function TelegramForm({ value, onSaved }: { value: TelegramChannel; onSav
       </div>
       <label htmlFor="tg-proxy">代理</label>
       <div>
-        <select id="tg-proxy" value={mode} onChange={(e) => setMode(e.target.value as TelegramChannel["proxy_mode"])}>
-          <option value="none">不使用</option>
-          <option value="reverse_proxy">自建的 Telegram 反向代理</option>
-          <option value="socks5">SOCKS5 代理</option>
-        </select>
-        <div className="field-help">服务器在中国内地时连不上 Telegram，需要选一种代理。</div>
+        <Select<TelegramChannel["proxy_mode"]>
+          id="tg-proxy"
+          value={mode}
+          onChange={setMode}
+          ariaLabel="代理模式"
+          options={[
+            { value: "none", label: "不使用" },
+            { value: "reverse_proxy", label: "自建的 Telegram 反向代理" },
+            { value: "socks5", label: "SOCKS5 代理" },
+          ]}
+        />
       </div>
       {mode !== "none" && (
         <>

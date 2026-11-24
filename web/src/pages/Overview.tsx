@@ -1,11 +1,11 @@
 // 总览：低噪 Bento 仪表盘（可折叠待办栏 + 四大核心指标卡 + 账号配额双列网格 + 活跃实例与最近动态）。
 import { api } from "../api/client";
 import { useEvent } from "../api/events";
-import { INSTANCE_STATUS, SCOPE_SHORT, SEVERITY, SITE, regionName } from "../api/labels";
+import { INSTANCE_STATUS, SCOPE_SHORT, SEVERITY, regionName } from "../api/labels";
 import type { Account, Instance, Notification, QuotaScope, QuotaStatus } from "../api/types";
 import { ActivityIcon, ChevronRight, GlobeIcon, ServerIcon, ShieldIcon } from "../components/icons";
 import { quotaLevel, QuotaLegend, QuotaMeter, quotaUnknown, QuotaUnknownNote } from "../components/QuotaMeter";
-import { Async, Badge, Card, EmptyState, ErrorState, KpiCard, Skeleton, type Level } from "../components/ui";
+import { Async, Badge, Card, EmptyState, ErrorState, KpiCard, Select, Skeleton, type Level } from "../components/ui";
 import { useShared } from "../lib/data";
 import { gb, rate, stamp } from "../lib/format";
 import {
@@ -25,14 +25,17 @@ import { quotaPool as pool } from "../lib/usage";
 const ORDER: Level[] = ["good", "neutral", "warning", "serious", "critical"];
 const worse = (a: Level, b: Level) => (ORDER.indexOf(a) >= ORDER.indexOf(b) ? a : b);
 
+const LEADING_STATUS_EMOJI = /^[🟢🟡🟠🔴⚪️⚠️🚨✅❌]+\s*/u;
+
 export function NotificationItem({ n }: { n: Notification }) {
   const [level, text] = SEVERITY[n.severity];
+  const title = n.title.replace(LEADING_STATUS_EMOJI, "");
   return (
     <div className="aitem" title={n.body || undefined}>
       <Badge level={n.kind === "recovery" ? "good" : level}>
         {n.kind === "recovery" ? "恢复" : n.kind === "test" ? "测试" : text}
       </Badge>
-      <div className="t">{n.title}</div>
+      <div className="t">{title}</div>
       <div className="when">{stamp(n.created_at)}</div>
     </div>
   );
@@ -247,16 +250,13 @@ export function Overview() {
         <div className="inline" style={{ gap: 10 }}>
           <div className="sub" style={{ fontWeight: 600 }}>各账号本月免费流量进度</div>
           {accs.length > 1 && (
-            <select
+            <Select<AccountSortKey>
+              size="sm"
               value={accSort}
-              onChange={(e) => updateAccSort(e.target.value as AccountSortKey)}
-              aria-label="账号卡片排序"
-              style={{ padding: "3px 8px", fontSize: "var(--fs-sm)", width: "auto" }}
-            >
-              {ACCOUNT_SORT_OPTIONS.map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
+              onChange={updateAccSort}
+              ariaLabel="账号卡片排序"
+              options={ACCOUNT_SORT_OPTIONS.map(([value, label]) => ({ value, label }))}
+            />
           )}
         </div>
         {qs.some((q) => !quotaUnknown(q)) && <QuotaLegend worstCase={qs.some((q) => q.worst_case_bytes !== null && q.worst_case_bytes > 0)} />}
@@ -277,35 +277,30 @@ export function Overview() {
       <div className="grid g2">
         <Card
           title="实例运行速览"
-          sub={`共 ${insts.length} 台机器，点击可进入实例工作区操作`}
           right={
-            <div className="inline" style={{ gap: 6, flexWrap: "wrap" }}>
+            <div className="inline" style={{ gap: 8, flexWrap: "wrap" }}>
               {insts.length > 1 && (
-                <>
-                  <select
+                <div className="control-group sm">
+                  <Select<InstanceSortKey>
+                    size="sm"
                     value={instSort.key}
-                    onChange={(e) => {
-                      const key = e.target.value as InstanceSortKey;
+                    onChange={(key) => {
                       const defDir = INSTANCE_SORT_OPTIONS.find(([k]) => k === key)?.[2] ?? "asc";
                       updateInstSort(key, defDir);
                     }}
-                    aria-label="总览实例排序字段"
-                    style={{ padding: "3px 8px", fontSize: "var(--fs-sm)", width: "auto" }}
-                  >
-                    {INSTANCE_SORT_OPTIONS.map(([key, label]) => (
-                      <option key={key} value={key}>按{label}</option>
-                    ))}
-                  </select>
+                    ariaLabel="总览实例排序字段"
+                    options={INSTANCE_SORT_OPTIONS.map(([value, label]) => ({ value, label: `按${label}` }))}
+                  />
                   <button
                     type="button"
-                    className="btn sm ghost"
+                    className="sort-dir-btn"
                     onClick={() => updateInstSort(instSort.key, instSort.dir === "asc" ? "desc" : "asc")}
                     title={instSort.dir === "asc" ? "当前升序，点击切换为降序" : "当前降序，点击切换为升序"}
                     aria-label="切换总览实例升降序"
                   >
                     {instSort.dir === "asc" ? "↑" : "↓"}
                   </button>
-                </>
+                </div>
               )}
               <Link className="btn sm ghost" to="/instances">
                 管理全部实例 <ChevronRight size={14} />
@@ -319,8 +314,9 @@ export function Overview() {
             <div>
               {sortedInsts.slice(0, 6).map((i) => {
                 const [sl, st] = INSTANCE_STATUS[i.status];
-                const tx = i.realtime?.tx_bytes_per_second ?? (i.cloud_network?.streams?.[0]?.egress.value != null ? i.cloud_network.streams[0].egress.value / 8 : null);
-                const rx = i.realtime?.rx_bytes_per_second ?? (i.cloud_network?.streams?.[0]?.ingress.value != null ? i.cloud_network.streams[0].ingress.value / 8 : null);
+                const stopped = i.status === "stopped";
+                const tx = stopped ? null : (i.realtime?.tx_bytes_per_second ?? (i.cloud_network?.streams?.[0]?.egress.value != null ? i.cloud_network.streams[0].egress.value / 8 : null));
+                const rx = stopped ? null : (i.realtime?.rx_bytes_per_second ?? (i.cloud_network?.streams?.[0]?.ingress.value != null ? i.cloud_network.streams[0].ingress.value / 8 : null));
                 return (
                   <div className="rowline" key={i.id}>
                     <div className="grow" style={{ minWidth: 150 }}>
@@ -372,7 +368,6 @@ export function Overview() {
 
         <Card
           title="最近告警与通知"
-          sub="额度越档、连接异常与自动策略执行回执"
           right={
             <Link className="btn sm ghost" to="/automation?tab=history">
               查看全部 <ChevronRight size={14} />
@@ -388,7 +383,7 @@ export function Overview() {
                   ))}
                 </div>
               ) : (
-                <EmptyState title="近期一切平静">没有任何告警或异常触发。</EmptyState>
+                <EmptyState title="近期暂无告警与通知" />
               )
             }
           </Async>
@@ -398,7 +393,7 @@ export function Overview() {
   );
 }
 
-function AccountCard({ account, quotas, instances }: { account: Account; quotas: QuotaStatus[]; instances: Instance[] }) {
+function AccountCard({ account, quotas }: { account: Account; quotas: QuotaStatus[]; instances: Instance[] }) {
   let level: Level = "good";
   let text = "配额充裕";
   for (const q of quotas) {
@@ -412,7 +407,6 @@ function AccountCard({ account, quotas, instances }: { account: Account; quotas:
   return (
     <Card
       title={account.name}
-      sub={`${SITE[account.site]} · ${instances.length} 台实例`}
       right={
         <div className="inline" style={{ gap: 6 }}>
           <Badge level={level}>{text}</Badge>
@@ -428,13 +422,7 @@ function AccountCard({ account, quotas, instances }: { account: Account; quotas:
           <QuotaUnknownNote quotas={quotas} />
         </>
       ) : (
-        <EmptyState title="暂无此账号的流量配额视图">
-          {account.track_mainland === false && account.track_overseas === false
-            ? "已在账号设置中关闭国内与海外 CDT 流量记录。"
-            : account.sync_status === "never_synced"
-              ? "正在首次扫描云资源与账单数据，请稍候。"
-              : "当前没有可展示的配额范围。"}
-        </EmptyState>
+        <EmptyState title={account.sync_status === "never_synced" ? "正在首次同步…" : "暂无可展示配额"} />
       )}
     </Card>
   );

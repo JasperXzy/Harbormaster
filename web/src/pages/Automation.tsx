@@ -7,7 +7,7 @@ import { ALERT_RULE, DECISION_OUTCOME, DECISION_STATE, DELIVERY, errorText, SCOP
 import type * as T from "../api/types";
 import { BellIcon, GlobeIcon, PlusIcon, ShieldIcon, ZapIcon } from "../components/icons";
 import { TelegramForm } from "../components/TelegramForm";
-import { Async, Badge, Banner, Card, Confirm, Drawer, EmptyState, ErrorState, errMsg, Modal, SegToggle, Skeleton, Spinner, SubTabs, Switch, useToast, type Level } from "../components/ui";
+import { Async, Badge, Banner, Card, Confirm, Drawer, EmptyState, ErrorState, errMsg, Modal, SegToggle, Select, Skeleton, Spinner, SubTabs, Switch, useToast, type Level } from "../components/ui";
 import { useShared } from "../lib/data";
 import { GB, gb, stamp } from "../lib/format";
 import { Link, useQueryTab } from "../lib/router";
@@ -230,9 +230,7 @@ function PoliciesSubWorkspace({ accounts, instances, reloadAll }: { accounts: T.
         <Async res={rules}>
           {(list) =>
             !list.length ? (
-              <EmptyState title="尚未创建额度保护规则" action={<button className="btn sm primary" onClick={() => setRuleDrawer({})}>创建首条保护规则</button>}>
-                建议先开启「试运行」配合「模拟用量演练」验证通知链路，确认无误后再启用真实关机。
-              </EmptyState>
+              <EmptyState title="尚未创建额度保护规则" action={<button className="btn sm primary" onClick={() => setRuleDrawer({})}>创建首条保护规则</button>} />
             ) : (
               <div>
                 {list.map((r) => (
@@ -278,7 +276,7 @@ function PoliciesSubWorkspace({ accounts, instances, reloadAll }: { accounts: T.
           <Async res={schedules}>
             {(list) =>
               !list.length ? (
-                <EmptyState title="暂无定时开关机计划">按量 ECS 配置夜间节省停机可显著降低计算与带宽固定成本。</EmptyState>
+                <EmptyState title="暂无定时开关机计划" />
               ) : (
                 <div>
                   {list.map((s) => (
@@ -319,9 +317,7 @@ function PoliciesSubWorkspace({ accounts, instances, reloadAll }: { accounts: T.
           <Async res={failovers}>
             {(list) =>
               !list.length ? (
-                <EmptyState title="暂无跨账号主备规则">
-                  {instances.length < 2 ? "至少需要 2 台受管实例才可配置主备接管。" : "主节点免费流量耗尽停机后，可自动拉起另一账号下的备用机器。"}
-                </EmptyState>
+                <EmptyState title="暂无跨账号主备规则" />
               ) : (
                 <div>
                   {list.map((f) => {
@@ -564,7 +560,6 @@ function ChannelsSubWorkspace() {
             <div className="channel-icon"><BellIcon size={17} /></div>
             <div className="channel-meta">
               <b>Telegram 通知机器人</b>
-              <span className="sub">即时推送告警与额度保护事件</span>
             </div>
             {tgData && <Badge level={CH_STATUS[tgData.status][0]}>{CH_STATUS[tgData.status][1]}</Badge>}
           </div>
@@ -579,7 +574,7 @@ function ChannelsSubWorkspace() {
                 )}
               </>
             ) : (
-              "尚未配置 Bot Token 与 Chat ID"
+              "未配置"
             )}
           </div>
           <div className="channel-foot">
@@ -599,8 +594,7 @@ function ChannelsSubWorkspace() {
           <div className="channel-card-top">
             <div className="channel-icon"><GlobeIcon size={17} /></div>
             <div className="channel-meta">
-              <b>邮件 (SMTP) 渠道</b>
-              <span className="sub">STARTTLS / SSL 加密邮件告警</span>
+              <b>邮件 (SMTP)</b>
             </div>
             {emData && <Badge level={emData.enabled ? CH_STATUS[emData.status][0] : "neutral"}>{emData.enabled ? CH_STATUS[emData.status][1] : "未启用"}</Badge>}
           </div>
@@ -614,7 +608,7 @@ function ChannelsSubWorkspace() {
                 )}
               </>
             ) : (
-              "尚未配置 SMTP 发件服务器"
+              "未配置"
             )}
           </div>
           <div className="channel-foot">
@@ -635,7 +629,6 @@ function ChannelsSubWorkspace() {
             <div className="channel-icon"><ZapIcon size={17} /></div>
             <div className="channel-meta">
               <b>Webhook 推送</b>
-              <span className="sub">JSON POST + HMAC-SHA256 签名</span>
             </div>
             {whData && <Badge level={whData.enabled ? CH_STATUS[whData.status][0] : "neutral"}>{whData.enabled ? CH_STATUS[whData.status][1] : "未启用"}</Badge>}
           </div>
@@ -649,7 +642,7 @@ function ChannelsSubWorkspace() {
                 )}
               </>
             ) : (
-              "尚未配置飞书 / 钉钉 / 自建 Webhook URL"
+              "未配置"
             )}
           </div>
           <div className="channel-foot">
@@ -670,17 +663,16 @@ function ChannelsSubWorkspace() {
             <div className="channel-icon"><BellIcon size={17} /></div>
             <div className="channel-meta">
               <b>每日流量简报</b>
-              <span className="sub">定时汇总多账号流量池与剩余额度</span>
             </div>
             {dyData && <Badge level={dyData.enabled ? "good" : "neutral"}>{dyData.enabled ? `每天 ${dyData.time_of_day}` : "未开启"}</Badge>}
           </div>
           <div className="sub">
-            {dyData?.enabled ? `每天 ${dyData.time_of_day} 自动向所有已启用渠道投递汇总报告` : "开启后每天定时推送各账号流量消耗简报"}
-            {dyData?.last_sent_date && <div>最近自动发送：{dyData.last_sent_date}</div>}
+            {dyData?.enabled ? `每天 ${dyData.time_of_day} 自动推送` : "未开启"}
+            {dyData?.last_sent_date && <div>最近发送：{dyData.last_sent_date}</div>}
           </div>
           <div className="channel-foot">
             <button className="btn sm ghost" disabled={busyAction !== null} onClick={quickSendDaily}>
-              {busyAction === "daily" && <Spinner />} 立即发送一份
+              {busyAction === "daily" && <Spinner />} 立即发送
             </button>
             <button className="btn sm" onClick={() => setOpenKey("daily")}>配置</button>
           </div>
@@ -692,14 +684,11 @@ function ChannelsSubWorkspace() {
             <div className="channel-icon"><ShieldIcon size={17} /></div>
             <div className="channel-meta">
               <b>Telegram 远程控制</b>
-              <span className="sub">白名单交互式查状态、开关机与换 IP</span>
             </div>
             {ctData && <Badge level={ctData.enabled ? "good" : "neutral"}>{ctData.enabled ? "监听中" : "未开启"}</Badge>}
           </div>
           <div className="sub">
-            {ctData?.enabled
-              ? `授权白名单：${ctData.allowed_user_ids.length} 位用户 · 支持 /status /quota /start /stop /changeip`
-              : "仅允许数字 ID 白名单内的管理员执行受控运维指令"}
+            {ctData?.enabled ? `白名单 ${ctData.allowed_user_ids.length} 位管理员` : "未开启"}
           </div>
           <div className="channel-foot">
             <span />
@@ -713,20 +702,19 @@ function ChannelsSubWorkspace() {
             <div className="channel-icon"><ShieldIcon size={17} /></div>
             <div className="channel-meta">
               <b>免打扰静默与维护窗</b>
-              <span className="sub">夜间抑制普通提醒，紧急告警不受限</span>
             </div>
             {qhData && (
-              <Badge level={hasActiveMaint ? "warning" : qhData.active ? "good" : qhData.enabled ? "neutral" : "neutral"}>
+              <Badge level={hasActiveMaint ? "warning" : qhData.active ? "good" : "neutral"}>
                 {hasActiveMaint ? "维护静默中" : qhData.active ? "当前静默中" : qhData.enabled ? `${qhData.start}–${qhData.end}` : "未开启"}
               </Badge>
             )}
           </div>
           <div className="sub">
             {hasActiveMaint
-              ? `临时维护静默持续至 ${stamp(qhData!.maintenance!.end_at)}`
+              ? `临时维护静默至 ${stamp(qhData!.maintenance!.end_at)}`
               : qhData?.enabled
-                ? `每日 ${qhData.start} 至 ${qhData.end} 非紧急通知仅存档不推送`
-                : "可配置夜间免打扰时段或开启 30m–3h 临时维护期"}
+                ? `每日 ${qhData.start} – ${qhData.end}`
+                : "未开启"}
           </div>
           <div className="channel-foot">
             <span />
@@ -736,7 +724,7 @@ function ChannelsSubWorkspace() {
       </div>
 
       {openKey === "telegram" && tgData && (
-        <Drawer title="配置 Telegram 通知机器人" sub="Bot Token 采用服务端主密钥加密存储" onClose={() => setOpenKey(null)}>
+        <Drawer title="配置 Telegram 通知机器人" onClose={() => setOpenKey(null)}>
           {tgData.status === "failing" && tgData.last_error && (
             <Banner level="critical">最近一次发送失败：{errorText(tgData.last_error.code)}</Banner>
           )}
@@ -745,31 +733,31 @@ function ChannelsSubWorkspace() {
       )}
 
       {openKey === "email" && emData && (
-        <Drawer title="配置邮件 (SMTP) 通知渠道" sub="支持 STARTTLS (587) 与隐式 TLS (465)" onClose={() => setOpenKey(null)}>
+        <Drawer title="配置邮件 (SMTP) 通知渠道" onClose={() => setOpenKey(null)}>
           <EmailChannelForm value={emData} onSaved={(nv) => email.mutate(() => nv)} onReload={email.reload} />
         </Drawer>
       )}
 
       {openKey === "webhook" && whData && (
-        <Drawer title="配置 Webhook 通知渠道" sub="JSON POST 推送，支持 HMAC-SHA256 签名与自定义鉴权头" onClose={() => setOpenKey(null)}>
+        <Drawer title="配置 Webhook 通知渠道" onClose={() => setOpenKey(null)}>
           <WebhookChannelForm value={whData} onSaved={(nv) => webhook.mutate(() => nv)} onReload={webhook.reload} />
         </Drawer>
       )}
 
       {openKey === "daily" && dyData && (
-        <Drawer title="配置每日流量简报" sub="按面板业务时区每天定时向所有已启用渠道投递汇总" onClose={() => setOpenKey(null)}>
+        <Drawer title="配置每日流量简报" onClose={() => setOpenKey(null)}>
           <DailyReportForm value={dyData} onSaved={(nv) => daily.mutate(() => nv)} />
         </Drawer>
       )}
 
       {openKey === "tg_ctrl" && ctData && (
-        <Drawer title="配置 Telegram 远程控制" sub="复用 Telegram 通知机器人的连接与代理配置" onClose={() => setOpenKey(null)}>
+        <Drawer title="配置 Telegram 远程控制" onClose={() => setOpenKey(null)}>
           <TelegramControlForm value={ctData} onSaved={(nv) => ctrl.mutate(() => nv)} />
         </Drawer>
       )}
 
       {openKey === "quiet" && qhData && (
-        <Drawer title="静默时段与临时维护期" sub="严重告警（额度保护、掉线、抢占回收）始终穿透静默即时送达" onClose={() => setOpenKey(null)}>
+        <Drawer title="静默时段与临时维护期" onClose={() => setOpenKey(null)}>
           <QuietHoursForm value={qhData} onSaved={(nv) => quiet.mutate(() => nv)} />
         </Drawer>
       )}
@@ -987,13 +975,16 @@ function RuleRow({ rule, plans, onChange }: { rule: T.AlertRule; plans: T.ProbeP
               </div>
             )}
             <div className="inline sub">
-              <select value={probePlanId || plans[0].id} onChange={(e) => setProbePlanId(e.target.value)} style={{ padding: "3px 8px" }} disabled={!rule.enabled}>
-                {plans.map((pl) => (
-                  <option key={pl.id} value={pl.id}>{pl.name}</option>
-                ))}
-              </select>
+              <Select
+                size="sm"
+                value={probePlanId || plans[0].id}
+                onChange={setProbePlanId}
+                disabled={!rule.enabled}
+                ariaLabel="选择测速组合"
+                options={plans.map((pl) => ({ value: pl.id, label: pl.name }))}
+              />
               <span>&gt;</span>
-              <input type="number" min={1} value={probeVal} onChange={(e) => setProbeVal(e.target.value)} style={{ width: 68, padding: "3px 8px" }} disabled={!rule.enabled} />
+              <input type="number" min={1} value={probeVal} onChange={(e) => setProbeVal(e.target.value)} style={{ width: 68, padding: "3px 8px", minHeight: 28 }} disabled={!rule.enabled} />
               <span>{rule.key === "network_latency" ? "ms" : "%"}</span>
               <button type="button" className="btn sm" disabled={busy || !rule.enabled} onClick={addProbeThreshold}>设定</button>
             </div>
@@ -1076,7 +1067,7 @@ function NotificationsHistoryCard() {
       <Async res={first} lines={5}>
         {() =>
           !items.length ? (
-            <EmptyState title="暂无通知记录">告警触发或发送测试消息后，投递详情将记录在此。</EmptyState>
+            <EmptyState title="暂无通知记录" />
           ) : (
             <>
               <div className="alist">
@@ -1116,15 +1107,18 @@ function DecisionsHistoryCard({ accName, instName }: { accName: (id: string) => 
   return (
     <Card
       title="额度保护判定记录"
-      sub="每次规则状态跃迁、试运行命中或执行停机的详细评估依据"
       right={
         (rules.data ?? []).length > 0 ? (
-          <select value={ruleId} onChange={(e) => setRuleId(e.target.value)} aria-label="按规则筛选">
-            <option value="">全部保护规则</option>
-            {(rules.data ?? []).map((r) => (
-              <option key={r.id} value={r.id}>{r.name}</option>
-            ))}
-          </select>
+          <Select
+            size="sm"
+            value={ruleId}
+            onChange={setRuleId}
+            ariaLabel="按规则筛选"
+            options={[
+              { value: "", label: "全部保护规则" },
+              ...(rules.data ?? []).map((r) => ({ value: r.id, label: r.name })),
+            ]}
+          />
         ) : undefined
       }
     >
@@ -1259,11 +1253,16 @@ function EmailChannelForm({ value, onSaved, onReload }: { value: T.EmailChannel;
         </div>
         <div>
           <label className="lbl">加密模式</label>
-          <select value={tlsMode} onChange={(e) => setTlsMode(e.target.value as "starttls" | "implicit_tls" | "none")}>
-            <option value="starttls">STARTTLS (587)</option>
-            <option value="implicit_tls">SSL / TLS (465)</option>
-            <option value="none">不加密</option>
-          </select>
+          <Select<"starttls" | "implicit_tls" | "none">
+            value={tlsMode}
+            onChange={setTlsMode}
+            ariaLabel="加密模式"
+            options={[
+              { value: "starttls", label: "STARTTLS (587)" },
+              { value: "implicit_tls", label: "SSL / TLS (465)" },
+              { value: "none", label: "不加密" },
+            ]}
+          />
         </div>
       </div>
       <div className="grid g2">
@@ -1531,12 +1530,17 @@ function QuietHoursForm({ value, onSaved }: { value: T.QuietHours; onSaved: (v: 
       ) : (
         <div>
           <label className="lbl">开启一次性临时维护窗口</label>
-          <select value={maintMins} onChange={(e) => setMaintMins(e.target.value)}>
-            <option value="0">不开启</option>
-            <option value="30">未来 30 分钟</option>
-            <option value="60">未来 1 小时</option>
-            <option value="180">未来 3 小时</option>
-          </select>
+          <Select
+            value={maintMins}
+            onChange={setMaintMins}
+            ariaLabel="临时维护窗口"
+            options={[
+              { value: "0", label: "不开启" },
+              { value: "30", label: "未来 30 分钟" },
+              { value: "60", label: "未来 1 小时" },
+              { value: "180", label: "未来 3 小时" },
+            ]}
+          />
         </div>
       )}
 
@@ -1801,7 +1805,7 @@ function RuleDrawer({
   };
 
   return (
-    <Drawer wide title={initial ? "编辑额度保护规则" : "新建额度保护规则"} sub="设置流量阈值与自动停机保护策略" onClose={onClose}>
+    <Drawer wide title={initial ? "编辑额度保护规则" : "新建额度保护规则"} onClose={onClose}>
       <form className="stack" onSubmit={submit} noValidate>
         <div>
           <label className="lbl" htmlFor="pr-name">规则名称</label>
@@ -1810,45 +1814,49 @@ function RuleDrawer({
         <div className="grid g2">
           <div>
             <label className="lbl" htmlFor="pr-acc">所属云账号</label>
-            <select
+            <Select
               id="pr-acc"
               value={accountId}
-              onChange={(e) => {
-                setAccountId(e.target.value);
+              onChange={(val) => {
+                setAccountId(val);
                 setTargets([]);
                 setSourceId("");
               }}
-            >
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+              ariaLabel="所属云账号"
+              options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+            />
           </div>
           <div>
             <label className="lbl" htmlFor="pr-scope">监控流量池</label>
-            <select id="pr-scope" value={scope} onChange={(e) => setScope(e.target.value as typeof scope)}>
-              <option value="overseas">非中国内地免费额度</option>
-              <option value="mainland">中国内地免费额度</option>
-              <option value="swas">轻量服务器套餐流量包</option>
-            </select>
+            <Select<"overseas" | "mainland" | "swas">
+              id="pr-scope"
+              value={scope}
+              onChange={setScope}
+              ariaLabel="监控流量池"
+              options={[
+                { value: "overseas", label: "非中国内地免费额度" },
+                { value: "mainland", label: "中国内地免费额度" },
+                { value: "swas", label: "轻量服务器套餐流量包" },
+              ]}
+            />
           </div>
         </div>
         {scope === "swas" && (
           <div>
             <label className="lbl" htmlFor="pr-swas">选择轻量服务器</label>
-            <select
+            <Select
               id="pr-swas"
               value={sourceId}
-              onChange={(e) => {
-                setSourceId(e.target.value);
-                if (e.target.value) setTargets([e.target.value]);
+              onChange={(val) => {
+                setSourceId(val);
+                if (val) setTargets([val]);
               }}
-            >
-              <option value="">请选择…</option>
-              {swasInstances.map((i) => (
-                <option key={i.id} value={i.id}>{i.name}</option>
-              ))}
-            </select>
+              ariaLabel="选择轻量服务器"
+              options={[
+                { value: "", label: "请选择…" },
+                ...swasInstances.map((i) => ({ value: i.id, label: i.name })),
+              ]}
+            />
           </div>
         )}
         <div className="grid g2">
@@ -2030,7 +2038,7 @@ function ScheduleDrawer({
   };
 
   return (
-    <Drawer wide title={initial ? "编辑定时开关机计划" : "新建定时开关机计划"} sub="按面板业务时区周期性执行启停" onClose={onClose}>
+    <Drawer wide title={initial ? "编辑定时开关机计划" : "新建定时开关机计划"} onClose={onClose}>
       <form className="stack" onSubmit={submit} noValidate>
         <div className="grid g2">
           <div>
@@ -2039,17 +2047,15 @@ function ScheduleDrawer({
           </div>
           <div>
             <label className="lbl">所属账号</label>
-            <select
+            <Select
               value={accountId}
-              onChange={(e) => {
-                setAccountId(e.target.value);
+              onChange={(val) => {
+                setAccountId(val);
                 setTargets([]);
               }}
-            >
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+              ariaLabel="所属账号"
+              options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+            />
           </div>
         </div>
         <div className="grid g2">
@@ -2183,7 +2189,7 @@ function FailoverDrawer({
   };
 
   return (
-    <Drawer title={initial ? "编辑主备容灾规则" : "新建主备容灾规则"} sub="主实例因额度保护停机时自动拉起跨地域或跨账号备机" onClose={onClose}>
+    <Drawer title={initial ? "编辑主备容灾规则" : "新建主备容灾规则"} onClose={onClose}>
       <form className="stack" onSubmit={submit}>
         <div>
           <label className="lbl">规则名称</label>
@@ -2191,19 +2197,21 @@ function FailoverDrawer({
         </div>
         <div>
           <label className="lbl">主实例（被额度保护停机时触发）</label>
-          <select value={primaryId} onChange={(e) => setPrimaryId(e.target.value)}>
-            {instances.map((i) => (
-              <option key={i.id} value={i.id}>{i.name} · {accName(i.account_id)}</option>
-            ))}
-          </select>
+          <Select
+            value={primaryId}
+            onChange={setPrimaryId}
+            ariaLabel="主实例"
+            options={instances.map((i) => ({ value: i.id, label: `${i.name} · ${accName(i.account_id)}` }))}
+          />
         </div>
         <div>
           <label className="lbl">备实例（自动开机接管）</label>
-          <select value={standbyId} onChange={(e) => setStandbyId(e.target.value)}>
-            {instances.map((i) => (
-              <option key={i.id} value={i.id} disabled={i.id === primaryId}>{i.name} · {accName(i.account_id)}</option>
-            ))}
-          </select>
+          <Select
+            value={standbyId}
+            onChange={setStandbyId}
+            ariaLabel="备实例"
+            options={instances.map((i) => ({ value: i.id, label: `${i.name} · ${accName(i.account_id)}`, disabled: i.id === primaryId }))}
+          />
         </div>
         <div className="inline">
           <Switch on={dryRun} onChange={setDryRun} label="试运行模式" />
@@ -2281,35 +2289,41 @@ function SimulationModal({
       <form className="stack" onSubmit={submit} noValidate>
         <div>
           <label className="lbl">云账号</label>
-          <select
+          <Select
             value={accountId}
-            onChange={(e) => {
-              setAccountId(e.target.value);
+            onChange={(val) => {
+              setAccountId(val);
               setSourceId("");
             }}
-          >
-            {accounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </select>
+            ariaLabel="云账号"
+            options={accounts.map((a) => ({ value: a.id, label: a.name }))}
+          />
         </div>
         <div>
           <label className="lbl">流量池范围</label>
-          <select value={scope} onChange={(e) => setScope(e.target.value as typeof scope)}>
-            <option value="overseas">非中国内地免费额度</option>
-            <option value="mainland">中国内地免费额度</option>
-            <option value="swas">轻量服务器套餐流量包</option>
-          </select>
+          <Select<"overseas" | "mainland" | "swas">
+            value={scope}
+            onChange={setScope}
+            ariaLabel="流量池范围"
+            options={[
+              { value: "overseas", label: "非中国内地免费额度" },
+              { value: "mainland", label: "中国内地免费额度" },
+              { value: "swas", label: "轻量服务器套餐流量包" },
+            ]}
+          />
         </div>
         {scope === "swas" && (
           <div>
             <label className="lbl">轻量服务器</label>
-            <select value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
-              <option value="">请选择…</option>
-              {swas.map((i) => (
-                <option key={i.id} value={i.id}>{i.name}</option>
-              ))}
-            </select>
+            <Select
+              value={sourceId}
+              onChange={setSourceId}
+              ariaLabel="轻量服务器"
+              options={[
+                { value: "", label: "请选择…" },
+                ...swas.map((i) => ({ value: i.id, label: i.name })),
+              ]}
+            />
           </div>
         )}
         <div className="grid g2">
@@ -2319,12 +2333,17 @@ function SimulationModal({
           </div>
           <div>
             <label className="lbl">持续时长</label>
-            <select value={mins} onChange={(e) => setMins(e.target.value)}>
-              <option value="5">5 分钟</option>
-              <option value="15">15 分钟</option>
-              <option value="30">30 分钟</option>
-              <option value="60">60 分钟</option>
-            </select>
+            <Select
+              value={mins}
+              onChange={setMins}
+              ariaLabel="持续时长"
+              options={[
+                { value: "5", label: "5 分钟" },
+                { value: "15", label: "15 分钟" },
+                { value: "30", label: "30 分钟" },
+                { value: "60", label: "60 分钟" },
+              ]}
+            />
           </div>
         </div>
         {error && <div className="field-error" role="alert">{error}</div>}

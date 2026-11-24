@@ -4,7 +4,7 @@ import { api, downloadText, randomIdempotencyKey } from "../api/client";
 import type * as T from "../api/types";
 import { LineChart } from "../components/charts/LineChart";
 import { PlusIcon, RefreshIcon } from "../components/icons";
-import { Async, Badge, Banner, Card, Confirm, CopyButton, Drawer, EmptyState, errMsg, InfoTip, Modal, SegToggle, Spinner, SubTabs, Switch, useToast, type Level } from "../components/ui";
+import { Async, Badge, Banner, Card, Confirm, CopyButton, Drawer, EmptyState, errMsg, InfoTip, Modal, SegToggle, Select, Spinner, SubTabs, Switch, useToast, type Level } from "../components/ui";
 import { useShared } from "../lib/data";
 import { bytes, num, stamp } from "../lib/format";
 import { useQueryTab } from "../lib/router";
@@ -151,13 +151,11 @@ export function Network() {
                           </button>
                         </div>
                       }
-                    >
-                      可一键添加常用公共节点，或添加自定义域名、公网 IP 与纳管实例作为测速目标。
-                    </EmptyState>
+                    />
                   );
                 }
                 if (points.length === 0) {
-                  return <EmptyState title="暂无可用测速源点">面板服务端及已安装 hm-agent 的在线实例将自动在此列出。</EmptyState>;
+                  return <EmptyState title="暂无可用测速源点" />;
                 }
                 return (
                   <div className="table-wrap">
@@ -402,12 +400,10 @@ function PlanHistoryCard({
               </span>
             )}
             <div className="spacer" />
-            {alertDirty ? (
+            {alertDirty && (
               <button className="btn sm primary" disabled={savingAlert} onClick={savePlanAlerts}>
                 {savingAlert && <Spinner />} 保存阈值
               </button>
-            ) : (
-              <span className="sub" style={{ fontSize: "var(--fs-xs)" }}>留空即取消该项组合告警</span>
             )}
           </div>
         )}
@@ -415,7 +411,7 @@ function PlanHistoryCard({
         <Async res={runsRes}>
           {(runs) => {
             if (runs.length === 0) {
-              return <EmptyState title="所选时段尚无探测记录">新启用的测速组合将在下一次调度周期后自动生成曲线。</EmptyState>;
+              return <EmptyState title="所选时段尚无探测记录" />;
             }
             const labels = runs.map((r) => stamp(r.created_at));
             const avgSeries = runs.map((r) => r.result?.summary?.average_ms ?? null);
@@ -694,32 +690,46 @@ function TracerouteSection({ points, targets, instances }: { points: T.ProbePoin
             <div className="grid g3">
               <div>
                 <label className="lbl">探测起点</label>
-                <select value={pointSel} onChange={(e) => setPointSel(e.target.value)}>
-                  <option value="server">面板服务端</option>
-                  {points
-                    .filter((p) => p.point_kind === "agent" && p.instance_id)
-                    .map((p) => (
-                      <option key={p.id} value={p.instance_id!} disabled={!p.trace.available}>
-                        {p.name} {!p.trace.available ? "（当前离线）" : ""}
-                      </option>
-                    ))}
-                </select>
+                <Select
+                  value={pointSel}
+                  onChange={setPointSel}
+                  ariaLabel="探测起点"
+                  options={[
+                    { value: "server", label: "面板服务端" },
+                    ...points
+                      .filter((p) => p.point_kind === "agent" && p.instance_id)
+                      .map((p) => ({
+                        value: p.instance_id!,
+                        label: `${p.name}${!p.trace.available ? "（离线）" : ""}`,
+                        disabled: !p.trace.available,
+                      })),
+                  ]}
+                />
               </div>
               <div>
                 <label className="lbl">目标地址</label>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <select value={destMode} onChange={(e) => setDestMode(e.target.value as "target" | "host")} style={{ width: 120 }}>
-                    <option value="host">输入地址</option>
-                    {targets.length > 0 && <option value="target">预设目标</option>}
-                  </select>
+                  <Select<"target" | "host">
+                    value={destMode}
+                    onChange={setDestMode}
+                    ariaLabel="目标类型"
+                    style={{ width: 112, flex: "none" }}
+                    options={[
+                      { value: "host", label: "输入地址" },
+                      ...(targets.length > 0 ? [{ value: "target" as const, label: "预设目标" }] : []),
+                    ]}
+                  />
                   {destMode === "target" ? (
-                    <select value={targetId} onChange={(e) => setTargetId(e.target.value)} style={{ flex: 1 }}>
-                      {targets.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name} ({t.kind === "custom" ? t.host : "纳管实例"})
-                        </option>
-                      ))}
-                    </select>
+                    <Select
+                      value={targetId}
+                      onChange={setTargetId}
+                      ariaLabel="预设目标"
+                      style={{ flex: 1 }}
+                      options={targets.map((t) => ({
+                        value: t.id,
+                        label: `${t.name} (${t.kind === "custom" ? t.host : "纳管实例"})`,
+                      }))}
+                    />
                   ) : (
                     <input
                       type="text"
@@ -734,14 +744,26 @@ function TracerouteSection({ points, targets, instances }: { points: T.ProbePoin
               <div>
                 <label className="lbl">探测协议</label>
                 <div style={{ display: "flex", gap: 8 }}>
-                  <select value={method} onChange={(e) => setMethod(e.target.value as "icmp" | "tcp")}>
-                    <option value="icmp">ICMP</option>
-                    <option value="tcp">TCP</option>
-                  </select>
-                  <select value={family} onChange={(e) => setFamily(e.target.value as "ipv4" | "ipv6")}>
-                    <option value="ipv4">IPv4</option>
-                    <option value="ipv6">IPv6</option>
-                  </select>
+                  <Select<"icmp" | "tcp">
+                    value={method}
+                    onChange={setMethod}
+                    ariaLabel="探测方式"
+                    style={{ flex: 1 }}
+                    options={[
+                      { value: "icmp", label: "ICMP" },
+                      { value: "tcp", label: "TCP" },
+                    ]}
+                  />
+                  <Select<"ipv4" | "ipv6">
+                    value={family}
+                    onChange={setFamily}
+                    ariaLabel="地址族"
+                    style={{ flex: 1 }}
+                    options={[
+                      { value: "ipv4", label: "IPv4" },
+                      { value: "ipv6", label: "IPv6" },
+                    ]}
+                  />
                   {method === "tcp" && (
                     <input
                       type="number"
@@ -771,35 +793,45 @@ function TracerouteSection({ points, targets, instances }: { points: T.ProbePoin
                 <div className="grid g3">
                   <div>
                     <label className="lbl">实例 A（去程起点 / 回程终点）</label>
-                    <select value={fromInst} onChange={(e) => setFromInst(e.target.value)}>
-                      {agentInstances.map((i) => (
-                        <option key={i.id} value={i.id}>
-                          {i.name} ({i.public_ips[0]?.address})
-                        </option>
-                      ))}
-                    </select>
+                    <Select
+                      value={fromInst}
+                      onChange={setFromInst}
+                      ariaLabel="实例 A"
+                      options={agentInstances.map((i) => ({ value: i.id, label: `${i.name} (${i.public_ips[0]?.address})` }))}
+                    />
                   </div>
                   <div>
                     <label className="lbl">实例 B（去程终点 / 回程起点）</label>
-                    <select value={toInst} onChange={(e) => setToInst(e.target.value)}>
-                      {agentInstances.map((i) => (
-                        <option key={i.id} value={i.id}>
-                          {i.name} ({i.public_ips[0]?.address})
-                        </option>
-                      ))}
-                    </select>
+                    <Select
+                      value={toInst}
+                      onChange={setToInst}
+                      ariaLabel="实例 B"
+                      options={agentInstances.map((i) => ({ value: i.id, label: `${i.name} (${i.public_ips[0]?.address})` }))}
+                    />
                   </div>
                   <div>
                     <label className="lbl">探测协议</label>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <select value={method} onChange={(e) => setMethod(e.target.value as "icmp" | "tcp")}>
-                        <option value="icmp">ICMP</option>
-                        <option value="tcp">TCP</option>
-                      </select>
-                      <select value={family} onChange={(e) => setFamily(e.target.value as "ipv4" | "ipv6")}>
-                        <option value="ipv4">IPv4</option>
-                        <option value="ipv6">IPv6</option>
-                      </select>
+                      <Select<"icmp" | "tcp">
+                        value={method}
+                        onChange={setMethod}
+                        ariaLabel="探测方式"
+                        style={{ flex: 1 }}
+                        options={[
+                          { value: "icmp", label: "ICMP" },
+                          { value: "tcp", label: "TCP" },
+                        ]}
+                      />
+                      <Select<"ipv4" | "ipv6">
+                        value={family}
+                        onChange={setFamily}
+                        ariaLabel="地址族"
+                        style={{ flex: 1 }}
+                        options={[
+                          { value: "ipv4", label: "IPv4" },
+                          { value: "ipv6", label: "IPv6" },
+                        ]}
+                      />
                       {method === "tcp" && (
                         <input type="number" min={1} max={65535} value={port} onChange={(e) => setPort(Number(e.target.value) || 443)} style={{ width: 84 }} />
                       )}
@@ -1129,7 +1161,7 @@ function ManageNetworkSection({
         }
       >
         {plans.length === 0 ? (
-          <EmptyState title="尚未创建测速组合">请先创建探测目标，再将测速源点与目标配对为周期探测计划。</EmptyState>
+          <EmptyState title="尚未创建测速组合" />
         ) : (
           <div className="table-wrap">
             <table>
@@ -1350,10 +1382,15 @@ function TargetModal({
         </div>
         <div>
           <label className="lbl">目标类型</label>
-          <select value={kind} onChange={(e) => setKind(e.target.value as "custom" | "instance")}>
-            <option value="custom">外部公网 IP / 域名</option>
-            {instances.length > 0 && <option value="instance">纳管云服务器实例</option>}
-          </select>
+          <Select<"custom" | "instance">
+            value={kind}
+            onChange={setKind}
+            ariaLabel="目标类型"
+            options={[
+              { value: "custom", label: "外部公网 IP / 域名" },
+              ...(instances.length > 0 ? [{ value: "instance" as const, label: "纳管云服务器实例" }] : []),
+            ]}
+          />
         </div>
         {kind === "custom" ? (
           <div>
@@ -1363,11 +1400,12 @@ function TargetModal({
         ) : (
           <div>
             <label className="lbl">选择纳管实例</label>
-            <select value={instId} onChange={(e) => setInstId(e.target.value)}>
-              {instances.map((i) => (
-                <option key={i.id} value={i.id}>{i.name} ({i.public_ips[0]?.address ?? "无公网 IP"})</option>
-              ))}
-            </select>
+            <Select
+              value={instId}
+              onChange={setInstId}
+              ariaLabel="选择纳管实例"
+              options={instances.map((i) => ({ value: i.id, label: `${i.name} (${i.public_ips[0]?.address ?? "无公网 IP"})` }))}
+            />
           </div>
         )}
         <div>
@@ -1463,47 +1501,66 @@ function PlanModal({
         <div className="grid g2">
           <div>
             <label className="lbl">测速源点</label>
-            <select value={pointKey} onChange={(e) => setPointKey(e.target.value)}>
-              <option value="server">面板服务端</option>
-              {points
-                .filter((p) => p.point_kind === "agent" && p.instance_id)
-                .map((p) => (
-                  <option key={p.id} value={p.instance_id!}>{p.name}</option>
-                ))}
-            </select>
+            <Select
+              value={pointKey}
+              onChange={setPointKey}
+              ariaLabel="测速源点"
+              options={[
+                { value: "server", label: "面板服务端" },
+                ...points
+                  .filter((p) => p.point_kind === "agent" && p.instance_id)
+                  .map((p) => ({ value: p.instance_id!, label: p.name })),
+              ]}
+            />
           </div>
           <div>
             <label className="lbl">探测目标</label>
-            <select value={targetId} onChange={(e) => setTargetId(e.target.value)}>
-              {targets.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
+            <Select
+              value={targetId}
+              onChange={setTargetId}
+              ariaLabel="探测目标"
+              options={targets.map((t) => ({ value: t.id, label: t.name }))}
+            />
           </div>
         </div>
         <div className="grid g3">
           <div>
             <label className="lbl">探测方式</label>
-            <select value={method} onChange={(e) => setMethod(e.target.value as "icmp" | "tcp")}>
-              <option value="icmp">ICMP Ping</option>
-              <option value="tcp">TCP 建连</option>
-            </select>
+            <Select<"icmp" | "tcp">
+              value={method}
+              onChange={setMethod}
+              ariaLabel="探测方式"
+              options={[
+                { value: "icmp", label: "ICMP Ping" },
+                { value: "tcp", label: "TCP 建连" },
+              ]}
+            />
           </div>
           <div>
             <label className="lbl">地址族</label>
-            <select value={family} onChange={(e) => setFamily(e.target.value as "ipv4" | "ipv6")}>
-              <option value="ipv4">IPv4</option>
-              <option value="ipv6">IPv6</option>
-            </select>
+            <Select<"ipv4" | "ipv6">
+              value={family}
+              onChange={setFamily}
+              ariaLabel="地址族"
+              options={[
+                { value: "ipv4", label: "IPv4" },
+                { value: "ipv6", label: "IPv6" },
+              ]}
+            />
           </div>
           <div>
             <label className="lbl">探测周期</label>
-            <select value={freq} onChange={(e) => setFreq(Number(e.target.value))}>
-              <option value={60}>每 1 分钟</option>
-              <option value={300}>每 5 分钟</option>
-              <option value={900}>每 15 分钟</option>
-              <option value={3600}>每 1 小时</option>
-            </select>
+            <Select
+              value={String(freq)}
+              onChange={(v) => setFreq(Number(v))}
+              ariaLabel="探测周期"
+              options={[
+                { value: "60", label: "每 1 分钟" },
+                { value: "300", label: "每 5 分钟" },
+                { value: "900", label: "每 15 分钟" },
+                { value: "3600", label: "每 1 小时" },
+              ]}
+            />
           </div>
         </div>
       </div>
@@ -1566,7 +1623,6 @@ function TraceSnapshotDrawer({ plan, onClose }: { plan: T.ProbePlan; onClose: ()
     <Drawer
       wide
       title={`每日 AS 路径快照：${plan.name}`}
-      sub="每天固定时刻执行去程路由追踪，对比自治系统 (AS) 序列并在跨境路由绕行或变更时发出告警"
       right={<CopyButton text={plan.id} label="复制组合 ID" />}
       onClose={onClose}
     >
